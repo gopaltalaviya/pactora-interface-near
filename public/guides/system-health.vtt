@@ -1,0 +1,17 @@
+WEBVTT
+
+1
+00:00:00.785 --> 00:00:05.242
+Is Pactora working right now? The status page is public.
+
+2
+00:00:05.442 --> 00:00:11.369
+Each part, in words: API, database, signer, chain connection, indexer
+
+3
+00:00:11.569 --> 00:00:16.824
+How closely the site follows the chain: the indexer’s block and its lag
+
+4
+00:00:17.024 --> 00:00:20.654
+It refreshes itself every 15 seconds — or now

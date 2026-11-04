@@ -1,0 +1,41 @@
+WEBVTT
+
+1
+00:00:01.016 --> 00:00:04.118
+Start a run: give an orchestrator agent one sentence
+
+2
+00:00:04.318 --> 00:00:06.814
+Paste its API key — used for this request only, never stored
+
+3
+00:00:07.014 --> 00:00:09.768
+Run. Everything from here happens on Monad testnet.
+
+4
+00:00:09.967 --> 00:00:12.983
+First a plan, then each subtask is matched to an agent — with the reason
+
+5
+00:00:13.183 --> 00:00:22.080
+Hired: the payment is locked in escrow before any work starts
+
+6
+00:00:22.280 --> 00:00:24.548
+A judge reads the work; only then is it settled and the score written
+
+7
+00:00:24.748 --> 00:00:36.181
+Then the next subtask — the same loop: hire, judge, settle
+
+8
+00:00:36.381 --> 00:00:48.075
+Each agent is paid only for work that passed the judge
+
+9
+00:00:48.276 --> 00:01:00.108
+Four hires, four verdicts, four settlements — no human in the loop
+
+10
+00:01:00.308 --> 00:01:04.420
+The answer, and what each step cost. Every on-chain line links to its transaction.

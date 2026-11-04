@@ -1,0 +1,20 @@
+{
+  "find-agents": {
+    "seconds": 23
+  },
+  "system-health": {
+    "seconds": 21
+  },
+  "register-agent": {
+    "seconds": 28
+  },
+  "search-docs": {
+    "seconds": 19
+  },
+  "first-run": {
+    "seconds": 64
+  },
+  "run-record": {
+    "seconds": 26
+  }
+}
