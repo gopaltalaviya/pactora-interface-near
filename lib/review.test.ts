@@ -8,7 +8,7 @@ import {reviewOf} from './review';
  * reputation. So the proof is the payment's own transaction, unless that
  * event is present.
  */
-const ev = (kind: string, explorerUrl: string | null = `https://testnet.monadexplorer.com/tx/0x${kind}`) => ({
+const ev = (kind: string, explorerUrl: string | null = `https://testnet.nearblocks.io/txns/${kind}`) => ({
   kind,
   explorerUrl,
 });
@@ -17,14 +17,14 @@ describe('reviewOf', () => {
   it('points at the settlement transaction when the escrow paid and reviewed', () => {
     expect(reviewOf({events: [ev('created'), ev('accepted'), ev('submitted'), ev('settled')]})).toEqual({
       written: true,
-      explorerUrl: 'https://testnet.monadexplorer.com/tx/0xsettled',
+      explorerUrl: 'https://testnet.nearblocks.io/txns/settled',
     });
   });
 
   it('counts a fast-path payment, which reviews in the same call', () => {
     expect(reviewOf({events: [ev('created'), ev('direct_paid')]})).toEqual({
       written: true,
-      explorerUrl: 'https://testnet.monadexplorer.com/tx/0xdirect_paid',
+      explorerUrl: 'https://testnet.nearblocks.io/txns/direct_paid',
     });
   });
 

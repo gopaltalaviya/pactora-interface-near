@@ -41,12 +41,12 @@ describe('RunTrace', () => {
   it('puts an explorer link on an on-chain line', () => {
     render(
       <RunTrace
-        events={[ev('settled', {jobId: JOB, explorerUrl: 'https://testnet.monadexplorer.com/tx/0xabc'})]}
+        events={[ev('settled', {jobId: JOB, explorerUrl: 'https://testnet.nearblocks.io/txns/abc'})]}
         startedAt={at}
       />,
     );
     const link = screen.getByRole('link', {name: /explorer/i});
-    expect(link.getAttribute('href')).toBe('https://testnet.monadexplorer.com/tx/0xabc');
+    expect(link.getAttribute('href')).toBe('https://testnet.nearblocks.io/txns/abc');
     expect(link.getAttribute('rel')).toContain('noreferrer');
   });
 

@@ -10,6 +10,7 @@ import {Icon, type IconName} from '@/components/ui/Icon';
 import {CountUp, Reveal} from '@/components/ui/Motion';
 import {api, formatUnits, type AgentSummary, type NetworkInfo} from '@/lib/api';
 import {safeHref} from '@/lib/links';
+import {displayAccount} from '@/lib/near';
 
 /**
  * The product page.
@@ -667,9 +668,9 @@ function ProofFigure({label, value, text}: {label: string; value?: number | null
 /** The deployed contracts, each a link a sceptic can open. */
 function Contracts({network}: {network: NetworkInfo | null}) {
   if (!network) return null;
-  const names = ['TaskEscrow', 'AgentAccountFactory', 'StakeVault'];
+  const names = ['Pactora', 'PaymentToken'] as const;
   const items = names
-    .map((n) => ({name: n, address: network.contracts[n]}))
+    .map((n) => ({name: n as string, address: network.contracts?.[n]}))
     .filter((c): c is {name: string; address: string} => Boolean(c.address));
   if (items.length === 0) return null;
   return (
@@ -682,7 +683,7 @@ function Contracts({network}: {network: NetworkInfo | null}) {
         const body = (
           <>
             <span className="text-text">{c.name}</span>{' '}
-            <span className="tabular">{`${c.address.slice(0, 6)}…${c.address.slice(-4)}`}</span>
+            <span className="tabular">{displayAccount(c.address)}</span>
           </>
         );
         return href ? (

@@ -102,8 +102,9 @@ describe('how a failed request reads', () => {
 
 /**
  * Audit M1 (2026-10-26): registration used to need only public chain data, so
- * anyone watching ERC-8004 could register an agent first and take its only
- * API key. The owner now signs a single-use challenge from the API.
+ * anyone watching the registry could register an agent first and take its
+ * only API key. The owner now signs a single-use challenge from the API, as a
+ * NEP-413 message (NEAR-PORT §5).
  */
 describe('registering an agent', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -111,50 +112,98 @@ describe('registering an agent', () => {
     name: 'Probe',
     capabilities: ['research'],
     pricePerTask: '20000',
-    walletAddress: '0x00000000000000000000000000000000000000a1',
-    ownerAddress: '0x00000000000000000000000000000000000000b2',
-    chainId: 10143,
+    walletAddress: 'probe.alice.testnet',
+    ownerAddress: 'alice.testnet',
+    chainId: 'near:testnet',
     chainAgentId: '42',
   };
+  const challenge = {
+    nonce: 'ab'.repeat(32),
+    message: 'Pactora: sign me',
+    recipient: 'pactora',
+    expiresAt: 'x',
+    walletPublicKey: 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp',
+  };
 
-  it('gets a challenge for exactly these values, has the owner sign it, and sends both', async () => {
+  it('asks for a challenge (wallet key first, before anything is on chain)', async () => {
+    const calls: {url: string; body: Record<string, unknown>}[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      calls.push({url: String(url), body: JSON.parse(String(init?.body))});
+      return new Response(JSON.stringify(challenge));
+    });
+    const got = await api.challenge({
+      ownerAddress: body.ownerAddress,
+      walletAddress: body.walletAddress,
+      chainId: body.chainId,
+    });
+    expect(got.walletPublicKey).toBe(challenge.walletPublicKey);
+    expect(calls[0]!.url).toMatch(/\/v1\/agents\/challenge$/);
+    expect(calls[0]!.body).toEqual({
+      ownerAddress: 'alice.testnet',
+      walletAddress: 'probe.alice.testnet',
+      chainId: 'near:testnet',
+    });
+  });
+
+  it('gets a challenge naming the agent id, has the owner sign it (NEP-413), and sends the proof', async () => {
     const calls: {url: string; body: Record<string, unknown>}[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       calls.push({url: String(url), body: JSON.parse(String(init?.body))});
       return String(url).endsWith('/v1/agents/challenge')
-        ? new Response(JSON.stringify({nonce: 'ab'.repeat(16), message: 'Pactora: sign me', expiresAt: 'x'}))
+        ? new Response(JSON.stringify(challenge))
         : new Response(
-            JSON.stringify({agentId: 7, chainId: 10143, walletAddress: body.walletAddress, apiKey: 'ax_k'}),
-            {
-              status: 201,
-            },
+            JSON.stringify({
+              agentId: 7,
+              chainId: 'near:testnet',
+              walletAddress: body.walletAddress,
+              apiKey: 'ax_k',
+            }),
+            {status: 201},
           );
     });
-    const sign = vi.fn(async (message: string) => `0xsig:${message}` as `0x${string}`);
+    const sign = vi.fn(async () => ({
+      accountId: 'alice.testnet',
+      publicKey: 'ed25519:owner',
+      signature: 'c2lnbmF0dXJl',
+    }));
 
     const agent = await api.register(body, sign);
 
-    expect(calls[0]!.url).toMatch(/\/v1\/agents\/challenge$/);
     expect(calls[0]!.body).toEqual({
-      ownerAddress: body.ownerAddress,
-      walletAddress: body.walletAddress,
+      ownerAddress: 'alice.testnet',
+      walletAddress: 'probe.alice.testnet',
       chainAgentId: '42',
-      chainId: 10143,
+      chainId: 'near:testnet',
     });
-    expect(sign).toHaveBeenCalledWith('Pactora: sign me');
+    expect(sign).toHaveBeenCalledWith({
+      message: 'Pactora: sign me',
+      recipient: 'pactora',
+      nonce: 'ab'.repeat(32),
+    });
     expect(calls[1]!.url).toMatch(/\/v1\/agents$/);
-    expect(calls[1]!.body).toMatchObject({
+    expect(calls[1]!.body).toEqual({
       ...body,
-      nonce: 'ab'.repeat(16),
-      signature: '0xsig:Pactora: sign me',
+      nonce: 'ab'.repeat(32),
+      publicKey: 'ed25519:owner',
+      signature: 'c2lnbmF0dXJl',
     });
     expect(agent.apiKey).toBe('ax_k');
   });
 
+  it('refuses a signature from an account other than the owner, before sending it', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(challenge)));
+    await expect(
+      api.register(body, async () => ({
+        accountId: 'mallory.testnet',
+        publicKey: 'ed25519:x',
+        signature: 's',
+      })),
+    ).rejects.toThrow(/mallory\.testnet/);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('registers nothing when the owner declines to sign', async () => {
-    const fetch = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({nonce: 'n', message: 'm', expiresAt: 'x'})));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(challenge)));
     await expect(
       api.register(body, async () => {
         throw new Error('User rejected the request.');

@@ -1,7 +1,6 @@
 'use client';
 
-import {useEffect, useState} from 'react';
-import {isAddress} from 'viem';
+import {useEffect, useRef, useState} from 'react';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -12,54 +11,76 @@ import {ErrorState, Notice} from '@/components/ui/States';
 import {agentCard, agentCardUri} from '@/lib/agent-card';
 import {API_URL, ApiError, api, formatUnits, type NetworkInfo, type RegisteredAgent} from '@/lib/api';
 import {safeHref} from '@/lib/links';
-import {connect, ensureChain, hasWallet, registerIdentity, signMessage} from '@/lib/wallet';
+import {displayAccount, formatYocto, subAccount} from '@/lib/near';
+import {connect, REGISTRATION_AMOUNTS, registerOnChain, signChallenge, type NearWallet} from '@/lib/wallet';
 
 /**
- * Register an agent.
+ * Register an agent (NEAR-PORT §5).
  *
  * Registration is genuinely two things, and a form that pretends otherwise
  * produces an agent nobody can hire:
  *
- *   1. An **ERC-8004 identity** on-chain. This is what makes the agent real
- *      to the protocol, and what the escrow resolves a payout wallet from.
+ *   1. **On chain**, from the owner's wallet: create the agent's own account
+ *      `<name>.<owner>` with a key the Pactora signer holds (scoped to the
+ *      Pactora contract), then `register_agent`, which assigns its id.
  *   2. A **Pactora record**, which makes it discoverable and issues its key.
+ *      The owner signs the API's one-time challenge (NEP-413), and the API
+ *      checks the signature, the owner's key and the agent on chain.
  *
- * The on-chain step goes first, and the id the registry assigns is passed to
- * the API, which checks it against the registry (owner and payout wallet)
- * before storing it. This page used to leave that to "an indexer observing
- * the registration", which no indexer did — so every agent registered here
- * got a working API key and could never be hired, which looks exactly like a
- * broken marketplace.
- *
- * The wallet signs; this page never sees a key.
+ * The chain goes first, because an agent that is not on chain cannot be
+ * hired. The wallet signs; this page never sees a key.
  */
 
-type Stage = 'form' | 'identity' | 'record' | 'done';
+type Stage = 'form' | 'chain' | 'record' | 'done';
 
 // The API's own rule (packages/shared Capability), checked before the wallet is asked to sign.
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const validCapability = (c: string) => c.length >= 2 && c.length <= 64 && KEBAB.test(c);
 
+/** `ResearchBot 2` → `researchbot-2`: a starting point for the account name, still editable. */
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+
 const STEPS = [
-  {title: 'Connect a wallet', body: 'It owns the agent and signs its identity. This page never sees a key.'},
-  {title: 'ERC-8004 identity', body: 'One transaction on Monad registers the agent and its payout wallet.'},
-  {title: 'Pactora record', body: 'The API checks the identity against the registry, then lists the agent.'},
+  {title: 'Connect a wallet', body: 'Your NEAR account owns the agent. This page never sees a key.'},
+  {
+    title: 'Two transactions on NEAR',
+    body: 'Create the agent account under yours, then register it with the Pactora contract.',
+  },
+  {
+    title: 'Sign the challenge',
+    body: 'A signed message (NEP-413) proves the agent is yours. No transaction.',
+  },
   {title: 'Copy your API key', body: 'Shown once. The agent uses it to accept and deliver work.'},
 ];
+
+interface OnChain {
+  wallet: string;
+  chainAgentId: string;
+  txHashes: string[];
+}
 
 export default function RegisterPage() {
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
   const [owner, setOwner] = useState<string | null>(null);
+  const walletRef = useRef<NearWallet | null>(null);
   const [stage, setStage] = useState<Stage>('form');
   const [error, setError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  // Kept once the transactions land: if the record then fails, a retry must
+  // not create the account again (the chain would refuse: it exists).
+  const [onChain, setOnChain] = useState<OnChain | null>(null);
   const [created, setCreated] = useState<RegisteredAgent | null>(null);
 
   const [name, setName] = useState('');
+  const [account, setAccount] = useState('');
+  const [accountEdited, setAccountEdited] = useState(false);
   const [description, setDescription] = useState('');
   const [capabilities, setCapabilities] = useState('market-research');
   const [price, setPrice] = useState('20000');
-  const [payout, setPayout] = useState('');
 
   useEffect(() => {
     api
@@ -68,21 +89,27 @@ export default function RegisterPage() {
       .catch(() => setError('The API is unreachable.'));
   }, []);
 
-  // Read after mount, not during render: `window.ethereum` does not exist on
-  // the server, and reading it in render made the first client render
-  // disagree with the server's HTML (a hydration mismatch).
-  const [wallet, setWallet] = useState(false);
-  useEffect(() => setWallet(hasWallet()), []);
-
-  const registry = network?.erc8004?.identityRegistry;
-  const rpcUrl = network?.rpcUrls[0];
-  const busy = stage === 'identity' || stage === 'record';
+  const pactora = network?.contracts?.Pactora;
+  const busy = stage === 'chain' || stage === 'record';
+  const locked = busy || onChain !== null;
   const token = network?.paymentToken;
 
-  // Checked here, before the wallet is asked to sign anything: a typo in the
-  // payout wallet is an identity whose payments go nowhere, and a price under
-  // the escrow minimum is an agent that can be registered but never hired.
-  const payoutInvalid = payout !== '' && !isAddress(payout);
+  // Checked here, before the wallet is asked to sign anything: a bad account
+  // name is a transaction the chain refuses, and a price under the escrow
+  // minimum is an agent that can be registered but never hired.
+  const accountName = accountEdited ? account : slug(name);
+  let walletAccount: string | null = onChain?.wallet ?? null;
+  let accountError: string | undefined;
+  if (!onChain && accountName) {
+    try {
+      // Before connecting, only the name itself can be checked.
+      const id = subAccount(accountName, owner ?? 'testnet');
+      walletAccount = owner ? id : null;
+    } catch (err) {
+      accountError = (err as Error).message;
+    }
+  }
+
   const minimum = network?.minJobAmount;
   const priceTooLow =
     price !== '' && price.length <= 39 && minimum !== undefined && BigInt(price) < BigInt(minimum);
@@ -92,13 +119,31 @@ export default function RegisterPage() {
     .filter(Boolean);
   const badCaps = parsedCaps.filter((c) => !validCapability(c));
   // The API's limits (apps/api routes/agents.ts RegisterBody), checked here because
-  // the identity is signed on chain FIRST: a record the API then refuses leaves an
-  // ERC-8004 identity that paid gas and lists nothing.
+  // the chain goes FIRST: a record the API then refuses leaves an agent on chain
+  // that paid for its storage and lists nothing.
   const nameTooLong = name.length > 64;
   const descTooLong = description.length > 1000;
   const tooManyCaps = parsedCaps.length > 16;
-  const priceTooBig = price.length > 39; // uint128
-  const formInvalid = nameTooLong || descTooLong || tooManyCaps || priceTooBig || parsedCaps.length === 0;
+  const priceTooBig = price.length > 39; // u128
+  let cardUri: string | null = null;
+  let cardError: string | undefined;
+  if (name.trim() && parsedCaps.length > 0 && badCaps.length === 0 && !tooManyCaps && !nameTooLong) {
+    try {
+      cardUri = agentCardUri(
+        agentCard({name, ...(description ? {description} : {}), capabilities: parsedCaps, apiUrl: API_URL}),
+      );
+    } catch (err) {
+      cardError = (err as Error).message;
+    }
+  }
+  const formInvalid =
+    nameTooLong ||
+    descTooLong ||
+    tooManyCaps ||
+    priceTooBig ||
+    parsedCaps.length === 0 ||
+    accountError !== undefined ||
+    cardError !== undefined;
 
   // Presets in the token's own units: the escrow minimum, and two common prices.
   const presets =
@@ -112,77 +157,64 @@ export default function RegisterPage() {
           .filter((v) => BigInt(v) >= BigInt(minimum))
       : [];
 
-  const step = stage === 'identity' ? 1 : stage === 'record' ? 2 : owner ? 1 : 0;
+  const step = stage === 'chain' ? 1 : stage === 'record' || onChain ? 2 : owner ? 1 : 0;
+  const attached = `${formatYocto(REGISTRATION_AMOUNTS.agentFunding)} NEAR to the agent account and ${formatYocto(
+    REGISTRATION_AMOUNTS.storageDeposit,
+  )} NEAR for storage`;
 
   async function onConnect() {
     setError(null);
     try {
-      const account = await connect();
-      setOwner(account);
-      // Default the payout wallet to the owner, which is what most people
-      // want, while leaving it editable for an agent paid to a contract.
-      if (!payout) setPayout(account);
+      const connected = await connect();
+      walletRef.current = connected.wallet;
+      setOwner(connected.accountId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'could not connect');
     }
   }
 
   async function onSubmit() {
-    if (!network || !owner || !registry) return;
+    const wallet = walletRef.current;
+    if (!network || !owner || !wallet || !pactora || !walletAccount || !cardUri) return;
     setError(null);
-    if (!rpcUrl) {
-      setError('This network publishes no RPC endpoint, so a wallet cannot be pointed at it.');
-      return;
-    }
-    if (payoutInvalid) {
-      setError('The payout wallet is not a valid address.');
-      return;
-    }
 
     try {
-      setStage('identity');
-      await ensureChain({
-        chainId: network.chainId,
-        name: network.name,
-        rpcUrl,
-        explorerBaseUrl: network.explorerBaseUrl,
-        nativeCurrency: network.nativeCurrency,
-      });
-
-      const {txHash: hash, agentId: chainAgentId} = await registerIdentity({
-        registry: registry as `0x${string}`,
-        // A real ERC-8004 registration file, carried inline, so the identity
-        // describes this agent to anyone who reads the registry.
-        agentURI: agentCardUri(
-          agentCard({
-            name,
-            ...(description ? {description} : {}),
-            capabilities: parsedCaps,
-            apiUrl: API_URL,
-          }),
-        ),
-        payoutWallet: (payout || owner) as `0x${string}`,
-        referenceImplementation: network.erc8004.referenceImplementation,
-        chainId: network.chainId,
-        rpcUrl,
-      });
-      setTxHash(hash);
+      let chain = onChain;
+      if (!chain) {
+        setStage('chain');
+        // The signer's key for the new account, created on first request. It
+        // goes into tx 1, so it is asked for before anything is on chain.
+        const {walletPublicKey} = await api.challenge({
+          ownerAddress: owner,
+          walletAddress: walletAccount,
+          chainId: network.chainId,
+        });
+        const sent = await registerOnChain(wallet, {
+          owner,
+          wallet: walletAccount,
+          pactora,
+          walletPublicKey,
+          cardUri,
+          amounts: REGISTRATION_AMOUNTS,
+        });
+        chain = {wallet: walletAccount, ...sent};
+        setOnChain(chain);
+      }
 
       setStage('record');
-      // The wallet asks the owner to sign the API's one-time challenge: it
-      // proves this is their agent, so nobody can register it first.
+      // A fresh challenge naming the agent id; the owner signs it (NEP-413).
       const agent = await api.register(
         {
           name,
           ...(description ? {description} : {}),
           capabilities: parsedCaps,
           pricePerTask: price,
-          walletAddress: payout || owner,
+          walletAddress: chain.wallet,
           ownerAddress: owner,
           chainId: network.chainId,
-          chainAgentId: chainAgentId.toString(),
+          chainAgentId: chain.chainAgentId,
         },
-        (message) => signMessage(owner as `0x${string}`, message),
+        (challenge) => signChallenge(wallet, owner, challenge),
       );
 
       setCreated(agent);
@@ -195,14 +227,14 @@ export default function RegisterPage() {
             ? err.message
             : 'registration failed',
       );
-      // Back to the form rather than stuck mid-stage: the identity may well
-      // have been created, and the message says which step failed.
+      // Back to the form rather than stuck mid-stage. If the agent is already
+      // on chain, the button now retries the record only.
       setStage('form');
     }
   }
 
   if (created) {
-    return <Done agent={created} txHash={txHash} network={network} />;
+    return <Done agent={created} txHashes={onChain?.txHashes ?? []} network={network} />;
   }
 
   return (
@@ -211,15 +243,14 @@ export default function RegisterPage() {
         <PageHeader
           eyebrow="Join the marketplace"
           title="Register an agent"
-          description="Two steps: an ERC-8004 identity on-chain, then the Pactora record. The identity goes first, because an agent without one cannot be hired."
+          description="Two steps: the agent goes on chain from your NEAR wallet, then the Pactora record. The chain goes first, because an agent that is not on chain cannot be hired."
         />
 
-        {!wallet && (
-          <Notice>
-            No browser wallet found. Install MetaMask, or register through the API directly —{' '}
-            <code className="tabular">POST /v1/agents</code> — which is how the demo agents are registered.
-          </Notice>
-        )}
+        <Notice>
+          Connect opens NEAR Connect, which lists the wallets that work on NEAR testnet. Or register through
+          the API directly — <code className="tabular">POST /v1/agents</code> — which is how the demo agents
+          are registered.
+        </Notice>
 
         <Card className="space-y-5">
           <Field
@@ -232,16 +263,42 @@ export default function RegisterPage() {
               id="reg-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              disabled={busy}
+              disabled={locked}
               placeholder="ResearchBot"
               autoComplete="off"
             />
           </Field>
 
           <Field
+            label="Agent account"
+            htmlFor="reg-account"
+            hint={
+              walletAccount
+                ? `Created under yours as ${walletAccount}. Settlements are paid here.`
+                : 'Created under your account as <name>.<you>. Settlements are paid here.'
+            }
+            error={accountError}
+          >
+            <TextInput
+              id="reg-account"
+              mono
+              value={accountName}
+              onChange={(e) => {
+                setAccountEdited(true);
+                setAccount(e.target.value.trim());
+              }}
+              disabled={locked}
+              placeholder="research-bot"
+              autoComplete="off"
+              spellCheck={false}
+              invalid={accountError !== undefined}
+            />
+          </Field>
+
+          <Field
             label="What it does"
             htmlFor="reg-description"
-            hint="Optional, shown on its profile."
+            hint="Optional, shown on its profile. Kept in the Pactora record; the on-chain card holds it only if it fits."
             error={
               descTooLong
                 ? `1,000 characters at most (this is ${description.length.toLocaleString('en')}).`
@@ -303,7 +360,7 @@ export default function RegisterPage() {
                   ? `Base units — ${network.paymentToken.symbol} has ${network.paymentToken.decimals} decimals, so 20000 is 0.02.`
                   : 'Base units.'
               }
-              error={priceTooBig ? 'That is larger than the escrow can hold (a uint128).' : undefined}
+              error={priceTooBig ? 'That is larger than the escrow can hold (a u128).' : undefined}
               warning={
                 priceTooLow && minimum !== undefined && network
                   ? `Below the escrow minimum of ${formatUnits(minimum, network.paymentToken.decimals)} ${network.paymentToken.symbol} — the escrow refuses any job cheaper than that, so this agent could never be hired.`
@@ -357,47 +414,15 @@ export default function RegisterPage() {
             )}
           </div>
 
-          <Field
-            label="Payout wallet"
-            htmlFor="reg-payout"
-            hint="Where settlements are paid; defaults to the owner."
-            error={
-              payoutInvalid ? 'Not an address. Settlements would go nowhere anyone controls.' : undefined
-            }
-          >
-            <TextInput
-              id="reg-payout"
-              mono
-              value={payout}
-              onChange={(e) => setPayout(e.target.value.trim())}
-              disabled={busy}
-              placeholder="0x…"
-              autoComplete="off"
-              spellCheck={false}
-              invalid={payoutInvalid}
-              actions={
-                owner && payout.toLowerCase() !== owner.toLowerCase() ? (
-                  <button
-                    type="button"
-                    onClick={() => setPayout(owner)}
-                    className="mr-1 rounded-md px-2 py-1 text-xs text-accent hover:bg-raised"
-                  >
-                    Use my wallet
-                  </button>
-                ) : undefined
-              }
-            />
-          </Field>
+          {cardError && <Notice>{cardError}</Notice>}
 
           <div className="flex flex-wrap items-center gap-3 border-t border-edge pt-5">
             {owner ? (
               <Badge tone="settled" dot>
-                <span className="tabular">
-                  owner {owner.slice(0, 6)}…{owner.slice(-4)}
-                </span>
+                <span className="tabular">owner {displayAccount(owner)}</span>
               </Badge>
             ) : (
-              <Button variant="secondary" onClick={() => void onConnect()} disabled={!wallet}>
+              <Button variant="secondary" onClick={() => void onConnect()}>
                 <Icon name="wallet" /> Connect wallet
               </Button>
             )}
@@ -409,34 +434,47 @@ export default function RegisterPage() {
               disabled={
                 busy ||
                 !owner ||
-                !registry ||
+                !pactora ||
+                !walletAccount ||
+                !cardUri ||
                 name.trim().length === 0 ||
                 price === '' ||
                 priceTooLow ||
-                payoutInvalid ||
                 badCaps.length > 0 ||
                 formInvalid
               }
               className="ml-auto"
             >
-              {stage === 'identity'
-                ? 'Waiting for the identity transaction…'
+              {stage === 'chain'
+                ? 'Waiting for the transactions…'
                 : stage === 'record'
                   ? 'Creating the record…'
-                  : 'Register'}
+                  : onChain
+                    ? 'Retry the record'
+                    : 'Register'}
             </Button>
           </div>
+          <p className="text-xs leading-relaxed text-muted">
+            Your wallet asks you to approve two transactions, which attach {attached} (testnet defaults), then
+            to sign one message.
+          </p>
           <p id="register-stage" role="status" aria-live="polite" className="sr-only">
-            {stage === 'identity'
-              ? 'Waiting for the identity transaction to be mined.'
+            {stage === 'chain'
+              ? 'Waiting for the two transactions to be final.'
               : stage === 'record'
-                ? 'Identity registered. Creating the Pactora record.'
+                ? 'The agent is on chain. Creating the Pactora record.'
                 : ''}
           </p>
 
-          {!registry && network && (
+          {!pactora && network && (
             <Notice>
-              This network has no identity registry configured, so on-chain registration is unavailable here.
+              This network publishes no Pactora contract, so on-chain registration is unavailable here.
+            </Notice>
+          )}
+
+          {onChain && stage === 'form' && (
+            <Notice>
+              Agent {onChain.chainAgentId} is on chain as {onChain.wallet}. Only the Pactora record is left.
             </Notice>
           )}
 
@@ -482,11 +520,11 @@ export default function RegisterPage() {
 
 function Done({
   agent,
-  txHash,
+  txHashes,
   network,
 }: {
   agent: RegisteredAgent;
-  txHash: string | null;
+  txHashes: string[];
   network: NetworkInfo | null;
 }) {
   const [copied, setCopied] = useState<'no' | 'yes' | 'failed'>('no');
@@ -514,7 +552,10 @@ function Done({
     }
   }
 
-  const tx = txHash && network?.explorerBaseUrl ? safeHref(`${network.explorerBaseUrl}/tx/${txHash}`) : null;
+  const explorer = network?.explorerBaseUrl;
+  const txs = explorer
+    ? txHashes.map((hash) => safeHref(`${explorer}/txns/${hash}`)).filter((h): h is string => h !== null)
+    : [];
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -561,24 +602,27 @@ function Done({
       <Card title="Hireable now">
         <div className="space-y-2 text-sm leading-relaxed text-muted">
           <p>
-            The API checked the ERC-8004 identity against the registry — its owner and its payout wallet —
-            before creating this record, so the escrow can pay this agent from its first job. Its reputation
-            starts unproven and moves only when a payment to it settles.
+            The API checked the agent on chain — its owner and its account,{' '}
+            <span className="tabular">{displayAccount(agent.walletAddress)}</span> — before creating this
+            record, so the escrow can pay this agent from its first job. Its reputation starts unproven and
+            moves only when a payment to it settles.
           </p>
           <p>
             An orchestrator you also own cannot hire it: the escrow refuses a job between two agents of one
             owner, because a reputation you can pay yourself for is worth nothing.
           </p>
-          {tx && (
+          {txs.map((href, i) => (
             <a
-              href={tx}
+              key={href}
+              href={href}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-accent hover:underline"
+              className="mr-4 inline-flex items-center gap-1 text-accent hover:underline"
             >
-              identity transaction ↗<span className="sr-only"> (opens the block explorer in a new tab)</span>
+              {i === 0 ? 'account transaction' : 'registration transaction'} ↗
+              <span className="sr-only"> (opens the block explorer in a new tab)</span>
             </a>
-          )}
+          ))}
         </div>
       </Card>
 

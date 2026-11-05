@@ -11,7 +11,7 @@ afterEach(() => {
 
 const report = (over: Partial<TrustReport> = {}): TrustReport => ({
   agentId: '12',
-  chainId: 10143,
+  chainId: 'near:testnet',
   verdict: 'trusted',
   reasons: ['8 paid jobs from 6 distinct owners; none self-funded; 0% failed'],
   metrics: {

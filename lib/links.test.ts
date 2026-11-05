@@ -13,7 +13,9 @@ describe('safeHref', () => {
     expect(safeHref('https://testnet.nearblocks.io/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm')).toBe(
       'https://testnet.nearblocks.io/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm',
     );
-    expect(safeHref('https://nearblocks.io/address/alice.near')).toBe('https://nearblocks.io/address/alice.near');
+    expect(safeHref('https://nearblocks.io/address/alice.near')).toBe(
+      'https://nearblocks.io/address/alice.near',
+    );
   });
 
   it('no longer admits the Monad explorers', () => {

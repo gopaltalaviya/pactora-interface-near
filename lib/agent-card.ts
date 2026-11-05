@@ -1,33 +1,29 @@
 /**
- * An ERC-8004 agent registration file ("agent card"), and the `data:` URI
- * that carries it on chain.
+ * The agent card a registration carries on chain as `card_uri`, and the
+ * `data:` URI that holds it.
  *
- * The identity's `agentURI` used to be `agentx://<name>` — a string that
- * resolves to nothing, so an ERC-8004 identity registered here described no
- * agent. ERC-8004 lets the URI be "a base64-encoded data: URI" for fully
- * on-chain metadata, which is what this builds: resolvable by anyone, for
- * ever, without Pactora being online.
+ * A `data:` URI so it resolves for anyone, for ever, without Pactora being
+ * online. Small on purpose: the Pactora contract refuses a `card_uri` over
+ * 512 bytes (`MAX_CARD_URI`, contracts/pactora/src/lib.rs), and refusing it
+ * here costs nothing where refusing it on chain costs a failed transaction.
+ * The description is the first thing dropped to fit; the full record,
+ * description included, lives in the API.
  *
- * Shape per https://eips.ethereum.org/EIPS/eip-8004 (registration-v1).
- * `registrations` is empty because the agent id is assigned by the very
- * transaction that carries this card; the registry and the chain are named
- * in the service entry instead. That entry is named `Pactora` from 2026-11-01;
- * cards registered before then say `AGENTX`. Nothing reads the name back, so
- * both are valid.
+ * Its shape is Pactora's own (`type` below). NEAR has no agent-card standard
+ * yet; the fields follow the agent-registration file this project used on
+ * Monad (name, services with skills), minus what a 512-byte limit cannot hold.
  */
 
-export const REGISTRATION_V1 = 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
+export const CARD_V1 = 'pactora-agent-card-v1';
+
+/** The contract's limit on `card_uri`, in bytes. */
+export const MAX_CARD_URI = 512;
 
 export interface AgentCard {
-  type: typeof REGISTRATION_V1;
+  type: typeof CARD_V1;
   name: string;
-  description: string;
-  image: string;
+  description?: string;
   services: {name: string; endpoint: string; version: string; skills?: string[]}[];
-  x402Support: boolean;
-  active: boolean;
-  registrations: {agentId: number; agentRegistry: string}[];
-  supportedTrust: string[];
 }
 
 export function agentCard(input: {
@@ -35,13 +31,11 @@ export function agentCard(input: {
   description?: string;
   capabilities: string[];
   apiUrl: string;
-  x402Support?: boolean;
 }): AgentCard {
   return {
-    type: REGISTRATION_V1,
+    type: CARD_V1,
     name: input.name,
-    description: input.description ?? `A Pactora agent offering ${input.capabilities.join(', ')}.`,
-    image: '',
+    ...(input.description ? {description: input.description} : {}),
     services: [
       {
         name: 'Pactora',
@@ -50,27 +44,38 @@ export function agentCard(input: {
         skills: input.capabilities,
       },
     ],
-    x402Support: input.x402Support ?? false,
-    active: true,
-    registrations: [],
-    // Reputation here is written only by a settled escrow payment.
-    supportedTrust: ['reputation'],
   };
 }
 
-/** `data:application/json;base64,…`, UTF-8 safe (names may not be ASCII). */
-export function agentCardUri(card: AgentCard): string {
+const PREFIX = 'data:application/json;base64,';
+
+function encode(card: AgentCard): string {
   const bytes = new TextEncoder().encode(JSON.stringify(card));
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
-  return `data:application/json;base64,${btoa(binary)}`;
+  return `${PREFIX}${btoa(binary)}`;
 }
 
-/** The inverse, for tests and for anyone checking what an identity says. */
+/**
+ * `data:application/json;base64,…`, UTF-8 safe (names may not be ASCII), at
+ * most 512 bytes: without the description if it must, and an error if even
+ * that is too long.
+ */
+export function agentCardUri(card: AgentCard): string {
+  const full = encode(card);
+  if (full.length <= MAX_CARD_URI) return full;
+  const {description: _dropped, ...bare} = card;
+  const short = encode(bare);
+  if (short.length <= MAX_CARD_URI) return short;
+  throw new Error(
+    `The agent card is ${short.length} bytes and the contract takes ${MAX_CARD_URI} at most — use a shorter name or fewer capabilities.`,
+  );
+}
+
+/** The inverse, for tests and for anyone checking what a registration says. */
 export function readAgentCardUri(uri: string): AgentCard {
-  const prefix = 'data:application/json;base64,';
-  if (!uri.startsWith(prefix)) throw new Error('not a base64 JSON data: URI');
-  const binary = atob(uri.slice(prefix.length));
+  if (!uri.startsWith(PREFIX)) throw new Error('not a base64 JSON data: URI');
+  const binary = atob(uri.slice(PREFIX.length));
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
   return JSON.parse(new TextDecoder().decode(bytes)) as AgentCard;
 }

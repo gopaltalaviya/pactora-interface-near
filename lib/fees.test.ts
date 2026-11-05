@@ -3,14 +3,14 @@ import type {NetworkInfo} from './api';
 import {NOT_PUBLISHED, feeRows, span} from './fees';
 
 const base: NetworkInfo = {
-  chainId: 10143,
-  name: 'Monad Testnet',
+  chainId: 'near:testnet',
+  nearNetworkId: 'testnet',
+  name: 'NEAR Testnet',
   testnet: true,
-  paymentToken: {symbol: 'USDC', decimals: 6, address: null},
-  contracts: {},
-  erc8004: {referenceImplementation: true},
+  paymentToken: {symbol: 'USDC', decimals: 6, accountId: null},
+  contracts: {Pactora: 'pactora.testnet', PaymentToken: 'musdc.testnet', Arbiter: 'arbiter.testnet'},
   rpcUrls: [],
-  nativeCurrency: {name: 'MON', symbol: 'MON', decimals: 18},
+  nativeCurrency: {name: 'NEAR', symbol: 'NEAR', decimals: 24},
   explorerBaseUrl: null,
   fastPathMaxDisplay: '0.03 USDC',
   protocolFeeBps: 100,
@@ -83,7 +83,7 @@ describe('feeRows', () => {
   it('uses the payment token the API names', () => {
     const rows = feeRows({
       ...base,
-      paymentToken: {symbol: 'TST', decimals: 2, address: null},
+      paymentToken: {symbol: 'TST', decimals: 2, accountId: null},
       minStake: '150',
     });
     expect(value(rows, 'minStake')).toBe('1.5 TST');

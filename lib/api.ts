@@ -3,7 +3,7 @@
  *
  * ## Why this is not `@pactora/sdk`
  *
- * The SDK lives in `agentx-backend`, which is a separate repository on
+ * The SDK lives in `pactora-backend-near`, which is a separate repository on
  * purpose: the contracts and the signer must never enter a Vercel build
  * container. Importing across that line would mean either publishing the SDK
  * or giving the hosting build a deploy key to a private repo — both worse
@@ -22,22 +22,28 @@
 // so this fallback only ever serves `next dev` and the tests.
 export const API_URL = process.env['NEXT_PUBLIC_API_URL']?.replace(/\/$/, '') ?? 'http://127.0.0.1:8080';
 
+/**
+ * A network key: a CAIP-2 string, `near:testnet` (NEAR-PORT §1). Accounts
+ * (`ownerAddress`, `walletAddress`, contracts) are NEAR account ids.
+ */
+export type ChainId = string;
+
+/** `GET /v1/network` (NEAR-PORT §4). */
 export interface NetworkInfo {
-  chainId: number;
+  chainId: ChainId;
+  /** What the RPC's `status.chain_id` answers: `testnet`. */
+  nearNetworkId: string;
   name: string;
+  shortName?: string;
   testnet: boolean;
-  paymentToken: {symbol: string; decimals: number; address: string | null};
-  contracts: Record<string, string>;
-  erc8004: {
-    identityRegistry?: string;
-    reputationRegistry?: string;
-    /** Reference registry takes register(uri, wallet); canonical takes register(uri). */
-    referenceImplementation: boolean;
-  };
-  /** PUBLIC endpoints. A wallet needs one to add Monad, which it has never seen. */
+  /** `accountId` is the token contract; null until it is deployed. */
+  paymentToken: {symbol: string; decimals: number; accountId: string | null};
+  contracts: {Pactora: string; PaymentToken: string; Arbiter: string};
   rpcUrls: string[];
   nativeCurrency: {name: string; symbol: string; decimals: number};
   explorerBaseUrl: string | null;
+  faucetUrls?: string[];
+  enabledChains?: ChainId[];
   fastPathMaxDisplay: string;
   protocolFeeBps: number;
   /** The smallest job the escrow accepts, in base units. A cheaper agent can never be hired. */
@@ -66,8 +72,8 @@ export interface NetworkInfo {
 
 export interface AgentSummary {
   agentId: number;
-  chainId: number;
-  /** The agent's ERC-8004 identity id on this chain, once registered there. */
+  chainId: ChainId;
+  /** The agent's id in the Pactora contract (u64, decimal string), once registered there. */
   chainAgentId?: string | number | null;
   name: string;
   description: string | null;
@@ -103,7 +109,7 @@ export interface JobEvents {
 
 export interface RunSummary {
   runId: string;
-  chainId: number;
+  chainId: ChainId;
   network: string;
   testnet: boolean;
   goal: string;
@@ -230,7 +236,7 @@ function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 export interface RegisteredAgent {
   agentId: number;
-  chainId: number;
+  chainId: ChainId;
   walletAddress: string;
   apiKey: string;
   warning: string;
@@ -238,7 +244,7 @@ export interface RegisteredAgent {
 
 /**
  * `GET /v1/status` — public by design: states and numbers only, never a host,
- * URL or error message. See agentx-backend apps/api/src/routes/status.ts.
+ * URL or error message. See pactora-backend-near apps/api/src/routes/status.ts.
  */
 export type ComponentStatus = 'up' | 'degraded' | 'down' | 'unknown';
 
@@ -250,11 +256,11 @@ export interface ModelStatus {
   lastDelivered: {runId: string; at: string} | null;
 }
 
-/** Gas in the wallets the signer sends from (v3). Absent from an older API. */
+/** NEAR in the accounts the signer sends from, in yoctoNEAR (24 decimals). Absent from an older API. */
 export interface GasStatus {
   state: 'ok' | 'low' | 'unknown';
   checkedAt: string | null;
-  wallets: {address: string; role: string; balanceWei: string; low: boolean}[];
+  wallets: {address: string; role: string; balanceYocto: string; low: boolean}[];
 }
 
 export interface StatusReport {
@@ -271,7 +277,7 @@ export interface StatusReport {
     indexer: ComponentStatus;
   };
   chains: {
-    chainId: number;
+    chainId: ChainId;
     name: string;
     testnet: boolean;
     rpc: ComponentStatus;
@@ -289,7 +295,7 @@ export interface StatusReport {
 /** GET /v1/agents/:id/trust (v3): the verdict, its reasons and the numbers behind them. */
 export interface TrustReport {
   agentId: string;
-  chainId: number;
+  chainId: ChainId;
   verdict: 'trusted' | 'new' | 'concentrated' | 'self-funded' | 'failing';
   reasons: string[];
   metrics: {
@@ -303,6 +309,16 @@ export interface TrustReport {
   };
   fundingWindowBlocks: number;
   indexedToBlock: string | null;
+}
+
+/** `POST /v1/agents/challenge` (NEAR-PORT §5). `nonce` is 32 bytes as 64 hex. */
+export interface Challenge {
+  nonce: string;
+  message: string;
+  recipient: string;
+  expiresAt: string;
+  /** `ed25519:…`, the key the signer holds for `walletAddress`. */
+  walletPublicKey: string;
 }
 
 export const api = {
@@ -346,6 +362,28 @@ export const api = {
   },
 
   /**
+   * `POST /v1/agents/challenge` (NEAR-PORT §5). Asked twice during
+   * registration: first without `chainAgentId`, for `walletPublicKey` — the
+   * key tx 1 adds to the agent's account, before anything is on chain — and
+   * then by `register`, naming the id `register_agent` returned.
+   */
+  challenge(
+    body: {ownerAddress: string; walletAddress: string; chainAgentId?: string; chainId: ChainId},
+    signal?: AbortSignal,
+  ): Promise<Challenge> {
+    return request<Challenge>(
+      '/v1/agents/challenge',
+      {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(body),
+        ...(signal ? {signal} : {}),
+      },
+      'could not start the registration',
+    );
+  },
+
+  /**
    * Create the Pactora record for an agent.
    *
    * The API key comes back exactly once and is never recoverable, so the page
@@ -353,7 +391,10 @@ export const api = {
    *
    * The owner proves control first (audit 2026-10-26): the API issues a
    * single-use challenge for exactly these values, `sign` has the owner's
-   * wallet sign it, and the registration carries the nonce and signature.
+   * wallet sign it (NEP-413), and the registration carries the nonce, the
+   * public key and the signature. The API checks the key is a full-access key
+   * of the owner and that `chainAgentId` on chain is this owner's, for this
+   * wallet.
    */
   async register(
     body: {
@@ -363,34 +404,45 @@ export const api = {
       pricePerTask: string;
       walletAddress: string;
       ownerAddress: string;
-      chainId: number;
-      /** The ERC-8004 id; the API checks it against the registry before storing it. */
-      chainAgentId?: string;
+      chainId: ChainId;
+      /** The Pactora contract's agent id, from `register_agent`. Required: an agent not on chain cannot be hired. */
+      chainAgentId: string;
     },
-    sign: (message: string) => Promise<`0x${string}`>,
+    sign: (challenge: {
+      message: string;
+      recipient: string;
+      nonce: string;
+    }) => Promise<{accountId: string; publicKey: string; signature: string}>,
   ): Promise<RegisteredAgent> {
-    const json = {'content-type': 'application/json'};
-    const challenge = await request<{nonce: string; message: string}>(
-      '/v1/agents/challenge',
-      {
-        method: 'POST',
-        headers: json,
-        body: JSON.stringify({
-          ownerAddress: body.ownerAddress,
-          walletAddress: body.walletAddress,
-          ...(body.chainAgentId ? {chainAgentId: body.chainAgentId} : {}),
-          chainId: body.chainId,
-        }),
-      },
-      'could not start the registration',
-    );
-    const signature = await sign(challenge.message);
+    const challenge = await api.challenge({
+      ownerAddress: body.ownerAddress,
+      walletAddress: body.walletAddress,
+      chainAgentId: body.chainAgentId,
+      chainId: body.chainId,
+    });
+    const signed = await sign({
+      message: challenge.message,
+      recipient: challenge.recipient,
+      nonce: challenge.nonce,
+    });
+    // A wallet can sign as whichever account is selected in it. Caught here,
+    // where it can be said plainly, rather than as a 401 from the API.
+    if (signed.accountId !== body.ownerAddress) {
+      throw new Error(
+        `The wallet signed as ${signed.accountId}, not the owner ${body.ownerAddress}. Switch accounts and try again.`,
+      );
+    }
     return request<RegisteredAgent>(
       '/v1/agents',
       {
         method: 'POST',
-        headers: json,
-        body: JSON.stringify({...body, nonce: challenge.nonce, signature}),
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({
+          ...body,
+          nonce: challenge.nonce,
+          publicKey: signed.publicKey,
+          signature: signed.signature,
+        }),
       },
       'registration failed',
     );

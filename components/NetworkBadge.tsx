@@ -52,13 +52,13 @@ export function NetworkBadge() {
           ? `${base} border-chain/30 bg-chain/10 text-muted`
           : `${base} border-refused/50 bg-refused/10 font-medium text-refused`
       }
-      title={network.contracts['TaskEscrow'] ?? undefined}
+      title={network.contracts?.Pactora || undefined}
     >
       <StatusDot tone={network.testnet ? 'chain' : 'refused'} />
       {/* On the narrowest phones a testnet badge is just its dot; REAL FUNDS is never hidden. */}
       <span className={network.testnet ? 'sr-only text-text min-[400px]:not-sr-only' : ''}>
         {network.name}
-        {network.testnet ? ' · testnet' : ' · REAL FUNDS'}
+        {network.testnet ? (/testnet/i.test(network.name) ? '' : ' · testnet') : ' · REAL FUNDS'}
       </span>
     </span>
   );

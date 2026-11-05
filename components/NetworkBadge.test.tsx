@@ -15,10 +15,15 @@ function serve(body: unknown, status = 200) {
 }
 
 const network = (testnet: boolean) => ({
-  chainId: testnet ? 10143 : 143,
-  name: testnet ? 'Monad Testnet' : 'Monad',
+  chainId: testnet ? 'near:testnet' : 'near:mainnet',
+  nearNetworkId: testnet ? 'testnet' : 'mainnet',
+  name: testnet ? 'NEAR Testnet' : 'NEAR',
   testnet,
-  contracts: {TaskEscrow: '0x4feED0338761817417Fd1dDdFC8331D16AEB370D'},
+  contracts: {
+    Pactora: testnet ? 'pactora.testnet' : 'pactora.near',
+    PaymentToken: 'musdc.testnet',
+    Arbiter: 'arb.testnet',
+  },
 });
 
 /**
@@ -29,13 +34,29 @@ describe('NetworkBadge', () => {
   it('says testnet on a testnet', async () => {
     serve(network(true));
     render(<NetworkBadge />);
-    expect((await screen.findByText(/Monad Testnet/)).textContent).toContain('testnet');
+    const badge = await screen.findByText(/NEAR Testnet/);
+    // The network's own name already says it; the badge does not repeat it.
+    expect(badge.textContent).toBe('NEAR Testnet');
+  });
+
+  it('names a testnet whose name does not say so', async () => {
+    serve({...network(true), name: 'NEAR Sandbox (local)'});
+    render(<NetworkBadge />);
+    expect((await screen.findByText(/NEAR Sandbox/)).textContent).toBe('NEAR Sandbox (local) · testnet');
+  });
+
+  it('carries the Pactora contract account in its title', async () => {
+    serve(network(true));
+    render(<NetworkBadge />);
+    expect((await screen.findByText(/NEAR Testnet/)).parentElement?.getAttribute('title')).toBe(
+      'pactora.testnet',
+    );
   });
 
   it('says REAL FUNDS on a mainnet, in words', async () => {
     serve(network(false));
     render(<NetworkBadge />);
-    expect((await screen.findByText(/REAL FUNDS/)).textContent).toBe('Monad · REAL FUNDS');
+    expect((await screen.findByText(/REAL FUNDS/)).textContent).toBe('NEAR · REAL FUNDS');
   });
 
   it('says the API is unreachable rather than assuming testnet', async () => {

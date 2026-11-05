@@ -1,95 +1,187 @@
-import {afterEach, describe, expect, it, vi} from 'vitest';
-import {ensureChain, hasWallet, registerIdentity, signMessage} from './wallet';
+import {describe, expect, it, vi} from 'vitest';
+import {
+  agentIdFromOutcome,
+  nonceBytes,
+  registerOnChain,
+  registrationTransactions,
+  signChallenge,
+  TESTNET_DEFAULTS,
+  type NearWallet,
+} from './wallet';
 
-afterEach(() => vi.unstubAllGlobals());
+const PACTORA = 'pactora.testnet';
+const KEY = 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp';
 
-function wallet(handler: (method: string, params?: unknown[]) => unknown) {
-  const request = vi.fn(async ({method, params}: {method: string; params?: unknown[]}) =>
-    handler(method, params),
-  );
-  vi.stubGlobal('ethereum', {request});
-  return request;
+const base64 = (s: string) => btoa(s);
+const ok = (value: string) => ({status: {SuccessValue: base64(value)}});
+
+function fakeWallet(outcomes: unknown[] = [ok(''), ok('17')]) {
+  const signAndSendTransactions = vi.fn(async () => outcomes);
+  const signMessage = vi.fn(async () => ({
+    accountId: 'alice.testnet',
+    publicKey: 'ed25519:owner',
+    signature: 'c2ln',
+  }));
+  return {signAndSendTransactions, signMessage} as unknown as NearWallet & {
+    signAndSendTransactions: typeof signAndSendTransactions;
+    signMessage: typeof signMessage;
+  };
 }
 
-const REGISTRY = '0xeD34Ffc39Ee69c780586b85d930368Bc29B30ef1';
-const OWNER = '0x0000000000000000000000000000000000000001';
-
 const args = {
-  registry: REGISTRY as `0x${string}`,
-  agentURI: 'agentx://test',
-  payoutWallet: OWNER as `0x${string}`,
-  referenceImplementation: true,
-  chainId: 10143,
-  rpcUrl: 'https://testnet-rpc.monad.xyz',
+  owner: 'alice.testnet',
+  wallet: 'probe.alice.testnet',
+  pactora: PACTORA,
+  walletPublicKey: KEY,
+  cardUri: 'data:application/json;base64,e30=',
 };
 
-describe('registerIdentity', () => {
-  // Validation happens before the wallet is asked anything: a typo in the
-  // payout wallet must not become a signed transaction.
-  it('refuses a malformed payout wallet without touching the wallet', async () => {
-    const request = wallet(() => [OWNER]);
-    await expect(registerIdentity({...args, payoutWallet: '0x1234' as `0x${string}`})).rejects.toThrow(
-      /payout wallet is not an address/,
-    );
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it('refuses a malformed registry address', async () => {
-    const request = wallet(() => [OWNER]);
-    await expect(registerIdentity({...args, registry: '0xnope' as `0x${string}`})).rejects.toThrow(
-      /registry/,
-    );
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it('refuses a network with no usable RPC endpoint', async () => {
-    const request = wallet(() => [OWNER]);
-    await expect(registerIdentity({...args, rpcUrl: ''})).rejects.toThrow(/RPC/);
-    expect(request).not.toHaveBeenCalled();
-  });
-});
-
-describe('ensureChain', () => {
-  const chain = {
-    chainId: 10143,
-    name: 'Monad Testnet',
-    rpcUrl: 'https://testnet-rpc.monad.xyz',
-    explorerBaseUrl: 'https://testnet.monadexplorer.com',
-    nativeCurrency: {name: 'MON', symbol: 'MON', decimals: 18},
-  };
-
-  it('adds the chain when the wallet has never seen it (4902)', async () => {
-    const request = wallet((method) => {
-      if (method === 'wallet_switchEthereumChain')
-        throw Object.assign(new Error('unknown chain'), {code: 4902});
-      return null;
+describe('the testnet defaults', () => {
+  it('are the amounts the registration was sized for, in yoctoNEAR', () => {
+    expect(TESTNET_DEFAULTS).toEqual({
+      storageDeposit: '100000000000000000000000',
+      agentFunding: '500000000000000000000000',
+      keyAllowance: '250000000000000000000000',
     });
-    await ensureChain(chain);
-    const add = request.mock.calls.find(([c]) => c.method === 'wallet_addEthereumChain');
-    expect(add?.[0].params?.[0]).toMatchObject({chainId: '0x279f', rpcUrls: [chain.rpcUrl]});
   });
+});
 
-  it('passes on any other refusal, such as the user saying no', async () => {
-    wallet(() => {
-      throw Object.assign(new Error('User rejected the request.'), {code: 4001});
+describe('registrationTransactions (NEAR-PORT §5)', () => {
+  const [create, register] = registrationTransactions({...args, amounts: TESTNET_DEFAULTS});
+
+  it('tx 1 creates the agent account, funds it, and adds the signer key scoped to Pactora', () => {
+    expect(create).toEqual({
+      receiverId: 'probe.alice.testnet',
+      actions: [
+        {type: 'CreateAccount'},
+        {type: 'Transfer', params: {deposit: '500000000000000000000000'}},
+        {
+          type: 'AddKey',
+          params: {
+            publicKey: KEY,
+            accessKey: {
+              permission: {receiverId: PACTORA, methodNames: [], allowance: '250000000000000000000000'},
+            },
+          },
+        },
+      ],
     });
-    await expect(ensureChain(chain)).rejects.toThrow(/rejected/);
+  });
+
+  it('tx 2 calls register_agent on Pactora with the storage deposit', () => {
+    expect(register).toEqual({
+      receiverId: PACTORA,
+      actions: [
+        {
+          type: 'FunctionCall',
+          params: {
+            methodName: 'register_agent',
+            args: {wallet: 'probe.alice.testnet', card_uri: args.cardUri},
+            gas: '100000000000000',
+            deposit: '100000000000000000000000',
+          },
+        },
+      ],
+    });
+  });
+
+  it('passes caps through only when set', () => {
+    const [, withCaps] = registrationTransactions({
+      ...args,
+      perTaskCap: '1000000',
+      dailyCap: '5000000',
+      amounts: TESTNET_DEFAULTS,
+    });
+    expect(withCaps!.actions[0]).toMatchObject({
+      params: {args: {per_task_cap: '1000000', daily_cap: '5000000'}},
+    });
   });
 });
 
-describe('hasWallet', () => {
-  it('is false without an injected provider', () => {
-    expect(hasWallet()).toBe(false);
+describe('agentIdFromOutcome', () => {
+  it('reads the u64 register_agent returned (base64 JSON)', () => {
+    expect(agentIdFromOutcome(ok('17'))).toBe('17');
+    expect(agentIdFromOutcome(ok('"17"'))).toBe('17');
+  });
+
+  it('keeps a u64 beyond 2^53 exact', () => {
+    expect(agentIdFromOutcome(ok('18446744073709551615'))).toBe('18446744073709551615');
+  });
+
+  it('says why when the call failed or returned something else', () => {
+    expect(() =>
+      agentIdFromOutcome({
+        status: {Failure: {ActionError: {kind: {FunctionCallError: 'InsufficientStorage'}}}},
+      }),
+    ).toThrow(/InsufficientStorage/);
+    expect(() => agentIdFromOutcome(ok('{"id":1}'))).toThrow(/agent id/);
+    expect(() => agentIdFromOutcome(undefined)).toThrow(/no outcome/);
   });
 });
 
-describe('signMessage', () => {
-  it('asks the wallet to personal_sign the exact text, as the account given', async () => {
-    const request = wallet((method) => (method === 'personal_sign' ? '0xsigned' : null));
-    const message = 'Pactora: register an agent.\nNonce: 1';
-    expect(await signMessage(OWNER as `0x${string}`, message)).toBe('0xsigned');
-    const call = request.mock.calls.find(([c]) => c.method === 'personal_sign');
-    // EIP-1193 personal_sign: [message as hex, address]
-    expect(call?.[0].params).toEqual(['0x' + Buffer.from(message).toString('hex'), OWNER]);
+describe('nonceBytes', () => {
+  it('turns the API nonce (64 hex) into the 32 bytes NEP-413 needs', () => {
+    const bytes = nonceBytes('00ff'.repeat(16));
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(bytes.length).toBe(32);
+    expect([bytes[0], bytes[1]]).toEqual([0, 255]);
+  });
+
+  it('refuses anything that is not exactly 32 bytes of hex', () => {
+    expect(() => nonceBytes('ab'.repeat(16))).toThrow(/32 bytes/);
+    expect(() => nonceBytes(`0x${'ab'.repeat(31)}`)).toThrow(/32 bytes/);
+  });
+});
+
+describe('registerOnChain', () => {
+  it('sends both transactions as the owner and returns the new agent id', async () => {
+    const w = fakeWallet();
+    const got = await registerOnChain(w, {...args, amounts: TESTNET_DEFAULTS});
+    expect(got.chainAgentId).toBe('17');
+    expect(w.signAndSendTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({signerId: 'alice.testnet', network: 'testnet'}),
+    );
+    const sent = w.signAndSendTransactions.mock.calls[0] as unknown as [{transactions: unknown[]}];
+    expect(sent[0].transactions).toHaveLength(2);
+  });
+
+  it('checks the input before the wallet is asked anything', async () => {
+    const w = fakeWallet();
+    await expect(
+      registerOnChain(w, {...args, wallet: 'probe.bob.testnet', amounts: TESTNET_DEFAULTS}),
+    ).rejects.toThrow(/sub-account/);
+    await expect(
+      registerOnChain(w, {...args, walletPublicKey: 'nope', amounts: TESTNET_DEFAULTS}),
+    ).rejects.toThrow(/ed25519/);
+    await expect(
+      registerOnChain(w, {...args, pactora: 'Not An Account', amounts: TESTNET_DEFAULTS}),
+    ).rejects.toThrow(/contract/);
+    expect(w.signAndSendTransactions).not.toHaveBeenCalled();
+  });
+
+  it('stops at a failed account creation rather than reading an id that does not exist', async () => {
+    const w = fakeWallet([{status: {Failure: {ActionError: {kind: 'AccountAlreadyExists'}}}}, ok('17')]);
+    await expect(registerOnChain(w, {...args, amounts: TESTNET_DEFAULTS})).rejects.toThrow(
+      /AccountAlreadyExists/,
+    );
+  });
+});
+
+describe('signChallenge (NEP-413)', () => {
+  it('passes message, recipient and the 32-byte nonce to the wallet', async () => {
+    const w = fakeWallet();
+    const signed = await signChallenge(w, 'alice.testnet', {
+      message: 'Pactora: sign me',
+      recipient: 'pactora',
+      nonce: 'ab'.repeat(32),
+    });
+    expect(signed).toEqual({accountId: 'alice.testnet', publicKey: 'ed25519:owner', signature: 'c2ln'});
+    const [params] = w.signMessage.mock.calls[0] as unknown as [
+      {message: string; recipient: string; nonce: Uint8Array; signerId: string},
+    ];
+    expect(params.message).toBe('Pactora: sign me');
+    expect(params.recipient).toBe('pactora');
+    expect(params.signerId).toBe('alice.testnet');
+    expect(params.nonce.length).toBe(32);
   });
 });

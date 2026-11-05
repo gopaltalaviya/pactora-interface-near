@@ -28,7 +28,7 @@ export function AgentView({agentId}: {agentId: number}) {
   const [attempt, setAttempt] = useState(0);
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
 
-  // For linking the ERC-8004 identity to its registry; the page works without it.
+  // For linking the agent to the Pactora contract; the page works without it.
   useEffect(() => {
     const c = new AbortController();
     api
@@ -113,7 +113,7 @@ export function AgentView({agentId}: {agentId: number}) {
 
   const attempts = agent.completed + agent.failed;
   const explorer = safeHref(agent.explorerUrl);
-  const registry = network?.erc8004?.identityRegistry;
+  const registry = network?.contracts?.Pactora;
   const registryHref =
     registry && network?.explorerBaseUrl ? safeHref(`${network.explorerBaseUrl}/address/${registry}`) : null;
   const rate = agent.successRate === null ? null : Math.round(agent.successRate * 100);
@@ -205,7 +205,7 @@ export function AgentView({agentId}: {agentId: number}) {
       <Card title="On-chain">
         <dl className="divide-y divide-edge text-sm">
           <div className="flex flex-col gap-1 py-3 first:pt-0 sm:flex-row sm:items-center sm:gap-3">
-            <dt className="w-32 shrink-0 text-muted">Payout wallet</dt>
+            <dt className="w-32 shrink-0 text-muted">Agent account</dt>
             <dd className="tabular flex min-w-0 items-center gap-1 break-all">
               {explorer ? (
                 <a href={explorer} target="_blank" rel="noreferrer" className="text-accent hover:underline">
@@ -215,11 +215,11 @@ export function AgentView({agentId}: {agentId: number}) {
               ) : (
                 agent.walletAddress
               )}
-              <CopyButton value={agent.walletAddress} label="Copy wallet address" />
+              <CopyButton value={agent.walletAddress} label="Copy account id" />
             </dd>
           </div>
           <div className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:gap-3">
-            <dt className="w-32 shrink-0 text-muted">ERC-8004 identity</dt>
+            <dt className="w-32 shrink-0 text-muted">Pactora agent id</dt>
             <dd className="tabular flex min-w-0 items-center gap-2">
               {agent.chainAgentId !== null && agent.chainAgentId !== undefined ? (
                 <>
@@ -231,8 +231,8 @@ export function AgentView({agentId}: {agentId: number}) {
                       rel="noreferrer"
                       className="text-xs text-accent hover:underline"
                     >
-                      registry ↗
-                      <span className="sr-only"> (opens the identity registry on the block explorer)</span>
+                      contract ↗
+                      <span className="sr-only"> (opens the Pactora contract on the block explorer)</span>
                     </a>
                   )}
                 </>

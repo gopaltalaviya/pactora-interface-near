@@ -7,8 +7,9 @@ import {Card} from '@/components/ui/Card';
 import {Icon, type IconName} from '@/components/ui/Icon';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Loading, Skeleton} from '@/components/ui/States';
-import {ApiError, api, formatUnits, type ComponentStatus, type GasStatus, type StatusReport} from '@/lib/api';
+import {ApiError, api, type ComponentStatus, type GasStatus, type StatusReport} from '@/lib/api';
 import {relativeTime} from '@/lib/format';
+import {displayAccount, formatYocto} from '@/lib/near';
 
 /**
  * Is Pactora working right now?
@@ -75,11 +76,8 @@ function ModelCard({model}: {model: NonNullable<StatusReport['model']>}) {
  * wallets it sends from. A low one is the next transaction failing, said
  * before it happens rather than as a revert during a run.
  */
-/** A wei balance in whole units, to four places: enough to see a wallet running dry. */
-function native(wei: string): string {
-  const [whole, fraction = ''] = formatUnits(wei, 18).split('.');
-  return fraction ? `${whole}.${fraction.slice(0, 4)}` : whole!;
-}
+/** A yoctoNEAR balance in NEAR, to four places: enough to see an account running dry. */
+const native = (yocto: string) => `${formatYocto(yocto)} NEAR`;
 
 function GasCard({gas}: {gas: GasStatus}) {
   const word = {ok: 'every wallet funded', low: 'a wallet is low', unknown: 'not yet read'}[gas.state];
@@ -94,13 +92,13 @@ function GasCard({gas}: {gas: GasStatus}) {
       </span>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium">Gas (the signer&apos;s wallets)</span>
+          <span className="text-sm font-medium">Gas (the signer&apos;s accounts)</span>
           <Badge tone={tone} dot>
             {word}
           </Badge>
         </div>
         <p className="text-xs leading-relaxed text-muted">
-          The native balance of every key the signer sends transactions from, read in the background
+          The NEAR balance of every account the signer sends transactions from, read in the background
           {gas.checkedAt ? ` — last ${relativeTime(gas.checkedAt)}` : ''}. A low one is topped up before the
           next run, not discovered by it.
         </p>
@@ -109,11 +107,11 @@ function GasCard({gas}: {gas: GasStatus}) {
             {gas.wallets.map((w) => (
               <li key={w.address} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-muted">
-                  {w.role}{' '}
-                  <span className="tabular text-text">{`${w.address.slice(0, 6)}…${w.address.slice(-4)}`}</span>
+                  {w.role} <span className="tabular text-text">{displayAccount(w.address)}</span>
                 </span>
                 <span className={`tabular ${w.low ? 'font-medium text-broken' : 'text-text'}`}>
-                  {native(w.balanceWei)} native{w.low ? ' — low' : ''}
+                  {native(w.balanceYocto)}
+                  {w.low ? ' — low' : ''}
                 </span>
               </li>
             ))}
