@@ -10,10 +10,14 @@ import {isPublicId, parseAgentId, safeHref, shortId} from './links';
  */
 describe('safeHref', () => {
   it('admits an https link on a known explorer', () => {
-    expect(safeHref('https://testnet.monadexplorer.com/tx/0xabc')).toBe(
-      'https://testnet.monadexplorer.com/tx/0xabc',
+    expect(safeHref('https://testnet.nearblocks.io/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm')).toBe(
+      'https://testnet.nearblocks.io/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm',
     );
-    expect(safeHref('https://monadscan.com/address/0x1')).toBe('https://monadscan.com/address/0x1');
+    expect(safeHref('https://nearblocks.io/address/alice.near')).toBe('https://nearblocks.io/address/alice.near');
+  });
+
+  it('no longer admits the Monad explorers', () => {
+    expect(safeHref('https://testnet.monadexplorer.com/tx/0xabc')).toBeNull();
   });
 
   it('refuses script and data URLs', () => {
@@ -23,17 +27,17 @@ describe('safeHref', () => {
   });
 
   it('refuses plain http, even on a known host', () => {
-    expect(safeHref('http://testnet.monadexplorer.com/tx/0xabc')).toBeNull();
+    expect(safeHref('http://testnet.nearblocks.io/txns/abc')).toBeNull();
   });
 
   it('refuses a host that is not an explorer, including look-alikes', () => {
-    expect(safeHref('https://evil.example/tx/0xabc')).toBeNull();
-    expect(safeHref('https://testnet.monadexplorer.com.evil.example/tx/1')).toBeNull();
-    expect(safeHref('https://monadscan.com@evil.example/')).toBeNull();
+    expect(safeHref('https://evil.example/txns/abc')).toBeNull();
+    expect(safeHref('https://testnet.nearblocks.io.evil.example/txns/1')).toBeNull();
+    expect(safeHref('https://nearblocks.io@evil.example/')).toBeNull();
   });
 
   it('refuses credentials in the URL', () => {
-    expect(safeHref('https://user:pass@monadscan.com/')).toBeNull();
+    expect(safeHref('https://user:pass@nearblocks.io/')).toBeNull();
   });
 
   it('refuses anything that is not a non-empty string', () => {

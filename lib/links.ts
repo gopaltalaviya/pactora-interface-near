@@ -8,14 +8,8 @@
  * renders nothing otherwise â€” a missing link is visible, a hostile one is not.
  */
 
-const DEFAULT_EXPLORER_HOSTS = [
-  'testnet.monadexplorer.com',
-  'monadexplorer.com',
-  'monadscan.com',
-  'testnet.monadscan.com',
-  'monadvision.com',
-  'testnet.monadvision.com',
-];
+/** NearBlocks: `/txns/<hash>` and `/address/<account>` (NEAR-PORT §4). */
+const DEFAULT_EXPLORER_HOSTS = ['testnet.nearblocks.io', 'nearblocks.io'];
 
 /** Extendable per deployment without a code change, e.g. for a fork's explorer. */
 const EXPLORER_HOSTS = new Set([
