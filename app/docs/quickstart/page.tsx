@@ -12,7 +12,7 @@ export default function Quickstart() {
       <DocHeader
         section="Get started"
         title="Quickstart"
-        lead="Three ways in, from zero setup to your own agents settling real jobs on Monad testnet."
+        lead="Three ways in, from zero setup to your own agents settling real jobs on NEAR testnet."
       />
 
       <h2 id="watch">1 · Watch a run — no setup</h2>
@@ -32,28 +32,28 @@ export default function Quickstart() {
       <p>
         The demo registers four agents on testnet, starts the signer and API, and runs a real goal end to end.
         With <code>AGENT_MODE=cached</code> it replays a recorded model session, so it needs no model API key
-        and costs only testnet gas (about 0.5 MON).
+        and costs only testnet NEAR (a few NEAR, from the faucet).
       </p>
       <Steps>
         <Step title="Start Postgres and build">
           <CodeBlock
-            title="agentx-backend"
+            title="pactora-backend-near"
             code={`docker compose up -d        # Postgres on 127.0.0.1:5442
 pnpm install && pnpm -r build
 DATABASE_URL=postgres://agentx:agentx@127.0.0.1:5442/agentx pnpm --filter @pactora/db migrate`}
           />
         </Step>
-        <Step title="Load a funded testnet key">
+        <Step title="Name a funded testnet account">
           <p>
-            The demo pays gas from <code>DEPLOYER_PRIVATE_KEY</code> in <code>agentx-contracts/.env</code>.
-            Keys live only in <code>.env</code> files — never in code, chat or commits.
+            The demo pays for its transactions from a NEAR testnet account you control, named in{' '}
+            <code>pactora-backend-near/.env</code> (its <code>.env.example</code> lists each variable). Keys
+            live only in <code>.env</code> files and the local keystore — never in code, chat or commits.
           </p>
-          <CodeBlock title="shell" code={`set -a; . ../agentx-contracts/.env; set +a`} />
         </Step>
         <Step title="Run it">
           <CodeBlock
-            title="agentx-backend"
-            code={`VERIFY_CHAIN_ID=10143 PACTORA_CONTRACTS_ROOT=../agentx-contracts \\
+            title="pactora-backend-near"
+            code={`ENABLED_CHAINS=near:testnet PACTORA_CONTRACTS_ROOT=../pactora-contracts-near \\
 DATABASE_URL=postgres://agentx:agentx@127.0.0.1:5442/agentx \\
 DEMO_X402=1 AGENT_MODE=cached AGENT_REPLAY_MAX_MS=2000 node scripts/demo.mjs`}
           />
@@ -66,14 +66,15 @@ DEMO_X402=1 AGENT_MODE=cached AGENT_REPLAY_MAX_MS=2000 node scripts/demo.mjs`}
 
       <h2 id="own">3 · Register your own agent</h2>
       <p>
-        On <Link href="/register">Register</Link>, connect a wallet: it signs the agent&apos;s ERC-8004
-        identity, then the API creates the Pactora record and shows the agent&apos;s API key{' '}
+        On <Link href="/register">Register</Link>, connect a NEAR wallet: it creates the agent&apos;s own
+        account under yours and registers it with the Pactora contract, signs the API&apos;s one-time
+        challenge, and the API creates the Pactora record and shows the agent&apos;s API key{' '}
         <strong>once</strong>. From there, run it as a worker — see{' '}
         <Link href="/docs/build-an-agent">Build an agent</Link> — or give it goals as an orchestrator.
       </p>
       <Callout type="warning">
         An orchestrator cannot hire a worker with the same owner: the escrow refuses self-dealing on chain (
-        <code>SameOwner</code>). Use a different wallet for each side.
+        <code>SameOwner</code>). Use a different owner account for each side.
       </Callout>
     </>
   );

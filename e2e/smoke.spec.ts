@@ -36,10 +36,13 @@ test('the landing page makes its case and leads to the demo and the docs', async
   await expect(page.getByRole('link', {name: 'Read the docs'})).toHaveAttribute('href', '/docs');
   // Live figures come from the API, and the deployed escrow links to the explorer.
   await expect(page.getByText('Jobs settled on chain')).toBeVisible();
-  await expect(page.getByRole('link', {name: /TaskEscrow/})).toHaveAttribute('href', /^https:\/\//);
+  await expect(page.getByRole('link', {name: /Pactora pactora\.testnet/})).toHaveAttribute(
+    'href',
+    'https://testnet.nearblocks.io/address/pactora.testnet',
+  );
   // The FAQ opens.
   await page.getByText('Is this real money?').click();
-  await expect(page.getByText(/Monad testnet with a test stablecoin/)).toBeVisible();
+  await expect(page.getByText(/NEAR testnet with a test stablecoin/)).toBeVisible();
 });
 
 test('every docs page renders, and the sidebar marks where you are', async ({page, isMobile}) => {
@@ -73,7 +76,7 @@ test('the demo page renders with labelled inputs and the network badge', async (
   await expect(page.getByRole('heading', {level: 1})).toContainText('One sentence');
   await expect(page.getByLabel('Goal')).toBeVisible();
   await expect(page.getByLabel('Orchestrator API key')).toBeVisible();
-  await expect(page.getByText('Monad Testnet · testnet')).toBeVisible();
+  await expect(page.getByText('NEAR Testnet', {exact: true})).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -127,12 +130,13 @@ test('an agent profile renders, and a hostile explorer URL is not a link', async
   const errors = watchConsole(page);
   await page.goto('/agents/1');
   await expect(page.getByRole('heading', {name: 'ResearchBot'})).toBeVisible();
-  await expect(page.getByRole('link', {name: /0x0{39}2/})).toHaveAttribute(
+  // A NEAR account is shown in full, linked to NearBlocks.
+  await expect(page.getByRole('link', {name: /^researchbot\.owner\.testnet/})).toHaveAttribute(
     'href',
-    /^https:\/\/testnet\.monadexplorer\.com\//,
+    'https://testnet.nearblocks.io/address/researchbot.owner.testnet',
   );
 
-  await expect(page.getByText('#42')).toBeVisible(); // its ERC-8004 identity
+  await expect(page.getByText('#42')).toBeVisible(); // its Pactora agent id on chain
   await page.goto('/agents/2');
   await expect(page.getByRole('heading', {name: 'Unproven'})).toBeVisible();
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
@@ -148,7 +152,7 @@ test('a malformed agent id is a real 404', async ({page}) => {
 test('a run renders its answer, steps and trace, with money as money', async ({page}) => {
   const errors = watchConsole(page);
   await page.goto(`/runs/${RUN_ID}`);
-  await expect(page.getByRole('heading', {level: 1})).toContainText('Research ETH/USDC');
+  await expect(page.getByRole('heading', {level: 1})).toContainText('Research NEAR/USDC');
   await expect(page.getByText('Liquidity is thin; wait.')).toBeVisible();
   // The trace's total, formatted from base units with the token's decimals.
   await expect(
@@ -164,7 +168,10 @@ test('a settled step on the run record proves its on-chain review', async ({page
   const proof = page.getByText(/Review written on chain for/);
   await expect(proof).toContainText('Review written on chain for ResearchBot — score now 72');
   // The proof is the settlement transaction, which wrote the review.
-  await expect(page.getByRole('link', {name: /proof ↗/})).toHaveAttribute('href', /\/tx\/0xsettle$/);
+  await expect(page.getByRole('link', {name: /proof ↗/})).toHaveAttribute(
+    'href',
+    'https://testnet.nearblocks.io/txns/8Ha3ThYvqv4WQx2t4ZCSFmAS5hj7VG4EHVgPeLJP7tUZ',
+  );
   expect(errors).toEqual([]);
 });
 
@@ -185,12 +192,16 @@ test('the run history needs a key and then lists runs', async ({page}) => {
   expect(errors).toEqual([]);
 });
 
-test('register explains itself without a wallet and validates before signing', async ({page}) => {
+test('register explains NEAR Connect and validates before signing', async ({page}) => {
   const errors = watchConsole(page);
   await page.goto('/register');
-  await expect(page.getByText(/No browser wallet found/)).toBeVisible();
-  await page.getByLabel(/Payout wallet/).fill('0x1234');
-  await expect(page.getByText(/Not an address/)).toBeVisible();
+  await expect(page.getByText(/Connect opens NEAR Connect/)).toBeVisible();
+  // The agent account defaults from the name, and must be one account-id segment.
+  await page.getByLabel('Name').fill('Research Bot');
+  await expect(page.getByLabel(/Agent account/)).toHaveValue('research-bot');
+  await page.getByLabel(/Agent account/).fill('Research.Bot');
+  await expect(page.getByText(/lowercase letters, digits/)).toBeVisible();
+  await expect(page.getByText(/0\.5 NEAR to the agent account and 0\.1 NEAR for storage/)).toBeVisible();
   await page.getByLabel(/Price per task/).fill('500');
   await expect(page.getByText(/Below the escrow minimum of 0.01 USDC/)).toBeVisible();
   expect(errors).toEqual([]);
@@ -215,7 +226,11 @@ test('the status page names a wallet that is low on gas', async ({page}) => {
   const gas = page.getByRole('region', {name: 'Gas'});
   await expect(gas).toContainText('a wallet is low');
   await expect(gas).toContainText('keeper');
-  await expect(gas).toContainText('— low');
+  // Balances in NEAR (24 decimals); a named account in full, an implicit one shortened.
+  await expect(gas).toContainText('4.6381 NEAR');
+  await expect(gas).toContainText('0.09 NEAR — low');
+  await expect(gas).toContainText('researchbot.owner.testnet');
+  await expect(gas).toContainText('d5d5d5d5…d5d5d5d5');
 });
 
 test('the status page says what is degraded, in words', async ({page}) => {
@@ -292,7 +307,7 @@ test('the fees page shows the network’s own values, read live', async ({page})
   await expect(row('maxJob')).toContainText('10 USDC');
   await expect(row('withdrawDelay')).toContainText('7 days');
   await expect(row('maxFee')).toContainText('10% of the job');
-  await expect(page.getByText('Monad Testnet', {exact: true})).toBeVisible();
+  await expect(page.getByText('NEAR Testnet', {exact: true}).first()).toBeVisible();
 });
 
 test('an API that does not publish a limit is said so, never filled in', async ({page}) => {

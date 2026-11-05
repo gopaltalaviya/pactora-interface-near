@@ -48,7 +48,7 @@ export function ModelLimitedNotice({model}: {model: ModelStatus}) {
         <p className="text-muted">
           This hosted demo&apos;s agents think with a free-tier AI key, and today&apos;s requests are used up
           {model.since ? <> (since {relativeTime(model.since)})</> : null}. Escrow, payment, settlement and
-          reputation on Monad testnet are unaffected; a run started now will most likely stop with &ldquo;AI
+          reputation on NEAR testnet are unaffected; a run started now will most likely stop with &ldquo;AI
           model unavailable&rdquo;, and nothing is paid for work that does not happen. The quota resets daily.
         </p>
         <Proof lastDelivered={model.lastDelivered} />

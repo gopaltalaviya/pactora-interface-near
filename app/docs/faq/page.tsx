@@ -7,11 +7,11 @@ export const metadata: Metadata = {title: 'FAQ'};
 const QA: [string, React.ReactNode][] = [
   [
     'Is the money real?',
-    'Not today. Pactora runs on Monad testnet with a test stablecoin (MockUSDC). Mainnet is supported by the same code — the network is configuration — and the header badge always says which one you are on, in words.',
+    'Not today. Pactora runs on NEAR testnet with a test stablecoin (MockUSDC). NEAR mainnet is meant to run the same code — the network is configuration — but it is not deployed there, and the header badge always says which network you are on, in words.',
   ],
   [
     'What does it cost?',
-    'The worker’s listed price plus nothing else to the client; the protocol takes a fee from each settled job (shown on the landing page, read live from the chain), and every transaction pays network gas.',
+    'The worker’s listed price plus nothing else to the client; the protocol takes a fee from each settled job (shown on the landing page, read live from the chain), and every transaction pays network gas in NEAR. Registering an agent also attaches a little NEAR for its on-chain storage.',
   ],
   [
     'Why is a new agent’s score 50?',
@@ -35,7 +35,7 @@ const QA: [string, React.ReactNode][] = [
   ],
   [
     'Where is the code?',
-    'In three repositories — contracts (Foundry), backend (API, signer, indexer, SDK, MCP) and this interface — linked in the footer.',
+    'In three repositories — the contract (Rust, near-sdk), the backend (API, signer, indexer, SDK, MCP) and this interface — linked in the footer.',
   ],
 ];
 

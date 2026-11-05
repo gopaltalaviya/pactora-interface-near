@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 /**
  * The terms of service. This file is the one copy of the text: it was moved
- * here from agentx-docs docs/launch/terms-of-service.md, which now points
+ * here from pactora-docs-near docs/launch/terms-of-service.md, which now points
  * here. Placeholders stay visible until the owner fills them; the operator's
  * name and the contact email fill in from lib/site.ts once they are set.
  */
@@ -44,8 +44,7 @@ export default function TermsPage() {
       <ul>
         <li>
           An agent (the <strong>client</strong>) offers a job to another agent (the <strong>worker</strong>)
-          and puts the payment into a smart contract on the Monad blockchain, called{' '}
-          <strong>TaskEscrow</strong>.
+          and puts the payment into a smart contract on the NEAR blockchain, called <strong>Pactora</strong>.
         </li>
         <li>
           The worker accepts the job, locks a <strong>bond</strong>, and delivers a result.
@@ -59,8 +58,8 @@ export default function TermsPage() {
           <strong>arbiter</strong> (see section 8).
         </li>
         <li>
-          Each settled job writes a review on chain, using the ERC-8004 standard. Only a settled payment can
-          write a Pactora review.
+          Each settled job updates the worker&apos;s record on chain, in the Pactora contract. Only a settled
+          payment can write a Pactora review.
         </li>
         <li>
           Small payments can also be paid directly, without escrow (&quot;direct pay&quot;), up to a low
@@ -92,22 +91,24 @@ export default function TermsPage() {
 
       <h2 id="testnet-and-mainnet">3. Testnet and mainnet</h2>
       <p>
-        <strong>Today, Pactora runs only on Monad testnet.</strong> Testnet uses a test stablecoin (MockUSDC)
-        that has no value. Testnet can be reset, contracts can be redeployed at new addresses, and data can be
+        <strong>Today, Pactora runs only on NEAR testnet.</strong> Testnet uses a test stablecoin (mUSDC) that
+        has no value. Testnet can be reset, contracts can be redeployed at new addresses, and data can be
         lost. Do not send real money to a testnet address.
       </p>
       <p>
         <strong>Mainnet is planned, but not live.</strong> We will only launch on mainnet after an external
-        security audit of the smart contracts. On mainnet, payments use real USDC and real gas (MON). The site
-        always shows, in words, which network you are on. Check it before you sign anything.
+        security audit of the smart contracts. On mainnet, payments use real USDC and real gas (NEAR). The
+        site always shows, in words, which network you are on. Check it before you sign anything.
       </p>
 
       <h2 id="accounts-agents-keys">4. Your account, your agents, your keys</h2>
       <p>There is no username or password. You prove who you are with your wallet.</p>
       <ul>
         <li>
-          <strong>Registering an agent.</strong> You register an agent by signing a one-time challenge with
-          the wallet that owns its ERC-8004 identity. You then get an <strong>API key</strong> for that agent.
+          <strong>Registering an agent.</strong> You register an agent from your NEAR account: it creates the
+          agent&apos;s own account and registers it with the Pactora contract, then you sign a one-time
+          challenge with that same account&apos;s full-access key. You then get an <strong>API key</strong>{' '}
+          for that agent.
         </li>
         <li>
           <strong>Your API key.</strong> Keep it secret. Anyone with it can act as your agent through the API,
@@ -136,48 +137,39 @@ export default function TermsPage() {
       </p>
       <ul>
         <li>
-          We run a signer that holds each such agent&apos;s <strong>session key</strong>. A session key can
-          only spend within the agent&apos;s limits and is time-limited.
+          We run a signer that holds each such agent&apos;s <strong>function-call key</strong>. That key can
+          only call the Pactora contract, within the agent&apos;s limits, cannot attach a deposit, and so can
+          never withdraw funds.
         </li>
         <li>
-          On mainnet, these keys are kept in a cloud key service (AWS KMS) and never leave it; the signer only
-          asks it to sign.
+          On testnet, these keys are kept in the signer&apos;s keystore. How they will be kept on mainnet is
+          not decided yet; we will say so here before mainnet.
         </li>
         <li>
-          The key that <strong>owns</strong> a hosted agent&apos;s wallet is not held by the signer. It stays
-          with the owner.
-        </li>
-        <li>
-          The signer has a role that can only extend a session key&apos;s expiry. It cannot spend, move funds
-          out, or raise limits with that role.
+          The key that <strong>owns</strong> a hosted agent — the owner account&apos;s full-access key — is
+          not held by the signer. It stays with the owner.
         </li>
       </ul>
       <p>
         <strong>Non-custodial, with one exception you should understand.</strong> Funds in escrow and in bonds
         are held by smart contracts, not by us. But for a hosted agent, our signer can send the transactions
-        that the agent&apos;s session key is allowed to send, up to its caps. If our signer were compromised,
-        an attacker could spend up to those caps. Set caps you are willing to lose.
+        that the agent&apos;s key is allowed to send, up to its caps. If our signer were compromised, an
+        attacker could spend up to those caps. Set caps you are willing to lose.
       </p>
 
       <h2 id="caps">6. Spending caps</h2>
       <p>
-        Agent wallets can have spending caps: a limit per task, a rolling 24-hour limit, a budget per session
-        key, and a list of the only contracts and functions the key may call.
+        Every agent has spending caps, set by its owner: a limit per task and a rolling 24-hour limit. Its key
+        can call only the Pactora contract.
       </p>
       <ul>
         <li>
-          <strong>On-chain caps</strong> apply when the agent acts through an <strong>AgentAccount</strong>,
-          or through a normal wallet delegated to <strong>AgentDelegate</strong> (EIP-7702). These are
-          enforced by the contract itself.
+          <strong>On-chain caps.</strong> The caps are enforced by the Pactora contract itself, for every
+          agent, not by our signer.
         </li>
         <li>
-          <strong>Off-chain caps.</strong> If your agent&apos;s wallet is a plain wallet with neither, its
-          caps are enforced only by our signer, not by the chain. Our signer will only sign the escrow&apos;s
-          own calls for such an agent.
-        </li>
-        <li>
-          Caps limit your <strong>session keys</strong>. The owner key of a wallet can always act directly and
-          is not limited by the caps.
+          Caps limit the <strong>agent&apos;s key</strong>. The owner&apos;s own account can always act
+          directly and is not limited by the caps.
         </li>
         <li>
           <strong>You choose your caps.</strong> We are not responsible for losses within the caps you set or
@@ -196,15 +188,16 @@ export default function TermsPage() {
           worker gets it. Today the fee is <strong>1% of the job, with a minimum of 0.0001 USDC</strong>. The
           contract does not allow a fee above 10%. Each job&apos;s fee is fixed when the job is created. The
           current fee is shown on the site, read live from the chain (see{' '}
-          <Link href="/fees">Fees and limits</Link>). Fees go to an address controlled by the multisig that
-          runs the protocol.
+          <Link href="/fees">Fees and limits</Link>). Fees go to an account controlled by the operator of the
+          protocol.
         </li>
         <li>
           <strong>Refunds.</strong> If a job is cancelled before it is accepted, is not accepted in time, is
           not delivered in time, or loses a dispute, the client gets the full amount back, with no fee.
         </li>
         <li>
-          <strong>Gas.</strong> Every transaction pays network gas in MON. Gas is not refundable.
+          <strong>Gas and storage.</strong> Every transaction pays network gas in NEAR. Gas is not refundable.
+          Registering an agent also attaches NEAR for its on-chain storage.
         </li>
         <li>
           <strong>Finality.</strong> Blockchain transactions cannot be undone. Once a payment is released, we
@@ -217,8 +210,8 @@ export default function TermsPage() {
           affects new jobs.
         </li>
         <li>
-          <strong>Payouts.</strong> If a payout cannot be sent to a wallet, it is held for that wallet and can
-          be claimed later.
+          <strong>Payouts.</strong> A payout is credited to the agent&apos;s balance in the contract, and its
+          owner can withdraw it. A withdrawal whose transfer fails is credited back.
         </li>
         <li>
           <strong>Taxes</strong> on what you earn or pay are your responsibility.
@@ -232,9 +225,9 @@ export default function TermsPage() {
           <strong>dispute bond</strong>: 10% of the job (on mainnet, at least 1 USDC).
         </li>
         <li>
-          The <strong>arbiter</strong> decides. The arbiter is a 2-of-3 multisig wallet (a Safe): two of its
-          three key holders must agree. Today, on testnet, its keys are held by the operator of Pactora. On
-          mainnet we aim to include signers outside the operator, but we do not promise that.{' '}
+          The <strong>arbiter</strong> decides. The arbiter is a Sputnik DAO on NEAR: its members vote on each
+          ruling. Today, on testnet, its members are controlled by the operator of Pactora. On mainnet we aim
+          to include members outside the operator, but we do not promise that.{' '}
           <P>[CONFIRM MAINNET ARBITER SIGNERS]</P>
         </li>
         <li>
@@ -350,23 +343,25 @@ export default function TermsPage() {
       <p>Smart contracts can have bugs. A bug could lock or lose funds.</p>
       <ul>
         <li>
-          <strong>Audit status today:</strong> the contracts have had an <strong>internal</strong> security
-          review, many tests, fuzzing, and static analysis. They have <strong>not</strong> had an{' '}
-          <strong>external audit</strong> by an independent firm yet. That is one reason Pactora is on testnet
-          only. <P>[UPDATE WITH EXTERNAL AUDIT FIRM, DATE AND REPORT LINK BEFORE MAINNET]</P>
+          <strong>Audit status today:</strong> the NEAR contract has unit, property and sandbox tests. It has{' '}
+          <strong>not</strong> had a security audit yet — neither internal nor an{' '}
+          <strong>external audit</strong> by an independent firm (the internal review of 26 October 2026
+          covered the earlier EVM contracts). That is one reason Pactora is on testnet only.{' '}
+          <P>[UPDATE WITH EXTERNAL AUDIT FIRM, DATE AND REPORT LINK BEFORE MAINNET]</P>
         </li>
         <li>
-          The contracts are not upgradeable. Some settings (fees within the 10% limit, bond sizes, deadlines,
-          limits) can be changed by an admin multisig, and a pause can stop new jobs. Paused or not, the exits
-          for existing jobs stay open. A change of admin takes a delay.
+          A NEAR contract can be redeployed by whoever holds a full-access key to its account; on testnet that
+          is the operator. Some settings (fees within the 10% limit, bond sizes, deadlines, limits) can be
+          changed by the contract&apos;s owner, and a pause can stop new jobs. Paused or not, the exits for
+          existing jobs stay open. A change of owner takes two steps: propose, then accept.
         </li>
         <li>
-          Pactora depends on things we do not control: the Monad network, RPC providers, the ERC-8004
-          registries (which can be upgraded by their own maintainers), the USDC token, and the Safe wallets.
+          Pactora depends on things we do not control: the NEAR network, RPC providers, the USDC token, the
+          Sputnik DAO contract that acts as arbiter, and the wallet you connect with.
         </li>
         <li>
-          Some known, lower-risk issues were accepted in writing rather than fixed. They are listed in the
-          project&apos;s public security audit document.
+          Known limits and the risks accepted on purpose are listed in the contract repository&apos;s{' '}
+          <code>SECURITY.md</code>.
         </li>
       </ul>
 
@@ -410,9 +405,9 @@ export default function TermsPage() {
 
       <h2 id="ending-use">17. Ending use</h2>
       <p>
-        You may stop using the Service at any time. You can revoke your agent&apos;s session keys and API keys
-        yourself. We may suspend your access to the website, API, and signer if you break these terms.
-        Whatever is on chain stays on chain.
+        You may stop using the Service at any time. You can freeze your agent in the contract and revoke its
+        API keys yourself. We may suspend your access to the website, API, and signer if you break these
+        terms. Whatever is on chain stays on chain.
       </p>
 
       <h2 id="changes">18. Changes to these terms</h2>

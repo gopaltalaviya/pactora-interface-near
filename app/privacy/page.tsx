@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 /**
  * The privacy policy. This file is the one copy of the text: it was moved
- * here from agentx-docs docs/launch/privacy-policy.md, which now points here.
+ * here from pactora-docs-near docs/launch/privacy-policy.md, which now points here.
  *
  * It was written from what the code on the `v3` branch actually stores and
  * sends. If the code changes — a new table, analytics, a new AI provider, log
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>No accounts.</strong> We do not ask for your name, email, phone number, or ID. You identify
-          yourself with a wallet address and an API key.
+          yourself with a NEAR account and an API key.
         </li>
         <li>
           <strong>No tracking.</strong> The website uses no analytics, no advertising, no tracking pixels, and
@@ -51,7 +51,7 @@ export default function PrivacyPage() {
           records (see below).
         </li>
         <li>
-          <strong>Blockchain data is public and permanent.</strong> Anything written on the Monad blockchain
+          <strong>Blockchain data is public and permanent.</strong> Anything written on the NEAR blockchain
           can be read by anyone, forever, and cannot be deleted — by us or anyone else.
         </li>
         <li>
@@ -66,7 +66,8 @@ export default function PrivacyPage() {
       <p>When you register an agent, we store:</p>
       <ul>
         <li>
-          the agent&apos;s <strong>owner wallet address</strong> and <strong>agent wallet address</strong>;
+          the agent&apos;s <strong>owner account</strong> and <strong>agent account</strong> (NEAR account
+          ids);
         </li>
         <li>
           the agent&apos;s{' '}
@@ -107,7 +108,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Token transfers:</strong> copies of the payment token&apos;s public on-chain transfer
-          records that involve a Pactora agent — including the address on the other side, even if it is not a
+          records that involve a Pactora agent — including the account on the other side, even if it is not a
           Pactora user. We use these to check whether an agent&apos;s reviews were paid for by its own owner.
         </li>
         <li>
@@ -162,20 +163,27 @@ export default function PrivacyPage() {
 
       <h3 id="browser">In your browser</h3>
       <p>
-        The website sets <strong>no cookies</strong>. It stores two things in your browser, which never leave
-        your device:
+        The website sets <strong>no cookies</strong>. It stores these things in your browser, which never
+        leave your device:
       </p>
       <ul>
         <li>your last 5 picks in the site search (local storage);</li>
         <li>
           a cache of the site&apos;s own docs pages, for search (session storage, cleared when you close the
-          tab).
+          tab);
+        </li>
+        <li>
+          if you connect a wallet on the register page: which wallet you chose and your account id, a cached
+          copy of that wallet&apos;s connector code, and whatever that wallet&apos;s own code keeps (local
+          storage and IndexedDB, written by NEAR Connect).
         </li>
       </ul>
       <p>The API key you paste to start a run is sent with that request only. The site does not save it.</p>
       <p>
-        The site connects your wallet through your browser wallet (for example MetaMask) directly. We do not
-        use a third-party wallet-connection service.
+        The register page connects your wallet through <strong>NEAR Connect</strong>, an open-source library
+        that runs in your browser. It loads a list of wallets, and the code of the wallet you pick, from that
+        wallet&apos;s published location, and runs it in a sandbox. We never receive your keys; the wallet you
+        choose is a separate service with its own terms and privacy policy.
       </p>
 
       <h3 id="not-collected">What we do not collect</h3>
@@ -186,23 +194,28 @@ export default function PrivacyPage() {
 
       <h2 id="blockchain">2. Public blockchain data</h2>
       <p>
-        Pactora works on the Monad blockchain. When you or your agent use it, these become{' '}
+        Pactora works on the NEAR blockchain. When you or your agent use it, these become{' '}
         <strong>public and permanent</strong> on chain:
       </p>
       <ul>
-        <li>wallet addresses, payments, fees, bonds, refunds and their amounts;</li>
+        <li>
+          account ids — including your agent&apos;s, which is named after yours (for example{' '}
+          <code>research-bot.alice.testnet</code>) — payments, fees, bonds, refunds and their amounts;
+        </li>
         <li>
           job deadlines and the <strong>hashes</strong> of job specs and results (not the content);
         </li>
-        <li>reviews written through ERC-8004, and the job outcome they record;</li>
+        <li>your agent&apos;s record in the Pactora contract: its jobs, outcomes and reviews;</li>
         <li>
-          your agent&apos;s identity card, which holds its name, description, capabilities and API endpoint.
+          your agent&apos;s card, which holds its name, capabilities, API endpoint and — if it fits — its
+          description.
         </li>
       </ul>
       <p>
         We do not control the blockchain.{' '}
         <strong>We cannot change or delete anything that is on chain</strong>, and neither can you. Anyone can
-        copy and analyse it. Think before you put a name or description on chain that could identify you.
+        copy and analyse it. Think before you put a name, account id or description on chain that could
+        identify you.
       </p>
 
       <h2 id="who-else">3. Who else sees your data</h2>
@@ -223,9 +236,13 @@ export default function PrivacyPage() {
           <strong>Let&apos;s Encrypt</strong> gets our domain name only — for HTTPS certificates.
         </li>
         <li>
-          <strong>Monad RPC providers</strong> (the public Monad RPC today, or <P>[RPC PROVIDER]</P>) get
+          <strong>NEAR RPC providers</strong> (the public NEAR RPC today, or <P>[RPC PROVIDER]</P>) get
           blockchain requests from our server, and from your browser on the register page — to read and send
           blockchain transactions.
+        </li>
+        <li>
+          <strong>GitHub and jsDelivr</strong>, and the host of the wallet you pick, get your IP address when
+          the register page loads the wallet list and that wallet&apos;s code — only if you press Connect.
         </li>
         <li>
           <strong>AI model providers</strong> — Anthropic, Google (Gemini) and Groq, as configured — get, for
@@ -233,8 +250,12 @@ export default function PrivacyPage() {
           specs and inputs those agents work on — so the hosted agents can do the work.
         </li>
         <li>
-          <strong>Amazon Web Services (KMS)</strong> — on mainnet — gets transactions to be signed (not your
-          personal data) — to keep the hosted agents&apos; keys safe.
+          <strong>
+            <P>[KEY SERVICE]</P>
+          </strong>{' '}
+          — only if one is used on mainnet, which is not decided — would get transactions to be signed (not
+          your personal data), to keep the hosted agents&apos; keys safe. On testnet the keys stay on our
+          server.
         </li>
         <li>
           <strong>Other agents:</strong> a job&apos;s spec, including the goal of the run that created it,
@@ -298,7 +319,8 @@ export default function PrivacyPage() {
           <strong>Correct:</strong> you can update your agent&apos;s profile yourself.
         </li>
         <li>
-          <strong>Revoke:</strong> you can revoke your API keys and session keys yourself.
+          <strong>Revoke:</strong> you can revoke your API keys, and freeze your agent in the contract,
+          yourself.
         </li>
         <li>
           <strong>Delete:</strong> we can delete or remove data that is only in our database, where the law
@@ -317,8 +339,8 @@ export default function PrivacyPage() {
       <h2 id="security">6. Security</h2>
       <p>
         We protect data with HTTPS, hashed API keys, logs that hide secrets, a private signer that is not on
-        the public internet, and, on mainnet, keys kept in AWS KMS. No system is perfectly secure. See also{' '}
-        <Link href="/risks">Risks</Link>.
+        the public internet, and agent keys that can call only the Pactora contract. No system is perfectly
+        secure. See also <Link href="/risks">Risks</Link>.
       </p>
 
       <h2 id="children">7. Children</h2>

@@ -30,7 +30,7 @@ accent — the pact, then the place it is made.
 | Text            | `#e8ecf4` | Primary text                                                          |
 | Accent          | `#6ea8ff` | Actions, links, the "ora" of the wordmark                             |
 | Accent on white | `#3b6fd8` | The "ora" of the wordmark on white (4.7:1; the accent is 2.4:1 there) |
-| Chain           | `#9d8cff` | Monad — used only where the chain is meant                            |
+| Chain           | `#9d8cff` | The chain — used only where the chain is meant                        |
 | Settled         | `#3fd68c` | Money that moved                                                      |
 | Refused         | `#f5b942` | The system deciding no                                                |
 | Broken          | `#ff6b6b` | Something actually wrong                                              |

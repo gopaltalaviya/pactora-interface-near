@@ -87,11 +87,11 @@ try {
   const network = await get('/v1/network');
   expectFields('/v1/network', network, [
     'chainId',
+    'nearNetworkId',
     'name',
     'testnet',
     'paymentToken',
     'contracts',
-    'erc8004',
     'rpcUrls',
     'nativeCurrency',
     'explorerBaseUrl',
@@ -100,19 +100,24 @@ try {
     'minJobAmount',
     'windows',
   ]);
-  expectFields('/v1/network paymentToken', network.paymentToken, ['symbol', 'decimals', 'address']);
+  expectFields('/v1/network paymentToken', network.paymentToken, ['symbol', 'decimals', 'accountId']);
+  expectFields('/v1/network contracts', network.contracts, ['Pactora', 'PaymentToken', 'Arbiter']);
   expectFields('/v1/network nativeCurrency', network.nativeCurrency, ['name', 'symbol', 'decimals']);
 
-  // The register page picks its ABI from this. Guessing sends a transaction
-  // that reverts, and on mainnet it pays gas to find out.
-  typeof network.erc8004?.referenceImplementation === 'boolean'
-    ? ok('/v1/network states which ERC-8004 registry ABI the chain has')
-    : fail('/v1/network erc8004.referenceImplementation is missing or not a boolean');
+  // NEAR-PORT §1: the network key is a CAIP-2 string. A number here is the
+  // EVM build answering, and every chainId comparison on the site would miss.
+  typeof network.chainId === 'string' && /^near:[a-z]+$/.test(network.chainId)
+    ? ok(`/v1/network chainId is ${network.chainId}`)
+    : fail(`/v1/network chainId is ${JSON.stringify(network.chainId)}, not a near:<network> string`);
 
-  // A wallet cannot add Monad without one of these; it is in no default list.
+  // /register sends register_agent to this account; without it nothing can be registered.
+  typeof network.contracts?.Pactora === 'string' && network.contracts.Pactora.length > 1
+    ? ok(`/v1/network names the Pactora contract (${network.contracts.Pactora})`)
+    : fail('/v1/network contracts.Pactora is missing, so /register cannot register an agent');
+
   Array.isArray(network.rpcUrls) && network.rpcUrls.length > 0
-    ? ok(`/v1/network offers ${network.rpcUrls.length} public RPC endpoint(s) a wallet can use`)
-    : fail('/v1/network returned no rpcUrls, so a wallet cannot add this chain');
+    ? ok(`/v1/network offers ${network.rpcUrls.length} public RPC endpoint(s)`)
+    : fail('/v1/network returned no rpcUrls');
 
   // The badge says "testnet" or "REAL FUNDS" from this one boolean. A string
   // here would be truthy either way, and the page would claim testnet safety
@@ -258,7 +263,7 @@ try {
   }
 } catch (err) {
   fail(`could not check the contract: ${err.message}`);
-  console.error('\n  Is the API running? Start it with `pnpm dev` in agentx-backend.\n');
+  console.error('\n  Is the API running? Start it with `pnpm dev` in pactora-backend-near.\n');
 }
 
 console.log(failures ? `\nFAILED (${failures})\n` : '\nContract holds.\n');

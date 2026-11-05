@@ -23,7 +23,7 @@
   --color-refused: #f5b942;
   --color-broken: #ff6b6b;
   --color-accent: #6ea8ff;
-  /* Monad's violet — the chain's colour, used only where the chain is meant. */
+  /* The chain colour (a violet), used only where the chain is meant. */
   --color-chain: #9d8cff;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;

@@ -21,20 +21,20 @@ const json = (route: Route, status: number, body: unknown) =>
 
 const agent = (agentId: number, extra: Record<string, unknown> = {}) => ({
   agentId,
-  chainId: 10143,
+  chainId: 'near:testnet',
   chainAgentId: String(100 + agentId),
   name: `Agent ${agentId}`,
   description: 'does things',
   capabilities: ['market-research'],
   pricePerTask: '20000',
   priceDisplay: '0.02 USDC',
-  walletAddress: '0x0000000000000000000000000000000000000002',
+  walletAddress: 'researchbot.owner.testnet',
   score: 60,
   completed: 2,
   failed: 0,
   successRate: 1,
   active: true,
-  explorerUrl: 'https://testnet.monadexplorer.com/address/0x0000000000000000000000000000000000000002',
+  explorerUrl: 'https://testnet.nearblocks.io/address/researchbot.owner.testnet',
   ...extra,
 });
 
@@ -239,8 +239,8 @@ test('volume: 100 agents and a 500-event trace render', async ({page}) => {
   await page.route(`**/v1/runs/${RUN_ID}`, (route) =>
     json(route, 200, {
       runId: RUN_ID,
-      chainId: 10143,
-      network: 'Monad Testnet',
+      chainId: 'near:testnet',
+      network: 'NEAR Testnet',
       testnet: true,
       goal: 'Big run',
       state: 'done',
@@ -276,8 +276,8 @@ test('every way a step can end is named in words', async ({page}) => {
   await page.route(`**/v1/runs/${RUN_ID}`, (route) =>
     json(route, 200, {
       runId: RUN_ID,
-      chainId: 10143,
-      network: 'Monad Testnet',
+      chainId: 'near:testnet',
+      network: 'NEAR Testnet',
       testnet: true,
       goal: 'Every outcome',
       state: 'failed',
@@ -308,8 +308,8 @@ test('a refused review is said plainly, and an unsettled step claims none', asyn
   await page.route(`**/v1/runs/${RUN_ID}`, (route) =>
     json(route, 200, {
       runId: RUN_ID,
-      chainId: 10143,
-      network: 'Monad Testnet',
+      chainId: 'near:testnet',
+      network: 'NEAR Testnet',
       testnet: true,
       goal: 'Two steps',
       state: 'done',
@@ -329,8 +329,14 @@ test('a refused review is said plainly, and an unsettled step claims none', asyn
   await page.route(`**/v1/jobs/${JOB_A}`, (route) =>
     json(route, 200, {
       events: [
-        {kind: 'settled', explorerUrl: 'https://testnet.monadexplorer.com/tx/0x1'},
-        {kind: 'feedback_failed', explorerUrl: 'https://testnet.monadexplorer.com/tx/0x1'},
+        {
+          kind: 'settled',
+          explorerUrl: 'https://testnet.nearblocks.io/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm',
+        },
+        {
+          kind: 'feedback_failed',
+          explorerUrl: 'https://testnet.nearblocks.io/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm',
+        },
       ],
     }),
   );
@@ -414,8 +420,8 @@ test('the status page tells a stopped indexer from one catching up', async ({pag
     components: {api: 'up', database: 'up', signer: 'up', rpc: 'up', indexer},
     chains: [
       {
-        chainId: 10143,
-        name: 'Monad Testnet',
+        chainId: 'near:testnet',
+        name: 'NEAR Testnet',
         testnet: true,
         rpc: 'up',
         headBlock: 1_500,
@@ -445,11 +451,11 @@ test('a run whose record is still being written when the stream ends still shows
 }) => {
   // The live stream can say "finished" a moment before the record has the
   // answer (an older API wrote it after the event). The page read once and
-  // showed a finished run with no answer — seen live on Monad testnet.
+  // showed a finished run with no answer — seen live on the EVM testnet this started on.
   const finished = {
     runId: NEW_RUN,
-    chainId: 10143,
-    network: 'Monad Testnet',
+    chainId: 'near:testnet',
+    network: 'NEAR Testnet',
     testnet: true,
     goal: 'g',
     spent: '20000',
@@ -517,8 +523,8 @@ data: ${JSON.stringify({detail: reason, spent: '0'})}
   await page.route(`**/v1/runs/${NEW_RUN}`, (route) =>
     json(route, 200, {
       runId: NEW_RUN,
-      chainId: 10143,
-      network: 'Monad Testnet',
+      chainId: 'near:testnet',
+      network: 'NEAR Testnet',
       testnet: true,
       goal: 'g',
       state: 'failed',
@@ -584,8 +590,8 @@ test('a live stream that drops and reconnects shows each line once, and only a r
   await page.route(`**/v1/runs/${NEW_RUN}`, (route) =>
     json(route, 200, {
       runId: NEW_RUN,
-      chainId: 10143,
-      network: 'Monad Testnet',
+      chainId: 'near:testnet',
+      network: 'NEAR Testnet',
       testnet: true,
       goal: 'g',
       state: 'done',
@@ -699,8 +705,8 @@ test('a run stopped by the AI model is named as that, not as a broken run', asyn
   await page.route(`**/v1/runs/${NEW_RUN}`, (route) =>
     json(route, 200, {
       runId: NEW_RUN,
-      chainId: 10143,
-      network: 'Monad Testnet',
+      chainId: 'near:testnet',
+      network: 'NEAR Testnet',
       testnet: true,
       goal: 'g',
       state: 'failed',

@@ -4,7 +4,7 @@ import {useEffect, useState} from 'react';
 
 /**
  * The product in one picture: an orchestrator hires three agents; every
- * payment passes through the escrow on Monad before it reaches them; each
+ * payment passes through the escrow on NEAR before it reaches them; each
  * settlement writes that agent's reputation.
  *
  * Pure SVG. Payments are dots travelling along the edges (SVG animateMotion,
@@ -51,7 +51,7 @@ export function NetworkVisual() {
         viewBox={`0 0 ${W} ${H}`}
         className="relative size-full overflow-visible"
         role="img"
-        aria-label="An orchestrator agent pays three worker agents through the Pactora escrow on Monad; each settlement writes the worker's reputation."
+        aria-label="An orchestrator agent pays three worker agents through the Pactora escrow on NEAR; each settlement writes the worker's reputation."
       >
         <defs>
           <linearGradient id="edge" x1="0" x2="1">
@@ -121,7 +121,7 @@ export function NetworkVisual() {
             className="fill-chain"
             style={{fontSize: 10.5, fontFamily: 'var(--font-mono)'}}
           >
-            Monad · locked
+            NEAR · locked
           </text>
         </g>
 

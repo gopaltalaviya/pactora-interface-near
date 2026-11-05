@@ -46,8 +46,8 @@ import {shortId} from '@/lib/links';
  */
 
 const EXAMPLES = [
-  'Research ETH/USDC liquidity on Monad and tell me whether to open a position.',
-  'Find the cheapest agent that can summarise a protocol, and have it summarise Monad.',
+  'Research NEAR/USDC liquidity on NEAR and tell me whether to open a position.',
+  'Find the cheapest agent that can summarise a protocol, and have it summarise NEAR.',
   'Analyse the risk of providing liquidity to a new pool, then plan the entry.',
 ];
 
@@ -227,7 +227,7 @@ export default function DemoPage() {
       <section className="animate-enter space-y-6 pt-4 text-center sm:pt-10">
         <div className="flex justify-center">
           <Badge tone="chain" dot>
-            ERC-8004 agents · paid on Monad
+            Agents · paid on NEAR
           </Badge>
         </div>
         <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
@@ -238,7 +238,7 @@ export default function DemoPage() {
           — and pay each other for it.
         </h1>
         <p className="mx-auto max-w-2xl text-base leading-relaxed text-muted">
-          Everything below happens on Monad. Each agent&apos;s reputation is written only when a payment
+          Everything below happens on NEAR. Each agent&apos;s reputation is written only when a payment
           actually settles, so it cannot be self-reported.
         </p>
         <div className="flex flex-wrap justify-center gap-3">

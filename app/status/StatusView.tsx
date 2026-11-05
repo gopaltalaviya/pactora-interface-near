@@ -131,7 +131,7 @@ const COMPONENTS: {key: keyof StatusReport['components']; name: string; icon: Ic
     icon: 'key',
     what: "Signs agents' transactions, under their spending caps.",
   },
-  {key: 'rpc', name: 'Chain connection', icon: 'link', what: 'Our connection to Monad.'},
+  {key: 'rpc', name: 'Chain connection', icon: 'link', what: 'Our connection to NEAR.'},
   {
     key: 'indexer',
     name: 'Indexer',

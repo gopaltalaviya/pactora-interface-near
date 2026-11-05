@@ -19,17 +19,18 @@ export default function RisksPage() {
       <p>A bug in a smart contract could lock or lose funds.</p>
       <ul>
         <li>
-          The contracts have had an <strong>internal</strong> security audit (26 October 2026), many tests,
-          fuzzing and static analysis. They have <strong>not</strong> had an external audit by an independent
-          firm yet. That is one reason Pactora is on testnet only.
+          The NEAR contract is new. It has unit, property and sandbox tests, but it has <strong>not</strong>{' '}
+          had a security audit yet — the internal audit of 26 October 2026 covered the earlier EVM contracts,
+          not this one. That is one reason Pactora is on testnet only.
         </li>
         <li>
-          Some known, lower-risk issues were accepted in writing rather than fixed. They are listed in the
-          project&apos;s public security audit document.
+          Known limits and the risks accepted on purpose are listed in the contract repository&apos;s{' '}
+          <code>SECURITY.md</code>.
         </li>
         <li>
-          The contracts cannot be upgraded. Some settings — the fee (never above 10%), bond sizes, time limits
-          and job limits — can be changed by an admin multisig. A pause can stop new jobs; paused or not, the
+          A NEAR contract can be redeployed by whoever holds a full-access key to its account; on testnet,
+          that is the operator. Some settings — the fee (never above 10%), bond sizes, time limits and job
+          limits — can be changed by the contract&apos;s owner. A pause can stop new jobs; paused or not, the
           exits for existing jobs stay open.
         </li>
       </ul>
@@ -45,14 +46,14 @@ export default function RisksPage() {
       <h2 id="reputation">Reputation is hard to fake, not impossible</h2>
       <p>
         Only a settled payment can write a Pactora review, so every review costs a real, paid job. An agent
-        cannot hire another agent with the same owner: the escrow refuses it. And our trust check flags agents
-        paid by wallets their own owner funded. But:
+        cannot hire another agent with the same owner: the contract refuses it. And our trust check flags
+        agents paid by wallets their own owner funded. But:
       </p>
       <ul>
         <li>
-          A review bought this way is cheap. On mainnet it costs the minimum fee (about 0.0001 USDC) plus gas,
-          and a direct payment needs no bond. This was accepted on purpose: a higher minimum would price out
-          real small payments.
+          A review bought this way is cheap. On mainnet it costs the minimum fee (about 0.0001 USDC) plus gas
+          in NEAR, and a direct payment needs no bond. This was accepted on purpose: a higher minimum would
+          price out real small payments.
         </li>
         <li>
           A ring of <strong>separate</strong> owners paying each other can still buy reviews. It costs them
@@ -65,27 +66,24 @@ export default function RisksPage() {
       <h2 id="signer">The hosted signer can spend up to your caps</h2>
       <p>
         Agents act with no human present, so something must sign their transactions. For agents that use our
-        hosted signer, it holds each agent&apos;s <strong>session key</strong>, which can only spend within
-        the agent&apos;s caps and expires. The key that <strong>owns</strong> the agent&apos;s wallet is not
-        held by the signer.
+        hosted signer, it holds each agent&apos;s <strong>function-call key</strong>, which can only call the
+        Pactora contract, within the agent&apos;s caps, and can never withdraw. The key that{' '}
+        <strong>owns</strong> the agent — your own account&apos;s full-access key — is not held by the signer.
       </p>
       <ul>
         <li>
           If our signer were broken into, an attacker could spend up to those caps.{' '}
           <strong>Set caps you are willing to lose.</strong>
         </li>
-        <li>
-          Caps are enforced by the contract when the agent uses an agent account or a delegated wallet. For a
-          plain wallet with neither, only our signer enforces them, not the chain.
-        </li>
-        <li>The owner key of a wallet is never limited by the caps.</li>
+        <li>Caps are enforced by the Pactora contract, on chain, for every agent — not by our signer.</li>
+        <li>The owner&apos;s own account is never limited by the caps.</li>
       </ul>
 
       <h2 id="arbiter">Who decides disputes</h2>
       <p>
-        Disputes are decided by the arbiter, a 2-of-3 multisig wallet (a Safe): two of its three key holders
-        must agree. <strong>Today, on testnet, all its keys are held by the operator of Pactora.</strong> Who
-        will hold the mainnet keys is not decided yet. The arbiter judges from what it can see, does not owe
+        Disputes are decided by the arbiter, a Sputnik DAO on NEAR: its members vote on each ruling.{' '}
+        <strong>Today, on testnet, all its members are controlled by the operator of Pactora.</strong> Who
+        will be a member on mainnet is not decided yet. The arbiter judges from what it can see, does not owe
         you a reason, and can get things wrong. If it does not decide in time, the worker is paid and the
         client gets the dispute bond back.
       </p>
@@ -95,9 +93,9 @@ export default function RisksPage() {
 
       <h2 id="registries">Things we do not control</h2>
       <p>
-        Pactora depends on the Monad network, RPC providers, the USDC token, the Safe wallets and the ERC-8004
-        registries. The ERC-8004 identity registry can be upgraded by its own maintainers; we check that it
-        still runs the code we tested against, but we cannot stop a change.
+        Pactora depends on the NEAR network, RPC providers, the USDC token, the Sputnik DAO contract that acts
+        as arbiter, and the wallet you connect with (through NEAR Connect, which loads each wallet&apos;s own
+        code). We cannot stop a change to any of them.
       </p>
 
       <h2 id="public">Job data is public</h2>
@@ -112,8 +110,8 @@ export default function RisksPage() {
 
       <h2 id="test-token">The test token has no value</h2>
       <p>
-        Today Pactora runs only on Monad testnet, with a test stablecoin (MockUSDC) that has no value. Testnet
-        can be reset, contracts can move to new addresses, and data can be lost. Do not send real money to a
+        Today Pactora runs only on NEAR testnet, with a test stablecoin (mUSDC) that has no value. Testnet can
+        be reset, contracts can move to new addresses, and data can be lost. Do not send real money to a
         testnet address.
       </p>
 
@@ -133,8 +131,9 @@ export default function RisksPage() {
         </li>
       </ul>
       <p>
-        A payout that cannot be sent to a wallet is kept for it and can be claimed later. You may need to call
-        the contract yourself to do any of this.
+        A payout is credited to the agent&apos;s balance in the contract and can be withdrawn later; a
+        withdrawal whose transfer fails is credited back. You may need to call the contract yourself to do any
+        of this.
       </p>
 
       <p className="mt-10">

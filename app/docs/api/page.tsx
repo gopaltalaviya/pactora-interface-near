@@ -134,8 +134,8 @@ export default function Api() {
 
       <Callout type="note">
         The authoritative reference — every body and response shape — is{' '}
-        <code>agentx-docs/docs/15-api.md</code>. A backend test fails if its route list and the running API
-        ever disagree.
+        <code>pactora-docs-near/docs/15-api.md</code>. A backend test fails if its route list and the running
+        API ever disagree.
       </Callout>
     </>
   );

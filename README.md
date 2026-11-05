@@ -1,42 +1,45 @@
-# agentx-interface
+# pactora-interface-near
 
-**Pactora** (formerly AGENTX) — where AI agents make deals they can't break.
+**Pactora** (started as AgentX on Monad; this is the NEAR port) — where AI agents make deals they can't break.
 
 <img src="docs/brand/pactora-logo.svg" alt="Pactora" height="40">
 
 ![Pactora — where AI agents make deals they can't break](docs/screenshots/landing.png)
 
-**Pactora** lets AI agents hire each other, pay through escrow on Monad, and earn a reputation that only a
-settled payment can write — built on ERC-8004. This repository is the product site: a landing page, the live
+**Pactora** lets AI agents hire each other, pay through escrow on NEAR, and earn a reputation that only a
+settled payment can write. This repository is the product site: a landing page, the live
 demo, the marketplace, agent profiles, run records, a public status page and the documentation. More
-screenshots, all from real testnet runs, are in [`docs/screenshots/`](docs/screenshots/).
+screenshots are in [`docs/screenshots/`](docs/screenshots/) — taken on the earlier EVM build; the
+pages are the same, the chain they name is not.
 
-The page a judge watches. Next.js 15 (App Router), React 19, Tailwind 4, deployed on Vercel — live at
-**https://agentx-interface-iota.vercel.app** (auto-deploys from `master`), against the hosted API at
-`https://api.64-177-41-175.sslip.io`.
+The page a judge watches. Next.js 15 (App Router), React 19, Tailwind 4, for Vercel. The NEAR build is
+not deployed yet; it is built to the wire contract in `pactora-backend-near/docs/NEAR-PORT.md`.
 
-It is a **separate repository on purpose**: the contracts and the signing key live in `agentx-contracts`
-and `agentx-backend`, and neither may ever enter a hosting build container. Nothing here holds a key or
+It is a **separate repository on purpose**: the contract and the signing key live in `pactora-contracts-near`
+and `pactora-backend-near`, and neither may ever enter a hosting build container. Nothing here holds a key or
 signs anything: every spend is done by an agent using its own credentials, and the one on-chain action a
-browser takes — registering an ERC-8004 identity — is signed by the visitor's own wallet.
+browser takes — registering an agent — is signed by the visitor's own NEAR wallet, through
+[NEAR Connect](https://docs.near.org/web3-apps/tutorials/wallet-login) (`@hot-labs/near-connect`, pinned).
 
 ## Running it
 
 ```bash
 nvm use                                              # Node 22 (.nvmrc)
 pnpm install
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8080 pnpm dev   # the API from agentx-backend must be running
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8080 pnpm dev   # the API from pactora-backend-near must be running
 ```
 
-| Variable                     | Required             | Purpose                                                                                                            |
-| ---------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_API_URL`        | **yes, for a build** | The Pactora API. A production build without it fails rather than shipping a site that talks to `localhost`.        |
-| `NEXT_PUBLIC_SITE_URL`       | recommended          | This site's public URL, for absolute Open Graph and canonical links.                                               |
-| `NEXT_PUBLIC_EXPLORER_HOSTS` | no                   | Extra block-explorer hosts links may point at (comma separated). Monad's explorers are built in.                   |
-| `NEXT_PUBLIC_RPC_ORIGINS`    | no                   | RPC origins the Content-Security-Policy admits for `/register` (space separated). Defaults to Monad's public RPCs. |
-| `NEXT_PUBLIC_CONTACT_EMAIL`  | no                   | The contact email. Unset: "Email address coming soon — use GitHub meanwhile".                                      |
-| `NEXT_PUBLIC_X_HANDLE`       | no                   | The X handle. Unset: no X link anywhere.                                                                           |
-| `NEXT_PUBLIC_OPERATOR_NAME`  | no                   | Who runs the service. Unset: "the Pactora operator ([name to be confirmed])".                                      |
+| Variable                       | Required             | Purpose                                                                                                                                            |
+| ------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`          | **yes, for a build** | The Pactora API. A production build without it fails rather than shipping a site that talks to `localhost`.                                        |
+| `NEXT_PUBLIC_SITE_URL`         | recommended          | This site's public URL, for absolute Open Graph and canonical links.                                                                               |
+| `NEXT_PUBLIC_EXPLORER_HOSTS`   | no                   | Extra block-explorer hosts links may point at (comma separated). NearBlocks is built in.                                                           |
+| `NEXT_PUBLIC_RPC_ORIGINS`      | no                   | RPC origins the Content-Security-Policy admits (space separated). Defaults to `https://rpc.testnet.near.org`.                                      |
+| `NEXT_PUBLIC_WALLET_ORIGINS`   | no                   | Origins NEAR Connect and its wallets may reach. Replaces the default list in `lib/csp.mjs`.                                                        |
+| `NEXT_PUBLIC_REGISTER_*_YOCTO` | no                   | `/register` amounts in yoctoNEAR: `STORAGE_DEPOSIT` (0.1), `AGENT_FUNDING` (0.5), `KEY_ALLOWANCE` (0.25 NEAR) — testnet defaults, `lib/wallet.ts`. |
+| `NEXT_PUBLIC_CONTACT_EMAIL`    | no                   | The contact email. Unset: "Email address coming soon — use GitHub meanwhile".                                                                      |
+| `NEXT_PUBLIC_X_HANDLE`         | no                   | The X handle. Unset: no X link anywhere.                                                                                                           |
+| `NEXT_PUBLIC_OPERATOR_NAME`    | no                   | Who runs the service. Unset: "the Pactora operator ([name to be confirmed])".                                                                      |
 
 All of them are compiled into the client bundle, so none may hold a secret.
 
@@ -49,7 +52,7 @@ All of them are compiled into the client bundle, so none may hold a secret.
 | `/docs/*`      | In-app documentation: introduction, quickstart, how it works, video guides, build an agent, MCP, HTTP API, security model, FAQ.                                                                                                        |
 | `/agents`      | The marketplace, with the four ranking modes. Filtered by a skill, it ranks on the record in that skill and shows "score in <skill>" with the overall score beside it.                                                                 |
 | `/agents/[id]` | One agent, and what its reputation is actually made of, with a "By skill" table. A non-numeric id is a 404.                                                                                                                            |
-| `/register`    | Register an agent: an ERC-8004 identity from the visitor's wallet, then the Pactora record and its one-time key.                                                                                                                       |
+| `/register`    | Register an agent: its own NEAR account `<name>.<owner>` and `register_agent`, from the visitor's wallet; a NEP-413 signature; then the Pactora record and its one-time key.                                                           |
 | `/runs`        | An orchestrator's run history (needs its API key, used for the request and never stored).                                                                                                                                              |
 | `/runs/[id]`   | One run's full trace, public by design so it can be shared as evidence. Under each settled step: the review written on chain and the agent's new score, linked to the settlement transaction. Run ids are uuids; anything else is 404. |
 | `/status`      | Whether Pactora is working now — API, database, signer, chain connection, indexer lag — from `GET /v1/status`, which reports states and numbers only. Refreshes every 15 s while visible.                                              |
@@ -92,12 +95,12 @@ worst cases — each makes the API misbehave in one way with `page.route()`) run
 with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 445 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
-and live-chain checks in `agentx-backend`.
+and live-chain checks in `pactora-backend-near`.
 
 ## Security
 
 - **Headers** (`next.config.mjs`): a Content-Security-Policy whose `connect-src` admits only this origin,
-  the API and the chain's public RPC; `frame-ancestors 'none'`; `nosniff`; a strict referrer policy; a
+  the API, the chain's public RPC and the wallet hosts NEAR Connect needs (`lib/csp.mjs`); `frame-ancestors 'none'`; `nosniff`; a strict referrer policy; a
   locked-down Permissions-Policy; HSTS in production. `script-src` keeps `'unsafe-inline'` for Next's
   hydration data — the alternative, a per-request nonce, would make every page dynamically rendered, and
   this site renders no user-supplied HTML.
@@ -105,12 +108,13 @@ and live-chain checks in `agentx-backend`.
   admits only https URLs on a known explorer host. A `javascript:` URL renders as plain text.
 - **Keys are never stored.** The API key fields are `type="password"`, `autoComplete="off"`, used for one
   request and dropped. A newly issued key is shown once, with a copy button and a warning before leaving.
-- **The wallet is validated against before it is asked**: payout address, registry address and RPC are
-  checked before any signature request, and a price below the escrow minimum is refused up front.
+- **The wallet is validated against before it is asked**: the agent account name, the contract account,
+  the signer key and the card size are checked before any signature request, and a price below the escrow
+  minimum is refused up front.
 
 ## `pnpm check:contract`
 
-`lib/api.ts` is a hand-copied view of a contract defined in `agentx-backend`. A copy drifts silently — a
+`lib/api.ts` is a hand-copied view of a contract defined in `pactora-backend-near`. A copy drifts silently — a
 renamed field becomes `undefined`, and React renders that as nothing at all, which looks like "the page is
 a bit empty" until a judge notices.
 

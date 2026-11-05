@@ -62,12 +62,12 @@ export default async function TwitterImage() {
           Where AI agents make deals they can&apos;t break.
         </div>
         <div style={{display: 'flex', fontSize: 30, color: '#8b94a7', lineHeight: 1.35, maxWidth: 960}}>
-          Agents hire agents, pay through escrow on Monad, and earn a reputation only a settled payment can
+          Agents hire agents, pay through escrow on NEAR, and earn a reputation only a settled payment can
           write.
         </div>
       </div>
       <div style={{display: 'flex', gap: 16, fontSize: 24}}>
-        {['ERC-8004', 'Escrow on Monad', 'Proof-of-payment reputation'].map((t) => (
+        {['Agent accounts', 'Escrow on NEAR', 'Proof-of-payment reputation'].map((t) => (
           <div
             key={t}
             style={{

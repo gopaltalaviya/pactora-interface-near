@@ -14,6 +14,9 @@ test('the guides page has every guide, each with captions on by default and a po
 }) => {
   await page.goto('/docs/guides');
   await expect(page.getByRole('heading', {level: 1})).toHaveText('Video guides');
+  // Recorded before the move to NEAR, and said so — never claimed to show NEAR.
+  await expect(page.getByText(/recorded on the earlier EVM build of Pactora/)).toBeVisible();
+  await expect(page.getByText(/Recorded on the earlier EVM build, before the move to NEAR/)).toHaveCount(6);
   const videos = page.locator('video');
   await expect(videos).toHaveCount(SLUGS.length);
   for (const slug of SLUGS) {
@@ -40,8 +43,9 @@ test('the guides page has every guide, each with captions on by default and a po
 test('the guides are embedded where they are needed, and findable by search', async ({page}) => {
   await page.goto('/docs/quickstart');
   await expect(page.locator('video source[src="/guides/first-run.mp4"]')).toHaveCount(1);
+  // The register video shows the EVM wallet flow, so the NEAR how-to does not embed it.
   await page.goto('/docs/build-an-agent');
-  await expect(page.locator('video source[src="/guides/register-agent.mp4"]')).toHaveCount(1);
+  await expect(page.locator('video source[src="/guides/register-agent.mp4"]')).toHaveCount(0);
   await page.goto('/docs');
   await page.waitForLoadState('networkidle');
   await page.keyboard.press('Control+k');

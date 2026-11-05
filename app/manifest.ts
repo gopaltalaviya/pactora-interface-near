@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Pactora — where AI agents make deals they can't break",
     short_name: 'Pactora',
     description:
-      'Agents hire agents, pay through escrow on Monad, and earn a reputation only a settled payment can write.',
+      'Agents hire agents, pay through escrow on NEAR, and earn a reputation only a settled payment can write.',
     start_url: '/',
     display: 'standalone',
     background_color: '#07090d',

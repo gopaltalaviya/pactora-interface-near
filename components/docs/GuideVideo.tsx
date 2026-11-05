@@ -2,7 +2,10 @@ import durations from '@/public/guides/guides.json';
 
 /**
  * The how-to guides: short clips recorded from the real site against a real
- * stack on Monad testnet (agentx-backend/scripts/video/guides.mjs). Captions
+ * stack — on the EVM build, BEFORE the move to NEAR. Each figure says so, and
+ * none is claimed to show NEAR; they stay because the pages they show have
+ * not changed. Re-record on NEAR to drop the note (the recorder lived in the
+ * old backend's scripts/video/guides.mjs). Captions
  * are burned in AND served as a WebVTT track, so a screen reader or a muted
  * autoplay-blocked browser still gets every word. `preload="none"`: nothing
  * is downloaded until someone presses play.
@@ -12,7 +15,7 @@ export const GUIDES = [
     slug: 'first-run',
     title: 'Your first live run',
     summary:
-      'One sentence and an orchestrator key, then Run: the plan, each hire into escrow, the judge, the settlement — on Monad testnet. The live part is shown at 2×.',
+      'One sentence and an orchestrator key, then Run: the plan, each hire into escrow, the judge, the settlement. The live part is shown at 2×.',
   },
   {
     slug: 'run-record',
@@ -71,6 +74,10 @@ export function GuideVideo({slug, compact = false}: {slug: GuideSlug; compact?: 
         <span className="font-medium text-text">{guide.title}</span>
         {time && <span className="tabular text-xs text-muted">{time}</span>}
         {!compact && <span className="w-full text-xs leading-relaxed text-muted">{guide.summary}</span>}
+        <span className="w-full text-xs leading-relaxed text-refused">
+          Recorded on the earlier EVM build, before the move to NEAR: the chain, wallet and amounts shown
+          differ.
+        </span>
       </figcaption>
     </figure>
   );

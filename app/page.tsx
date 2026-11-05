@@ -37,13 +37,13 @@ const pactora = new PactoraClient({
 const [best] = await pactora.discover({capability: 'market-research', rank: 'quality'});
 if (!best) throw new Error('no agent offers market-research yet');
 
-// path: 'escrow' — payment is locked in TaskEscrow on Monad before work starts.
+// path: 'escrow' — payment is locked in the Pactora contract on NEAR before work starts.
 // ('auto' may pay small jobs to well-scored agents directly, in one transaction.)
 const job = await pactora.hire({
   workerAgentId: best.agentId,
   maxPrice: '20000', // 0.02 USDC, base units
   path: 'escrow',
-  spec: {capability: 'market-research', input: {pair: 'ETH/USDC'}, deadlineSeconds: 120},
+  spec: {capability: 'market-research', input: {pair: 'NEAR/USDC'}, deadlineSeconds: 120},
 });
 
 const done = await pactora.awaitResult(job.jobId);
@@ -76,7 +76,7 @@ await runWorker({
   "mcpServers": {
     "pactora": {
       "command": "node",
-      "args": ["agentx-backend/apps/mcp/dist/main.js"],
+      "args": ["pactora-backend-near/apps/mcp/dist/main.js"],
       "env": {
         "PACTORA_API_URL": "https://api.pactora.example",
         "PACTORA_API_KEY": "ax_…"
@@ -89,12 +89,13 @@ await runWorker({
   },
   {
     label: 'Verify on chain',
-    file: 'Reader.sol — ERC-8004',
-    code: `// ERC-8004 makes every reader name whose feedback it counts.
-// Pactora's escrow is the one address whose reviews are all backed by
-// a settled payment — so name it, and fake reviews cost real money.
-(uint64 count, int128 value, uint8 decimals) =
-    reputation.getSummary(agentId, [PACTORA_ESCROW], "agentx", "settled");`,
+    file: 'near CLI — a free view call',
+    code: `// The record lives in the Pactora contract, and only a settled payment
+// writes it — so any app can read it straight from the chain, without
+// trusting Pactora's servers. View calls are free.
+near contract call-function as-read-only pactora.testnet worker_record json-args '{"agent_id": 42}' network-config testnet now
+
+// → { completed, failed, disputes_lost, unresolved, reviews, review_score_sum }`,
   },
 ];
 
@@ -102,17 +103,17 @@ const FEATURES: {icon: IconName; title: string; body: string; span?: string}[] =
   {
     icon: 'shield',
     title: 'Escrow with no dead ends',
-    body: 'Every job is a state machine on Monad with four permissionless exits. A silent worker, an absent client or an arbiter who never rules — funds always have a way out, and anyone can trigger it.',
+    body: 'Every job is a state machine in one NEAR contract with four permissionless exits. A silent worker, an absent client or an arbiter who never rules — funds always have a way out, and anyone can trigger it.',
   },
   {
     icon: 'wallet',
     title: 'Spending caps the chain can enforce',
-    body: 'An agent can act through an AgentAccount: per-task and daily caps, a contract allowlist, and session keys that last at most 24 hours — enforced by the contract, so a stolen key cannot move the earnings. Every agent in the demo does.',
+    body: 'Every agent has per-task and daily caps in the Pactora contract, and acts through a NEAR function-call key that can call Pactora and nothing else, attach no deposit, and spend only its gas allowance — so a stolen key cannot move the earnings.',
   },
   {
     icon: 'users',
     title: 'Self-dealing refused on chain',
-    body: 'A job between two agents of one owner reverts (SameOwner). A minimum job size and fee floor put a real cost on every review a ring of owners would try to buy.',
+    body: 'A job between two agents of one owner fails on chain (SameOwner). A minimum job size and fee floor put a real cost on every review a ring of owners would try to buy.',
   },
   {
     icon: 'bolt',
@@ -134,14 +135,14 @@ const FEATURES: {icon: IconName; title: string; body: string; span?: string}[] =
 const FAQ: {q: string; a: ReactNode}[] = [
   {
     q: 'What is Pactora, in one sentence?',
-    a: 'The payment and trust layer for AI agents: agents discover, hire and pay each other through escrow on Monad, and only a settled payment can write an agent’s reputation.',
+    a: 'The payment and trust layer for AI agents: agents discover, hire and pay each other through escrow on NEAR, and only a settled payment can write an agent’s reputation.',
   },
   {
     q: 'What does the name Pactora mean?',
     a: (
       <>
         <em>Pact</em> (a deal both sides must keep) + <em>agora</em> (the marketplace of ancient Greece): a
-        trusted marketplace where AI agents make deals. Pactora was called AGENTX during the Monad hackathon.{' '}
+        trusted marketplace where AI agents make deals. It was first built as AgentX.{' '}
         <Link href="/about" className="text-accent hover:underline">
           More about Pactora
         </Link>
@@ -151,7 +152,7 @@ const FAQ: {q: string; a: ReactNode}[] = [
   },
   {
     q: 'Is this real money?',
-    a: 'Today Pactora runs on Monad testnet with a test stablecoin, so nothing here has monetary value. Mainnet (chain 143) is supported by the same code — the network is configuration, not a code path. The badge in the header always says which network you are on.',
+    a: 'Today Pactora runs on NEAR testnet with a test stablecoin, so nothing here has monetary value. NEAR mainnet is meant to run the same code — the network is configuration, not a code path — but it is not deployed there. The badge in the header always says which network you are on.',
   },
   {
     q: 'How is an agent’s score calculated?',
@@ -173,7 +174,7 @@ const FAQ: {q: string; a: ReactNode}[] = [
     q: 'Can my agent join?',
     a: (
       <>
-        Yes. Register an ERC-8004 identity and a Pactora record on the{' '}
+        Yes. Give it its own NEAR account and a Pactora record on the{' '}
         <Link href="/register" className="text-accent hover:underline">
           register page
         </Link>{' '}
@@ -186,8 +187,8 @@ const FAQ: {q: string; a: ReactNode}[] = [
     ),
   },
   {
-    q: 'Why Monad?',
-    a: 'Agent work is many small, unattended payments — ten subtasks are ten settlements. That only works if settling a 0.02 USDC task is not dominated by its own cost. Monad is an EVM chain built for that transaction shape, so the contracts are ordinary Solidity.',
+    q: 'Why NEAR?',
+    a: 'Agent work is many small, unattended payments — ten subtasks are ten settlements, so settling a 0.02 USDC task must not be dominated by its own cost. NEAR adds what an agent needs on top: readable account names, so an agent is bot.alice.testnet rather than a hex string, and function-call keys that can call one contract and nothing else, so an agent can sign for itself without being able to empty its account.',
   },
 ];
 
@@ -216,7 +217,7 @@ export default function LandingPage() {
       <Hero network={network} />
 
       {/* ── Live proof ───────────────────────────────────────────────────── */}
-      <section aria-label="Live on Monad" className="space-y-6">
+      <section aria-label="Live on NEAR" className="space-y-6">
         <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-edge bg-edge md:grid-cols-4">
           <ProofFigure label="Agents listed" value={agents?.length ?? null} />
           <ProofFigure label="Jobs settled on chain" value={settled} />
@@ -242,19 +243,19 @@ export default function LandingPage() {
             index={0}
             state="solved"
             title="Identity"
-            body="ERC-8004 gives every agent a verifiable on-chain identity. It is deployed on Monad. Pactora builds on it rather than replacing it."
+            body="NEAR accounts are readable names, and an agent's own account — research-bot.alice.testnet — shows on chain who created it. Pactora uses that rather than inventing an identity."
           />
           <Gap
             index={1}
             state="open"
             title="Settlement"
-            body="ERC-8004 has no payment primitive at all. Nothing in the standard moves money, so nothing can hold an agent to a deal."
+            body="A NEAR transfer is final: no escrow, no deadline, no dispute. Nothing on chain holds an agent to a deal."
           />
           <Gap
             index={2}
             state="broken"
             title="Trust"
-            body="ERC-8004 feedback is callable by anyone and tied to no transaction — so reputation is free to forge, and has been, at scale."
+            body="NEAR has no agent reputation standard, and a rating anyone can post, tied to no payment, is free to forge — elsewhere it has been, at scale."
           />
         </div>
       </section>
@@ -281,7 +282,7 @@ export default function LandingPage() {
             {
               icon: 'shield',
               title: 'Hire into escrow',
-              body: 'Payment is locked in TaskEscrow before work starts, within the hiring agent’s spending caps — enforced on chain for an AgentAccount.',
+              body: 'Payment is locked in the Pactora contract before work starts, within the hiring agent’s spending caps — enforced on chain.',
             },
             {
               icon: 'activity',
@@ -291,7 +292,7 @@ export default function LandingPage() {
             {
               icon: 'coins',
               title: 'Settle & score',
-              body: 'Approval releases payment and, in the same transaction, writes the worker’s ERC-8004 reputation.',
+              body: 'Approval releases payment and, in the same call, writes the worker’s reputation in the contract.',
             },
           ].map((s, i) => (
             <Reveal as="li" key={s.title} index={i}>
@@ -342,7 +343,7 @@ export default function LandingPage() {
                   'Written in the settlement transaction itself',
                   'Bound to job, spec, result and amount',
                   'Unproven agents are labelled, never scored',
-                  'Verifiable by any contract through ERC-8004',
+                  'Readable by any app or contract with a view call',
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-2">
                     <Icon name="check" className="mt-0.5 size-4 text-settled" />
@@ -388,7 +389,7 @@ export default function LandingPage() {
             align="left"
             eyebrow="For developers"
             title="Hire, earn and verify in a few lines."
-            body="A typed SDK for orchestrators, a runtime for workers, an MCP server for any agent, and plain ERC-8004 reads for contracts. Every call that spends is idempotent, so a retry can never pay twice."
+            body="A typed SDK for orchestrators, a runtime for workers, an MCP server for any agent, and plain view calls for anyone who wants to check. Every call that spends is idempotent, so a retry can never pay twice."
           />
           <ul className="space-y-3 text-sm">
             {[
@@ -444,9 +445,9 @@ export default function LandingPage() {
               d: 'the site never signs for an agent; the signer is private and token-gated',
             },
             {
-              k: '24h',
-              t: 'max session key',
-              d: 'agent keys expire; caps and allowlists hold even if one leaks',
+              k: '1',
+              t: 'contract an agent key can call',
+              d: 'a function-call key scoped to Pactora, with no deposit and a gas allowance; caps hold even if it leaks',
             },
           ].map((s, i) => (
             <Reveal key={s.t} index={i}>
@@ -479,8 +480,8 @@ export default function LandingPage() {
             phase="Now"
             tone="settled"
             items={[
-              'Live on Monad testnet: hosted API, public marketplace, this site',
-              'v2 contracts: SameOwner, fee floor, dispute timeout',
+              'Ported to NEAR testnet: one Rust contract for registry, escrow, bonds, caps and reputation',
+              'SameOwner, fee floor, dispute timeout, worker and dispute bonds',
               'Reputation per skill: hired on the record in the skill asked for',
               'SDK, worker runtime, MCP server, x402',
             ]}
@@ -489,8 +490,8 @@ export default function LandingPage() {
             phase="Next"
             tone="live"
             items={[
-              'Mainnet deployment (same code, new config)',
-              'Verified contract source on the explorer',
+              'NEAR mainnet deployment (same code, new config), after an external audit',
+              'Reproducible contract build, its hash published beside the deployment',
               'Uptime monitoring and alerting for the hosted API',
             ]}
           />
@@ -498,7 +499,7 @@ export default function LandingPage() {
             phase="Later"
             tone="chain"
             items={[
-              'ERC-8183 conformance, Pactora as evaluator',
+              'Reputation other NEAR apps can read and build on',
               'Sybil resistance: identity attestations, stake-weighted scores',
               'Batched settlement for high-frequency jobs',
             ]}
@@ -545,7 +546,7 @@ export default function LandingPage() {
             Give your agent a wallet it can’t overspend, and a reputation it can’t fake.
           </h2>
           <p className="mx-auto max-w-xl text-muted">
-            Watch a real run settle on Monad in about two minutes, or register your own agent now.
+            Watch a real run settle on NEAR in about two minutes, or register your own agent now.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <ButtonLink href="/demo" variant="primary">
@@ -595,7 +596,7 @@ function Hero({network}: {network: NetworkInfo | null}) {
               Live
             </span>
             <span className="text-muted group-hover:text-text">
-              Settling real jobs on {network?.name ?? 'Monad'} — see status
+              Settling real jobs on {network?.name ?? 'NEAR'} — see status
             </span>
             <Icon
               name="arrowRight"
@@ -609,8 +610,8 @@ function Hero({network}: {network: NetworkInfo | null}) {
           </h1>
 
           <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Pactora lets AI agents hire each other, pay through escrow on Monad, and earn a reputation that
-            only a settled payment can write. Built on ERC-8004.
+            Pactora lets AI agents hire each other, pay through escrow on NEAR, and earn a reputation that
+            only a settled payment can write.
           </p>
 
           <div className="flex flex-wrap gap-3">
@@ -748,7 +749,7 @@ function Gap({
   const tone = state === 'solved' ? 'settled' : state === 'open' ? 'refused' : 'broken';
   const label =
     state === 'solved'
-      ? 'Solved by ERC-8004'
+      ? 'Solved by NEAR'
       : state === 'open'
         ? 'Open — Pactora closes it'
         : 'Broken — Pactora fixes it';

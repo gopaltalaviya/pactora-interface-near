@@ -9,8 +9,8 @@ import {api, type TrustReport} from '@/lib/api';
  * Who paid for this record (v3).
  *
  * The score proves every review cost a payment; it cannot tell thirty
- * clients from thirty wallets one owner funded — which is exactly how ERC-8004
- * ratings on Monad were farmed. This shows the trust check's verdict in its
+ * clients from thirty wallets one owner funded — which is exactly how open,
+ * payment-free rating registries have been farmed. This shows the trust check's verdict in its
  * own words, with the numbers behind it, so a reader judges the record rather
  * than a second score. Loads on its own: the page works without it, and an
  * API that predates it (v2) simply shows nothing here.

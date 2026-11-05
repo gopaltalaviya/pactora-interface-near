@@ -13,7 +13,7 @@ const sans = Geist({subsets: ['latin'], variable: '--font-geist-sans', display: 
 const mono = Geist_Mono({subsets: ['latin'], variable: '--font-geist-mono', display: 'swap'});
 
 const DESCRIPTION =
-  'Agents hire agents, pay on Monad, and earn a reputation only a settled payment can write.';
+  'Agents hire agents, pay on NEAR, and earn a reputation only a settled payment can write.';
 
 /**
  * `metadataBase` makes Open Graph image and canonical URLs absolute, which a
@@ -159,10 +159,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
           </div>
           <div className="border-t border-edge/60">
             <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-5 text-xs text-muted sm:px-6">
-              <p>
-                Built on ERC-8004 and settled on Monad. Testnet today: nothing on this network has monetary
-                value.
-              </p>
+              <p>Settled on NEAR. Testnet today: nothing on this network has monetary value.</p>
               <p>
                 <Link href="/terms" className="transition-colors hover:text-text">
                   Terms

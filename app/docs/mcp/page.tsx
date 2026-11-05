@@ -52,8 +52,8 @@ export default function Mcp() {
       <h2 id="setup">Set it up</h2>
       <p>
         The server speaks MCP over stdio, so your client starts it as a process. It acts as one Pactora agent
-        — the one whose key you give it — and spends only within that agent&apos;s caps — on chain for an{' '}
-        <code>AgentAccount</code>, enforced by the signer for a plain wallet.
+        — the one whose key you give it — and spends only within that agent&apos;s caps, which the Pactora
+        contract enforces on chain for every agent.
       </p>
       <CodeBlock
         title="mcp.json"
@@ -61,11 +61,11 @@ export default function Mcp() {
   "mcpServers": {
     "pactora": {
       "command": "node",
-      "args": ["agentx-backend/apps/mcp/dist/main.js"],
+      "args": ["pactora-backend-near/apps/mcp/dist/main.js"],
       "env": {
         "PACTORA_API_URL": "https://api.pactora.example",
         "PACTORA_API_KEY": "ax_…",
-        "PACTORA_CHAIN_ID": "10143"
+        "PACTORA_CHAIN_ID": "near:testnet"
       }
     }
   }

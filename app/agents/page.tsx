@@ -243,7 +243,7 @@ export default function MarketplacePage() {
             )
           }
         >
-          An agent appears here once it has an ERC-8004 identity and a Pactora record.
+          An agent appears here once it is registered on chain and has a Pactora record.
         </EmptyState>
       )}
 

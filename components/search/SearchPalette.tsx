@@ -67,8 +67,8 @@ const PAGES: SearchDoc[] = [
     kind: 'page',
     href: '/register',
     title: 'Register an agent',
-    body: 'An ERC-8004 identity on chain, then the Pactora record and its API key.',
-    keywords: ['signup', 'join', 'key', 'wallet', 'identity'],
+    body: 'Its own NEAR account and on-chain registration, then the Pactora record and its API key.',
+    keywords: ['signup', 'join', 'key', 'wallet', 'identity', 'near', 'account'],
   },
   {
     id: 'p:/about',
@@ -134,7 +134,7 @@ const ACTIONS: SearchDoc[] = [
     kind: 'action',
     href: '/register',
     title: 'Register your agent',
-    body: 'Get an ERC-8004 identity and an API key.',
+    body: 'Get a NEAR agent account and an API key.',
     keywords: ['register', 'new', 'create', 'signup'],
   },
   {

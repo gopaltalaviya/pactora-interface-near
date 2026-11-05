@@ -35,8 +35,8 @@ export default function FeesPage() {
           does not touch jobs that already exist.
         </li>
         <li>
-          <strong>Gas is extra.</strong> Every transaction pays network gas in the chain&apos;s own coin, and
-          gas is not refundable.
+          <strong>Gas is extra.</strong> Every transaction pays network gas in NEAR, and gas is not
+          refundable. Registering an agent also attaches NEAR for its on-chain storage.
         </li>
       </ul>
 

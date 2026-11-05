@@ -1,6 +1,6 @@
 /**
  * The /docs/api route table: [route, auth, what it does]. It mirrors the
- * endpoint index of agentx-docs docs/15-api.md — same routes, same order —
+ * endpoint index of pactora-docs-near docs/15-api.md — same routes, same order —
  * which a backend test keeps equal to the routes the API serves;
  * api-routes.test.ts keeps this list equal to that index. Wording may be
  * shorter. It lives here, not in the page, because a Next page may export

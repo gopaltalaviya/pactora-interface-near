@@ -2,32 +2,41 @@
  * A stand-in Pactora API for the smoke test: fixed responses, no database, no
  * chain. It proves the pages render, route and link correctly against the
  * API's shapes — it proves nothing about the API itself, which has its own
- * tests and the live-chain checks in agentx-backend/scripts.
+ * tests and the live-chain checks in pactora-backend-near/scripts.
  */
 import {createServer} from 'node:http';
 
 const PORT = Number(process.env.MOCK_API_PORT ?? 8787);
 const RUN_ID = '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b';
 const JOB_ID = '9b1c2d3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e';
-const EXPLORER = 'https://testnet.monadexplorer.com';
+const EXPLORER = 'https://testnet.nearblocks.io';
 const HOSTILE = 'javascript:alert(1)';
 
 const network = {
-  chainId: 10143,
-  name: 'Monad Testnet',
+  // The GET /v1/network shape of NEAR-PORT §4.
+  chainId: 'near:testnet',
+  nearNetworkId: 'testnet',
+  name: 'NEAR Testnet',
+  shortName: 'near-testnet',
   testnet: true,
-  paymentToken: {symbol: 'USDC', decimals: 6, address: '0x35Ca89EA58b292BF8D66eFEC2c086501a3802980'},
-  contracts: {TaskEscrow: '0x4feED0338761817417Fd1dDdFC8331D16AEB370D'},
-  erc8004: {identityRegistry: '0xeD34Ffc39Ee69c780586b85d930368Bc29B30ef1', referenceImplementation: true},
-  rpcUrls: ['https://testnet-rpc.monad.xyz'],
-  nativeCurrency: {name: 'MON', symbol: 'MON', decimals: 18},
+  paymentToken: {symbol: 'USDC', decimals: 6, accountId: 'musdc.pactora.testnet'},
+  contracts: {
+    Pactora: 'pactora.testnet',
+    PaymentToken: 'musdc.pactora.testnet',
+    Arbiter: 'arbiter.pactora.testnet',
+  },
+  rpcUrls: ['https://rpc.testnet.near.org'],
+  nativeCurrency: {name: 'NEAR', symbol: 'NEAR', decimals: 24},
   explorerBaseUrl: EXPLORER,
+  faucetUrls: [],
+  enabledChains: ['near:testnet'],
+  fastPathMax: '5000000',
   fastPathMaxDisplay: '5 USDC',
   protocolFeeBps: 100,
   minJobAmount: '10000',
   minFee: '100',
   windows: {accept: 600, work: 1800, review: 600, dispute: 3600},
-  // v3 fees and limits: the testnet values in agentx-contracts config/params.10143.json.
+  // Fees and limits, as pactora-contracts-near config/params.testnet.json might set them.
   bondBps: 2000,
   minBond: '10000',
   disputeBondBps: 1000,
@@ -41,19 +50,19 @@ const network = {
 
 const agent = (agentId, name, extra = {}) => ({
   agentId,
-  chainId: 10143,
+  chainId: 'near:testnet',
   name,
   description: `${name} does research`,
   capabilities: ['market-research'],
   pricePerTask: '20000',
   priceDisplay: '0.02 USDC',
-  walletAddress: '0x0000000000000000000000000000000000000002',
+  walletAddress: `${name.toLowerCase()}.owner.testnet`,
   score: 72,
   completed: 3,
   failed: 1,
   successRate: 0.75,
   active: true,
-  explorerUrl: `${EXPLORER}/address/0x0000000000000000000000000000000000000002`,
+  explorerUrl: `${EXPLORER}/address/${name.toLowerCase()}.owner.testnet`,
   ...extra,
 });
 
@@ -78,10 +87,10 @@ const skills = {
 
 const run = {
   runId: RUN_ID,
-  chainId: 10143,
-  network: 'Monad Testnet',
+  chainId: 'near:testnet',
+  network: 'NEAR Testnet',
   testnet: true,
-  goal: 'Research ETH/USDC liquidity on Monad',
+  goal: 'Research NEAR/USDC liquidity on NEAR',
   state: 'done',
   spent: '20000',
   spentDisplay: '0.02 USDC',
@@ -96,7 +105,7 @@ const run = {
       detail: 'paid 0.02 USDC',
       jobId: JOB_ID,
       agentId: 1,
-      explorerUrl: `${EXPLORER}/tx/0xabc`,
+      explorerUrl: `${EXPLORER}/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm`,
     },
   ],
   events: [
@@ -107,7 +116,11 @@ const run = {
     },
     {
       kind: 'hired',
-      payload: {jobId: JOB_ID, amount: '0.02 USDC', explorerUrl: `${EXPLORER}/tx/0xabc`},
+      payload: {
+        jobId: JOB_ID,
+        amount: '0.02 USDC',
+        explorerUrl: `${EXPLORER}/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm`,
+      },
       occurredAt: '2026-09-30T08:00:10.000Z',
     },
     {kind: 'settled', payload: {jobId: JOB_ID, explorerUrl: HOSTILE}, occurredAt: '2026-09-30T08:00:50.000Z'},
@@ -124,7 +137,7 @@ function send(res, status, body) {
   res.end(status === 204 ? undefined : JSON.stringify(body));
 }
 
-// The shape of GET /v1/status (agentx-backend apps/api/src/routes/status.ts):
+// The shape of GET /v1/status (pactora-backend-near apps/api/src/routes/status.ts):
 // one component degraded, so the page's non-happy path is what gets tested.
 const status = () => ({
   status: 'degraded',
@@ -136,14 +149,19 @@ const status = () => ({
     state: 'low',
     checkedAt: new Date(Date.now() - 30_000).toISOString(),
     wallets: [
-      {address: '0x' + 'd5'.repeat(20), role: 'signing-key', balanceWei: '74638165459998076677', low: false},
-      {address: '0x' + '5c'.repeat(20), role: 'keeper', balanceWei: '90000000000000000', low: true},
+      {
+        address: 'researchbot.owner.testnet',
+        role: 'agent',
+        balanceYocto: '4638165459998076677000000',
+        low: false,
+      },
+      {address: 'd5'.repeat(32), role: 'keeper', balanceYocto: '90000000000000000000000', low: true},
     ],
   },
   chains: [
     {
-      chainId: 10143,
-      name: 'Monad Testnet',
+      chainId: 'near:testnet',
+      name: 'NEAR Testnet',
       testnet: true,
       rpc: 'up',
       headBlock: 66970500,
@@ -182,7 +200,7 @@ createServer((req, res) => {
     const fresh = id === 2;
     return send(res, 200, {
       agentId: String(id),
-      chainId: 10143,
+      chainId: 'near:testnet',
       verdict: fresh ? 'new' : 'trusted',
       reasons: [
         fresh
@@ -225,9 +243,9 @@ createServer((req, res) => {
       jobId: JOB_ID,
       state: 'settled',
       events: [
-        {kind: 'created', explorerUrl: `${EXPLORER}/tx/0xabc`},
+        {kind: 'created', explorerUrl: `${EXPLORER}/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm`},
         {kind: 'job.settled', explorerUrl: null},
-        {kind: 'settled', explorerUrl: `${EXPLORER}/tx/0xsettle`},
+        {kind: 'settled', explorerUrl: `${EXPLORER}/txns/8Ha3ThYvqv4WQx2t4ZCSFmAS5hj7VG4EHVgPeLJP7tUZ`},
       ],
     });
   }
