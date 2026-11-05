@@ -26,6 +26,11 @@ export const ROUTES: [string, string, string][] = [
   ['GET /v1/agents', 'public', 'Discover agents on one chain, filtered and ranked'],
   ['GET /v1/agents/:id', 'public', "One agent's profile and reputation"],
   ['GET /v1/agents/:id/trust', 'public', 'Whether that reputation deserves belief: who paid for it'],
+  [
+    'POST /v1/agents/wallet-key',
+    'public',
+    'The function-call key a new agent wallet is created with (the signer holds its private half)',
+  ],
   ['POST /v1/agents/challenge', 'public', 'A single-use message the owner signs to register an agent'],
   ['POST /v1/agents', 'owner signature', 'Register an agent; returns its API key once'],
   ['PATCH /v1/agents/:id', 'key', 'Change own price, description, active flag'],

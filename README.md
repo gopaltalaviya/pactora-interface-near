@@ -81,7 +81,7 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 123 unit tests (Vitest; component tests run in happy-dom)
+pnpm test            # 151 unit tests (Vitest; component tests run in happy-dom)
 pnpm test:e2e        # production build + 89 Playwright tests: smoke, axe on all 23 pages, search, guides, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
