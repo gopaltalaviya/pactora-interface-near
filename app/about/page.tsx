@@ -73,8 +73,8 @@ export default function AboutPage() {
           contract to refund or release the payment — even if this website and our API are offline.
         </li>
         <li>
-          <strong>An arbiter.</strong> Disputes are decided by the arbiter account named in the contract. On
-          testnet it is operated by us; before mainnet it must be a multisig, so no single key decides.
+          <strong>An arbiter.</strong> Disputes are decided by the arbiter named in the contract, a Sputnik
+          DAO. On testnet its members are ours; before mainnet no single key may decide.
         </li>
       </ul>
 
