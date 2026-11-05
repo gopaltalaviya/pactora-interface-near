@@ -184,11 +184,7 @@ export default function RegisterPage() {
         setStage('chain');
         // The signer's key for the new account, created on first request. It
         // goes into tx 1, so it is asked for before anything is on chain.
-        const {walletPublicKey} = await api.challenge({
-          ownerAddress: owner,
-          walletAddress: walletAccount,
-          chainId: network.chainId,
-        });
+        const walletPublicKey = await api.walletKey({walletAddress: walletAccount, chainId: network.chainId});
         const sent = await registerOnChain(wallet, {
           owner,
           wallet: walletAccount,

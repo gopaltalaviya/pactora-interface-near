@@ -311,15 +311,15 @@ export interface TrustReport {
   indexedToBlock: string | null;
 }
 
-/** `POST /v1/agents/challenge` (NEAR-PORT §5). `nonce` is 32 bytes as 64 hex. */
+/** `POST /v1/agents/challenge` (NEAR-PORT §5 step 3). `nonce` is 32 bytes as 64 hex. */
 export interface Challenge {
   nonce: string;
   message: string;
   recipient: string;
   expiresAt: string;
-  /** `ed25519:…`, the key the signer holds for `walletAddress`. */
-  walletPublicKey: string;
 }
+
+const ED25519_KEY = /^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export const api = {
   network: (signal?: AbortSignal) => get<NetworkInfo>('/v1/network', signal),
@@ -362,23 +362,37 @@ export const api = {
   },
 
   /**
-   * `POST /v1/agents/challenge` (NEAR-PORT §5). Asked twice during
-   * registration: first without `chainAgentId`, for `walletPublicKey` — the
-   * key tx 1 adds to the agent's account, before anything is on chain — and
-   * then by `register`, naming the id `register_agent` returned.
+   * `POST /v1/agents/wallet-key` (NEAR-PORT §5 step 1): the `ed25519:` key the
+   * signer holds for a wallet that does not exist yet. tx 1 adds it to the
+   * new account, so it is asked for before anything is on chain. Public: a
+   * public key is harmless, and only the signer holds the private half.
    */
-  challenge(
-    body: {ownerAddress: string; walletAddress: string; chainAgentId?: string; chainId: ChainId},
-    signal?: AbortSignal,
-  ): Promise<Challenge> {
+  async walletKey(body: {walletAddress: string; chainId: ChainId}): Promise<string> {
+    const {walletPublicKey} = await request<{walletPublicKey?: unknown}>(
+      '/v1/agents/wallet-key',
+      {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
+      'could not get the agent key',
+    );
+    // It goes straight into a transaction the owner signs: refuse anything else here.
+    if (typeof walletPublicKey !== 'string' || !ED25519_KEY.test(walletPublicKey)) {
+      throw new ApiError('BAD_RESPONSE', 'The API did not return an ed25519 key for the agent account.');
+    }
+    return walletPublicKey;
+  },
+
+  /**
+   * `POST /v1/agents/challenge` (NEAR-PORT §5 step 3), once the agent is on
+   * chain: it names the id `register_agent` returned.
+   */
+  challenge(body: {
+    ownerAddress: string;
+    walletAddress: string;
+    chainAgentId: string;
+    chainId: ChainId;
+  }): Promise<Challenge> {
     return request<Challenge>(
       '/v1/agents/challenge',
-      {
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify(body),
-        ...(signal ? {signal} : {}),
-      },
+      {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
       'could not start the registration',
     );
   },

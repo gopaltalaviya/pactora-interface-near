@@ -122,27 +122,29 @@ describe('registering an agent', () => {
     message: 'Pactora: sign me',
     recipient: 'pactora',
     expiresAt: 'x',
-    walletPublicKey: 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp',
   };
 
-  it('asks for a challenge (wallet key first, before anything is on chain)', async () => {
+  // NEAR-PORT §5 step 1: the key exists before the account, the id only after register_agent.
+  it('asks for the signer key of the new wallet first, before anything is on chain', async () => {
     const calls: {url: string; body: Record<string, unknown>}[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
       calls.push({url: String(url), body: JSON.parse(String(init?.body))});
-      return new Response(JSON.stringify(challenge));
+      return new Response(
+        JSON.stringify({walletPublicKey: 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp'}),
+      );
     });
-    const got = await api.challenge({
-      ownerAddress: body.ownerAddress,
-      walletAddress: body.walletAddress,
-      chainId: body.chainId,
-    });
-    expect(got.walletPublicKey).toBe(challenge.walletPublicKey);
-    expect(calls[0]!.url).toMatch(/\/v1\/agents\/challenge$/);
-    expect(calls[0]!.body).toEqual({
-      ownerAddress: 'alice.testnet',
-      walletAddress: 'probe.alice.testnet',
-      chainId: 'near:testnet',
-    });
+    const key = await api.walletKey({walletAddress: body.walletAddress, chainId: body.chainId});
+    expect(key).toBe('ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toMatch(/\/v1\/agents\/wallet-key$/);
+    expect(calls[0]!.body).toEqual({walletAddress: 'probe.alice.testnet', chainId: 'near:testnet'});
+  });
+
+  it('refuses a wallet-key answer that is not an ed25519 key', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({walletPublicKey: 'nope'})));
+    await expect(api.walletKey({walletAddress: body.walletAddress, chainId: body.chainId})).rejects.toThrow(
+      /ed25519/,
+    );
   });
 
   it('gets a challenge naming the agent id, has the owner sign it (NEP-413), and sends the proof', async () => {
