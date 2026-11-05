@@ -1,7 +1,8 @@
 import {PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD} from 'next/constants.js';
+import {contentSecurityPolicy} from './lib/csp.mjs';
 
 /**
- * The API lives in agentx-backend and is deployed separately, so the browser
+ * The API lives in pactora-backend-near and is deployed separately, so the browser
  * talks to it directly. Kept as one env var rather than scattered literals —
  * the same page has to work against localhost, a Railway URL and a judge's
  * fork without a rebuild of anything but this value.
@@ -31,40 +32,6 @@ function apiUrl(phase) {
   return raw.replace(/\/$/, '');
 }
 
-/**
- * Content Security Policy.
- *
- * `connect-src` is the one that matters: the page fetches the API, streams
- * run events from it, and — on /register only — reads a transaction receipt
- * from the chain's public RPC. Everything else is same-origin.
- *
- * `script-src` keeps 'unsafe-inline' because Next's App Router inlines its
- * hydration data. The alternative, a per-request nonce, makes every page
- * dynamically rendered; for a site that renders no user-supplied HTML (React
- * escapes all of it, and links pass `safeHref`) that trade is not worth it.
- */
-function contentSecurityPolicy(api, dev) {
-  const rpc = (
-    process.env.NEXT_PUBLIC_RPC_ORIGINS ??
-    'https://testnet-rpc.monad.xyz https://rpc.monad.xyz https://rpc1.monad.xyz https://rpc2.monad.xyz'
-  )
-    .split(/[\s,]+/)
-    .filter(Boolean);
-  const origin = new URL(api).origin;
-  return [
-    "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
-    "font-src 'self'",
-    `connect-src 'self' ${origin} ${rpc.join(' ')}${dev ? ' ws: http://127.0.0.1:* http://localhost:*' : ''}`,
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'",
-  ].join('; ');
-}
-
 /** @param {string} phase */
 export default function config(phase) {
   const api = apiUrl(phase);
@@ -80,7 +47,7 @@ export default function config(phase) {
         {
           source: '/:path*',
           headers: [
-            {key: 'Content-Security-Policy', value: contentSecurityPolicy(api, dev)},
+            {key: 'Content-Security-Policy', value: contentSecurityPolicy(api, dev, process.env)},
             {key: 'X-Content-Type-Options', value: 'nosniff'},
             {key: 'X-Frame-Options', value: 'DENY'},
             {key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin'},

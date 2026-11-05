@@ -56,10 +56,10 @@ export const SITE: Site = readSite({
 
 /** The four source repositories. */
 export const REPOS = {
-  contracts: 'https://github.com/gopaltalaviya/agentx-contracts',
-  backend: 'https://github.com/gopaltalaviya/agentx-backend',
-  interface: 'https://github.com/gopaltalaviya/agentx-interface',
-  docs: 'https://github.com/gopaltalaviya/agentx-docs',
+  contracts: 'https://github.com/gopaltalaviya/pactora-contracts-near',
+  backend: 'https://github.com/gopaltalaviya/pactora-backend-near',
+  interface: 'https://github.com/gopaltalaviya/pactora-interface-near',
+  docs: 'https://github.com/gopaltalaviya/pactora-docs-near',
 } as const;
 
 /** This site's own origin, for absolute links (sitemap, robots, Open Graph). Never a hard-coded domain. */

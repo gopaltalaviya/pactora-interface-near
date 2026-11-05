@@ -28,13 +28,15 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       # lib/api-routes.test.ts holds /docs/api to docs/15-api.md, which lives
-      # in agentx-docs. Only that file, outside the tree lint and tests walk.
+      # in pactora-docs-near. Only that file, outside the tree lint and tests
+      # walk. raw.githubusercontent.com serves it only while that repo is
+      # public; while it is private this step needs a token with read access.
       - run: >-
-          curl -fsSL --create-dirs -o "$RUNNER_TEMP/agentx-docs/docs/15-api.md"
-          https://raw.githubusercontent.com/gopaltalaviya/agentx-docs/master/docs/15-api.md
+          curl -fsSL --create-dirs -o "$RUNNER_TEMP/pactora-docs-near/docs/15-api.md"
+          https://raw.githubusercontent.com/gopaltalaviya/pactora-docs-near/master/docs/15-api.md
       - run: pnpm test
         env:
-          PACTORA_DOCS_DIR: ${{ runner.temp }}/agentx-docs
+          PACTORA_DOCS_DIR: ${{ runner.temp }}/pactora-docs-near
       - run: pnpm audit --prod --audit-level high
 
       # A production build without NEXT_PUBLIC_API_URL fails on purpose (it
