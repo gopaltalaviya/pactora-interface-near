@@ -185,7 +185,7 @@ test('the run history needs a key and then lists runs', async ({page}) => {
   await page.goto('/runs');
   await page.getByLabel('Orchestrator API key').fill('ax_0123456789abcdef_secret');
   await page.getByRole('button', {name: 'Show runs'}).click();
-  await expect(page.getByRole('link', {name: /Research ETH\/USDC/})).toHaveAttribute(
+  await expect(page.getByRole('link', {name: /Research NEAR\/USDC/})).toHaveAttribute(
     'href',
     `/runs/${RUN_ID}`,
   );
