@@ -77,7 +77,7 @@ function ModelCard({model}: {model: NonNullable<StatusReport['model']>}) {
  * before it happens rather than as a revert during a run.
  */
 /** A yoctoNEAR balance in NEAR, to four places: enough to see an account running dry. */
-const native = (yocto: string) => `${formatYocto(yocto)} NEAR`;
+const native = (yocto: string | null) => (yocto === null ? 'not read' : `${formatYocto(yocto)} NEAR`);
 
 function GasCard({gas}: {gas: GasStatus}) {
   const word = {ok: 'every wallet funded', low: 'a wallet is low', unknown: 'not yet read'}[gas.state];

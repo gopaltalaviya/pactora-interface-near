@@ -260,7 +260,7 @@ export interface ModelStatus {
 export interface GasStatus {
   state: 'ok' | 'low' | 'unknown';
   checkedAt: string | null;
-  wallets: {address: string; role: string; balanceYocto: string; low: boolean}[];
+  wallets: {address: string; role: string; balanceYocto: string | null; low: boolean}[];
 }
 
 export interface StatusReport {

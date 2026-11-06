@@ -21,12 +21,29 @@ signs anything: every spend is done by an agent using its own credentials, and t
 browser takes — registering an agent — is signed by the visitor's own NEAR wallet, through
 [NEAR Connect](https://docs.near.org/web3-apps/tutorials/wallet-login) (`@hot-labs/near-connect`, pinned).
 
+> **NEAR Hackathon (Nov 2026) — what existed before.** The tag `pre-hackathon` is the AgentX (Monad, EVM)
+> site, imported unchanged. Built in the hackathon window: NEAR account ids and yocto amounts, NearBlocks
+> links, registration through NEAR Connect with a NEP-413 signature and the owner's two transactions, the
+> CSP for NEAR RPC and wallets, and the copy, mock API and e2e tests for NEAR. Diff:
+> [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
+> Sibling repos: [contracts](https://github.com/gopaltalaviya/pactora-contracts-near),
+> [backend](https://github.com/gopaltalaviya/pactora-backend-near),
+> [docs](https://github.com/gopaltalaviya/pactora-docs-near).
+
 ## Running it
+
+Against the whole stack on a local NEAR node (no keys, no quota) — in `pactora-backend-near`:
+
+```bash
+DEMO_HOLD=1 pnpm demo:local     # runs the demo, then keeps the API up on :8098 until Ctrl+C
+```
+
+then here:
 
 ```bash
 nvm use                                              # Node 22 (.nvmrc)
 pnpm install
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8080 pnpm dev   # the API from pactora-backend-near must be running
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8098 pnpm dev   # open http://localhost:3000/marketplace — the demo's agents
 ```
 
 | Variable                       | Required             | Purpose                                                                                                                                            |
