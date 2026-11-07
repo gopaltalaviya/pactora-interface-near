@@ -13,3 +13,8 @@ test-results/
 blob-report/
 coverage/
 .DS_Store
+.env.*
+!.env.example
+# keys never committed
+.keys/
+*keypair*.json
