@@ -11,6 +11,7 @@ import {
   type TokenInfo,
 } from '@/components/market/hooks';
 import {DeliveryPanels, useDelivery} from '@/components/market/Evidence';
+import {PartyReviewCard} from '@/components/market/Profile';
 import {utc} from '@/components/market/ListingCard';
 import {Badge} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
@@ -197,6 +198,10 @@ export function JobView({jobId}: {jobId: string}) {
             {JSON.stringify(job.result, null, 2)}
           </pre>
         </Card>
+      )}
+
+      {party && session.status === 'in' && job.state === 'settled' && (
+        <PartyReviewCard jobId={job.jobId} attempt={attempt} />
       )}
 
       <Timeline job={job} stream={stream} />

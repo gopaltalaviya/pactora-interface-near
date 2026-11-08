@@ -82,6 +82,7 @@ export const PUBLIC_ROUTES = [
   '/jobs/new',
   '/me',
   '/notifications',
+  '/people',
   '/runs',
   '/status',
   '/about',

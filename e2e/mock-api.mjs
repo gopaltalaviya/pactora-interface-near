@@ -134,7 +134,7 @@ function send(res, status, body) {
     'content-type': status >= 400 ? 'application/problem+json' : 'application/json',
     'access-control-allow-origin': '*',
     'access-control-allow-headers': 'authorization, content-type, idempotency-key',
-    'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   });
   res.end(status === 204 ? undefined : JSON.stringify(body));
 }
@@ -912,6 +912,7 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await profileRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await feedRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await delivery(req, res, path, me)) !== null) return;
 
@@ -1181,6 +1182,186 @@ async function market(req, res, url) {
 
 const flaky = new Set();
 const created = new Map();
+
+// ── profiles and two-way reviews (the API's routes/profiles.ts) ──
+// A directory of 23 published profiles (two people), with reviews on the
+// first; anyone signed in has a profile they can edit (kept per account).
+const DIR = Array.from({length: 23}, (_, i) => ({
+  profileId: `dddddddd-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+  kind: i < 2 ? 'person' : 'agent',
+  displayName: i === 0 ? 'Priya Photos' : i === 1 ? 'Wade Writes' : `Agent ${String(i).padStart(2, '0')}`,
+  headline: i === 0 ? 'Shop fronts in Pune, 100% on time' : '',
+  bio: i === 0 ? 'I photograph shop fronts.\n<b>not bold</b>' : '',
+  account: i === 0 ? 'priya.testnet' : null,
+  location: i === 0 ? 'Pune' : null,
+  capabilities: i === 0 ? ['photography'] : i > 1 ? ['market-research'] : [],
+  rating: i === 0 ? {average: 4.5, count: 2} : i === 2 ? {average: 3, count: 1} : {average: null, count: 0},
+  settledJobs: i === 0 ? 3 : 0,
+  chainAgentId: i > 1 ? String(i) : null,
+  publishedAt: new Date(Date.UTC(2026, 10, 1, 0, i)).toISOString(),
+  reviews:
+    i === 0
+      ? [
+          {
+            reviewId: 'rv-1',
+            rating: 5,
+            body: 'Sharp photos, on time.',
+            authorRole: 'client',
+            author: 'Olive',
+            jobId: JOB(1),
+            at: '2026-11-03T10:00:00.000Z',
+          },
+          {
+            reviewId: 'rv-2',
+            rating: 4,
+            body: 'Good, one retake needed.',
+            authorRole: 'client',
+            author: null,
+            jobId: JOB(1),
+            at: '2026-11-02T10:00:00.000Z',
+          },
+        ]
+      : [],
+}));
+const myProfiles = new Map();
+const partyReviewsOf = new Map();
+
+async function profileRoutes(req, res, path, account, me, url) {
+  if (path === '/v1/profiles' && req.method === 'GET') {
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const kind = url.searchParams.get('kind');
+    const sort = url.searchParams.get('sort') ?? 'rating';
+    const page = Number(url.searchParams.get('page') ?? 1);
+    let rows = DIR.filter(
+      (p) =>
+        (!kind || p.kind === kind) &&
+        (!q || p.displayName.toLowerCase().includes(q) || p.headline.toLowerCase().includes(q)),
+    );
+    rows = [...rows].sort((a, b) =>
+      sort === 'name'
+        ? a.displayName.localeCompare(b.displayName)
+        : sort === 'recent'
+          ? b.publishedAt.localeCompare(a.publishedAt)
+          : (b.rating.average ?? -1) - (a.rating.average ?? -1),
+    );
+    const view = (p) => {
+      const {bio, reviews, ...rest} = p;
+      void bio;
+      void reviews;
+      return rest;
+    };
+    return send(res, 200, {
+      total: rows.length,
+      page,
+      pageSize: 20,
+      sort,
+      profiles: rows.slice((page - 1) * 20, page * 20).map(view),
+    });
+  }
+  const one = /^\/v1\/profiles\/([^/]+)$/.exec(path);
+  if (one && req.method === 'GET') {
+    const p = DIR.find((x) => x.profileId === one[1]);
+    return p ? send(res, 200, p) : problem(res, 404, 'NOT_FOUND', 'no published profile');
+  }
+  if (path === '/v1/me/profile') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    if (!me) return problem(res, 403, 'FORBIDDEN', 'no person agent');
+    if (req.method === 'GET') {
+      const saved = myProfiles.get(account);
+      return send(
+        res,
+        200,
+        saved
+          ? {exists: true, ...saved, profileId: 'dddddddd-0000-4000-8000-000000000001'}
+          : {
+              exists: false,
+              published: false,
+              displayName: PEOPLE[account]?.name ?? account,
+              headline: '',
+              bio: '',
+              showAccount: false,
+            },
+      );
+    }
+    if (req.method === 'PUT') {
+      const b = await readBody(req);
+      const name = String(b.displayName ?? '').trim();
+      if (name.length < 1 || name.length > 60)
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'displayName is 1-60 characters');
+      myProfiles.set(account, {
+        displayName: name,
+        headline: b.headline ?? '',
+        bio: b.bio ?? '',
+        showAccount: Boolean(b.showAccount),
+        published: Boolean(b.published),
+      });
+      return send(res, 200, {
+        profileId: 'dddddddd-0000-4000-8000-000000000001',
+        published: Boolean(b.published),
+      });
+    }
+  }
+  const pr = /^\/v1\/jobs\/([^/]+)\/party-reviews$/.exec(path);
+  if (pr) {
+    const j = jobs.get(pr[1]);
+    if (!j) return problem(res, 404, 'NOT_FOUND', 'no such job');
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    const role = j.worker === me ? 'worker' : j.client === me ? 'client' : null;
+    if (!role) return problem(res, 403, 'FORBIDDEN', 'only the two parties review a job');
+    const store = partyReviewsOf.get(j.jobId) ?? {};
+    partyReviewsOf.set(j.jobId, store);
+    const settled = j.state === 'settled';
+    const closesAt = settled
+      ? new Date(Date.parse(j.settledAt ?? '2026-11-02T10:00:00.000Z') + 14 * 86_400_000).toISOString()
+      : null;
+    const open = settled && j.reviewWindow !== 'closed';
+    if (req.method === 'POST') {
+      if (!settled) return problem(res, 409, 'INVALID_STATE', 'a job is reviewed after it settles on chain');
+      if (!open) return problem(res, 410, 'DEADLINE_PASSED', 'the review window closed');
+      const b = await readBody(req);
+      if (!Number.isInteger(b.rating) || b.rating < 1 || b.rating > 5)
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'rating is 1-5');
+      const body = String(b.body ?? '').trim();
+      if (body.length < 10 || body.length > 2000)
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'body is 10-2000 characters');
+      if (store[role]) return problem(res, 409, 'IDEMPOTENCY_CONFLICT', 'already reviewed');
+      store[role] = {
+        reviewId: `rv-${++counter}`,
+        rating: b.rating,
+        body,
+        authorRole: role,
+        at: new Date().toISOString(),
+        hidden: false,
+      };
+      return send(res, 201, {...store[role], replayed: false});
+    }
+    const other = role === 'client' ? 'worker' : 'client';
+    const revealed = Boolean(store[role] && store[other]);
+    return send(res, 200, {
+      jobId: j.jobId,
+      role,
+      window: {open, settledOnChain: settled, closesAt},
+      mine: store[role] ?? null,
+      theirs: store[other] ? (revealed ? store[other] : {submitted: true}) : null,
+      revealed,
+    });
+  }
+  return null;
+}
+
+/** Test hook: the other party writes their review (as if from their own browser). */
+function otherPartyReviews(jobId, role) {
+  const store = partyReviewsOf.get(jobId) ?? {};
+  partyReviewsOf.set(jobId, store);
+  store[role] = {
+    reviewId: `rv-${++counter}`,
+    rating: 3,
+    body: 'Clear brief, slow to reply.',
+    authorRole: role,
+    at: new Date().toISOString(),
+    hidden: false,
+  };
+}
 
 // ── notifications and the faucet (the API's routes/agent-events.ts, faucet.ts) ──
 // Accounts named `nell-<anything>.testnet` are people with a seeded feed of
@@ -1616,6 +1797,18 @@ async function hooks(req, res, url) {
     pushEvent(j, 'job.submitted', 'LIVETX1');
     return send(res, 200, {state: j.state});
   }
+  // A person record for a test's own account, so parallel browsers never share one.
+  const newPerson = /^\/__test\/person\/([a-z0-9-]+\.testnet)$/.exec(url.pathname);
+  if (newPerson) {
+    PEOPLE[newPerson[1]] = {agentId: '77', chainAgentId: '177', name: 'Pat', capabilities: []};
+    myProfiles.delete(newPerson[1]);
+    return send(res, 200, {account: newPerson[1]});
+  }
+  const theirs = /^\/__test\/job\/([^/]+)\/their-review\/(client|worker)$/.exec(url.pathname);
+  if (theirs) {
+    otherPartyReviews(theirs[1], theirs[2]);
+    return send(res, 200, {ok: true});
+  }
   const feedReset = /^\/__test\/feed\/reset\/([^/]+)$/.exec(url.pathname);
   if (feedReset) {
     feeds.delete(feedReset[1]);
@@ -1647,10 +1840,12 @@ createServer(async (req, res) => {
   }
   if (
     url.pathname === '/v1/me' ||
+    url.pathname.startsWith('/v1/me/') ||
     url.pathname.startsWith('/v1/listings') ||
     url.pathname.startsWith('/v1/files/') ||
     url.pathname.startsWith('/v1/notifications') ||
     url.pathname === '/v1/faucet' ||
+    url.pathname.startsWith('/v1/profiles') ||
     (url.pathname.startsWith('/v1/jobs') && !url.pathname.startsWith(`/v1/jobs/${JOB_ID}`))
   ) {
     if ((await market(req, res, url)) !== null) return;

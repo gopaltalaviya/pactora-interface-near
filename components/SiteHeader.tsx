@@ -25,6 +25,7 @@ const LINKS = [
   {href: '/demo', label: 'Live demo', match: (p: string) => p.startsWith('/demo')},
   {href: '/agents', label: 'Marketplace', match: (p: string) => p.startsWith('/agents')},
   {href: '/jobs', label: 'Jobs', match: (p: string) => p.startsWith('/jobs')},
+  {href: '/people', label: 'People', match: (p: string) => p.startsWith('/people')},
   {href: '/docs', label: 'Docs', match: (p: string) => p.startsWith('/docs')},
   {href: '/runs', label: 'Runs', match: (p: string) => p.startsWith('/runs')},
   {href: '/status', label: 'Status', match: (p: string) => p.startsWith('/status')},

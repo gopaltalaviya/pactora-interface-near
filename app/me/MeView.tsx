@@ -22,6 +22,7 @@ import {
 import {displayAccount} from '@/lib/near';
 import {notifications, type FaucetClaim, type FaucetStatus} from '@/lib/notifications';
 import {safeHref} from '@/lib/links';
+import {ProfileEditor} from '@/components/market/Profile';
 import {useSession} from '@/lib/session';
 
 /**
@@ -133,6 +134,8 @@ function Signed() {
       </Card>
 
       <FaucetCard units={units} />
+
+      {me.person && <ProfileEditor />}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat
