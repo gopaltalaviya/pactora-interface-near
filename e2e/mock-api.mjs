@@ -913,6 +913,7 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await channelRoutes(req, res, path, account, me)) !== null) return;
   if ((await adminRoutes(req, res, path, account)) !== null) return;
   if ((await kycRoutes(req, res, path, account, me)) !== null) return;
   if ((await profileRoutes(req, res, path, account, me, url)) !== null) return;
@@ -1185,6 +1186,52 @@ async function market(req, res, url) {
 
 const flaky = new Set();
 const created = new Map();
+
+// ── channels: Telegram and email (the API's routes/channels.ts) ──
+// Per account; the email code is always 246810 here, the Telegram code fixed.
+const channelState = new Map();
+async function channelRoutes(req, res, path, account, me) {
+  if (!path.startsWith('/v1/me/channels')) return null;
+  if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+  if (!me) return problem(res, 403, 'FORBIDDEN', 'channels are for people');
+  const st = channelState.get(account) ?? {links: [], pendingEmail: null};
+  channelState.set(account, st);
+  if (path === '/v1/me/channels' && req.method === 'GET')
+    return send(res, 200, {telegram: {bot: 'PactoraTestBot'}, email: true, links: st.links});
+  if (path === '/v1/me/channels/telegram/code' && req.method === 'POST')
+    return send(res, 201, {
+      code: 'K7M2Q9XP',
+      number: '4821',
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      bot: 'PactoraTestBot',
+    });
+  if (path === '/v1/me/channels/email' && req.method === 'POST') {
+    const b = await readBody(req);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(b.address ?? '')))
+      return problem(res, 422, 'SCHEMA_MISMATCH', 'address: Invalid email');
+    st.pendingEmail = String(b.address).toLowerCase();
+    return send(res, 202, {address: `${st.pendingEmail[0]}***@${st.pendingEmail.split('@')[1]}`});
+  }
+  if (path === '/v1/me/channels/email/verify' && req.method === 'POST') {
+    const b = await readBody(req);
+    if (!st.pendingEmail) return problem(res, 404, 'NOT_FOUND', 'no email code is waiting');
+    if (b.code !== '246810') return problem(res, 403, 'FORBIDDEN', 'that is not the code');
+    st.links.push({
+      channel: 'email',
+      address: `${st.pendingEmail[0]}***@${st.pendingEmail.split('@')[1]}`,
+      since: new Date().toISOString(),
+    });
+    st.pendingEmail = null;
+    return send(res, 200, {channel: 'email', linked: true});
+  }
+  const del = /^\/v1\/me\/channels\/(telegram|email)$/.exec(path);
+  if (del && req.method === 'DELETE') {
+    const before = st.links.length;
+    st.links = st.links.filter((l) => l.channel !== del[1]);
+    return send(res, 200, {channel: del[1], unlinked: st.links.length < before});
+  }
+  return problem(res, 404, 'NOT_FOUND', 'not found');
+}
 
 // ── the admin console (the API's routes/admin.ts, /v1/compliance) ──
 // cara is on the arbiter DAO's council, rhea is a compliance reviewer.
@@ -2055,6 +2102,7 @@ async function hooks(req, res, url) {
   if (newPerson) {
     PEOPLE[newPerson[1]] = {agentId: '77', chainAgentId: '177', name: 'Pat', capabilities: []};
     myProfiles.delete(newPerson[1]);
+    channelState.delete(newPerson[1]);
     kycOf.delete(newPerson[1]);
     return send(res, 200, {account: newPerson[1]});
   }

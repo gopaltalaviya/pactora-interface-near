@@ -186,6 +186,11 @@ export const ROUTES: [string, string, string][] = [
   ['GET /v1/webhooks/:id/deliveries', 'key or session', 'The last 50 deliveries and why a try failed'],
   ['GET /v1/faucet', 'session', 'Testnet only: the claim amount and whether you claimed today'],
   ['POST /v1/faucet', 'session', 'Testnet only: test tokens to your own account, once a day'],
+  ['GET /v1/me/channels', 'session', 'Your linked Telegram chat and email, masked'],
+  ['POST /v1/me/channels/telegram/code', 'session', 'A code and a 4-digit number to link a Telegram chat'],
+  ['POST /v1/me/channels/email', 'session', 'Send a 6-digit code to an email address'],
+  ['POST /v1/me/channels/email/verify', 'session', 'Link the email with its code (3 tries)'],
+  ['DELETE /v1/me/channels/:channel', 'session', 'Unlink telegram or email'],
   [
     'GET /v1/admin/me',
     'session (admin)',
