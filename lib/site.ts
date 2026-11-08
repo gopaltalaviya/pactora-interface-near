@@ -81,6 +81,7 @@ export const PUBLIC_ROUTES = [
   '/jobs',
   '/jobs/new',
   '/kyc/simulated',
+  '/admin',
   '/me',
   '/notifications',
   '/people',
@@ -116,4 +117,5 @@ export const NOINDEX_ROUTES: readonly string[] = [
   '/me',
   '/notifications',
   '/kyc/simulated',
+  '/admin',
 ];

@@ -656,6 +656,7 @@ listingJob(40); // accepted, nothing delivered yet
 listingJob(41, {state: 'created'}); // not accepted: chat and drafts closed
 listingJob(42); // filled below: a round awaiting review, with a photo and a message
 listingJob(43); // filled below: an accepted draft, ready to submit
+addJob(JOB(50), {state: 'disputed', chainJobId: '7050'}); // the admin desk's dispute
 
 const jobView = (j) => ({
   jobId: j.jobId,
@@ -912,6 +913,7 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await adminRoutes(req, res, path, account)) !== null) return;
   if ((await kycRoutes(req, res, path, account, me)) !== null) return;
   if ((await profileRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await feedRoutes(req, res, path, account, me, url)) !== null) return;
@@ -1183,6 +1185,196 @@ async function market(req, res, url) {
 
 const flaky = new Set();
 const created = new Map();
+
+// ── the admin console (the API's routes/admin.ts, /v1/compliance) ──
+// cara is on the arbiter DAO's council, rhea is a compliance reviewer.
+// JOB(50) is disputed. Proposals and decisions are kept in memory.
+const isCouncil = (a) => /^cara(-[a-z0-9-]+)?[.]testnet$/.test(a);
+const isReviewer = (a) => /^rhea(-[a-z0-9-]+)?[.]testnet$/.test(a);
+const DAO_ID = 'pactora-arbiter.sputnikv2.testnet';
+const adminProposals = new Map();
+const adminState = new Map();
+const BASE_CASES = [
+  {
+    caseId: 'cccccccc-0000-4000-8000-000000000001',
+    subjectAccount: 'held.testnet',
+    source: 'ofac',
+    entryRef: '2674',
+    queryName: 'Abu Abbas',
+    matchedName: 'ABBAS, Abu',
+    score: 1,
+    strength: 'strong',
+    status: 'open',
+    version: 1,
+    decisions: [],
+  },
+];
+const BASE_REVIEWS = [
+  {
+    reviewId: 'eeeeeeee-0000-4000-8000-000000000001',
+    rating: 1,
+    body: 'Abusive words go here.',
+    authorRole: 'client',
+    at: '2026-11-03T10:00:00.000Z',
+    hidden: false,
+    hiddenReason: null,
+  },
+];
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64');
+const ruling = (jobId, forWorker) => ({
+  FunctionCall: {
+    receiver_id: 'pactora.testnet',
+    actions: [
+      {
+        method_name: 'resolve_dispute',
+        args: b64({job_id: jobId, for_worker: forWorker}),
+        deposit: '0',
+        gas: '50000000000000',
+      },
+    ],
+  },
+});
+
+async function adminRoutes(req, res, path, account) {
+  const isAdmin = path.startsWith('/v1/admin') || path.startsWith('/v1/compliance');
+  if (!isAdmin) return null;
+  if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+  const roles = [...(isCouncil(account) ? ['council'] : []), ...(isReviewer(account) ? ['reviewer'] : [])];
+  // Each test account has its own copy, so parallel browsers never share one.
+  if (!adminState.has(account))
+    adminState.set(account, {cases: structuredClone(BASE_CASES), reviews: structuredClone(BASE_REVIEWS)});
+  const {cases: adminCases, reviews: adminReviews} = adminState.get(account);
+  if (roles.length === 0) return problem(res, 403, 'FORBIDDEN', 'admin only');
+  const council = () =>
+    roles.includes('council') ? null : problem(res, 403, 'FORBIDDEN', 'only the arbiter council may do this');
+  if (path === '/v1/admin/me')
+    return send(res, 200, {account, chainId: 'near:testnet', roles, arbiterDao: DAO_ID});
+  if (path === '/v1/admin/disputes') {
+    if (council() !== null) return;
+    return send(res, 200, {
+      arbiterDao: DAO_ID,
+      disputes: [{jobId: JOB(50), chainJobId: '7050', amount: '4000000'}],
+    });
+  }
+  const d = /^\/v1\/admin\/disputes\/([^/]+)(\/proposal|\/proposals(?:\/(\d+)\/vote)?)?$/.exec(path);
+  if (d) {
+    if (council() !== null) return;
+    if (d[1] !== JOB(50)) return problem(res, 404, 'NOT_FOUND', 'no such dispute');
+    const evidenceHash = 'ab'.repeat(32);
+    if (!d[2]) {
+      return send(res, 200, {
+        jobId: JOB(50),
+        chainJobId: '7050',
+        state: 'disputed',
+        amount: '4000000',
+        resultHash: 'cd'.repeat(32),
+        resultMismatch: false,
+        client: {agentId: 11, name: 'Olive'},
+        worker: {agentId: 22, name: 'Wade'},
+        result: {answer: 'x'},
+        disputeReason: 'The photos are of the wrong street. <b>not bold</b>',
+        drafts: [{round: 1, snapshotHash: 'ef'.repeat(32), snapshot: {text: 'Both fronts photographed.'}}],
+        files: [],
+        messages: [
+          {
+            messageId: 'm1',
+            from: 'worker',
+            body: 'I went to the address given.',
+            at: '2026-11-02T09:00:00.000Z',
+          },
+        ],
+        timeline: [{kind: 'job.disputed', txHash: 'T9', at: '2026-11-02T10:00:00.000Z'}],
+        evidenceHash,
+      });
+    }
+    const list = adminProposals.get(account) ?? [];
+    adminProposals.set(account, list);
+    if (d[2] === '/proposal' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (b.evidenceHash !== evidenceHash)
+        return problem(res, 409, 'INVALID_STATE', 'stale evidence: reload and look again');
+      const kind = ruling(7050, Boolean(b.forWorker));
+      list.push({
+        id: list.length,
+        proposer: account,
+        description: `job ${JOB(50)}`,
+        status: 'InProgress',
+        votes: {},
+        forWorker: Boolean(b.forWorker),
+        youVoted: null,
+        kind,
+      });
+      return send(res, 200, {
+        dao: DAO_ID,
+        functionCall: {
+          receiverId: DAO_ID,
+          methodName: 'add_proposal',
+          args: {proposal: {description: `Pactora job ${JOB(50)}: evidence ${evidenceHash}`, kind}},
+          gas: '100000000000000',
+          deposit: '100000000000000000000000',
+        },
+      });
+    }
+    if (d[2] === '/proposals')
+      return send(res, 200, {
+        dao: DAO_ID,
+        council: [account, 'x.testnet', 'y.testnet'],
+        proposals: list.map(({kind, ...p}) => (void kind, p)),
+      });
+    if (d[3] !== undefined && req.method === 'POST') {
+      const p = list.find((x) => String(x.id) === d[3]);
+      if (!p) return problem(res, 404, 'NOT_FOUND', 'no such proposal');
+      const b = await readBody(req);
+      p.votes[account] = b.action === 'VoteApprove' ? 'Approve' : 'Reject';
+      p.youVoted = p.votes[account];
+      return send(res, 200, {
+        dao: DAO_ID,
+        functionCall: {
+          receiverId: DAO_ID,
+          methodName: 'act_proposal',
+          args: {id: p.id, action: b.action, proposal: p.kind},
+          gas: '300000000000000',
+          deposit: '0',
+        },
+      });
+    }
+  }
+  if (path === '/v1/admin/reviews') return send(res, 200, {reviews: adminReviews});
+  const hide = /^\/v1\/admin\/reviews\/([^/]+)\/hide$/.exec(path);
+  if (hide && req.method === 'POST') {
+    const b = await readBody(req);
+    if (String(b.reason ?? '').trim().length < 3)
+      return problem(res, 422, 'SCHEMA_MISMATCH', 'reason is 3-500 characters');
+    const r = adminReviews.find((x) => x.reviewId === hide[1]);
+    if (!r) return problem(res, 404, 'NOT_FOUND', 'no such review');
+    r.hidden = true;
+    r.hiddenReason = b.reason;
+    return send(res, 200, {reviewId: r.reviewId, hidden: true});
+  }
+  if (path.startsWith('/v1/compliance')) {
+    if (!roles.includes('reviewer')) return problem(res, 403, 'FORBIDDEN', 'only compliance reviewers');
+    if (path === '/v1/compliance/cases')
+      return send(res, 200, {cases: adminCases.filter((c) => c.status === 'open')});
+    const dc = /^\/v1\/compliance\/cases\/([^/]+)\/decisions$/.exec(path);
+    if (dc && req.method === 'POST') {
+      const c = adminCases.find((x) => x.caseId === dc[1]);
+      const b = await readBody(req);
+      if (!c) return problem(res, 404, 'NOT_FOUND', 'no case');
+      if (String(b.reason ?? '').trim().length < 10)
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'reason is 10-2000 characters');
+      if (b.caseVersion !== c.version) return problem(res, 409, 'INVALID_STATE', 'stale case');
+      c.decisions.push({
+        reviewer: account,
+        decision: b.decision,
+        reason: b.reason,
+        at: new Date().toISOString(),
+      });
+      c.version++;
+      return send(res, 201, {status: c.status, version: c.version, clearsSoFar: 1});
+    }
+  }
+  return problem(res, 404, 'NOT_FOUND', 'not found');
+}
 
 // ── identity checks (the API's routes/kyc.ts) ──
 // "Abu Abbas" is a strong sanctions match: the account is held and no
@@ -1909,6 +2101,8 @@ createServer(async (req, res) => {
     url.pathname === '/v1/faucet' ||
     url.pathname.startsWith('/v1/profiles') ||
     url.pathname.startsWith('/v1/kyc') ||
+    url.pathname.startsWith('/v1/admin') ||
+    url.pathname.startsWith('/v1/compliance') ||
     (url.pathname.startsWith('/v1/jobs') && !url.pathname.startsWith(`/v1/jobs/${JOB_ID}`))
   ) {
     if ((await market(req, res, url)) !== null) return;

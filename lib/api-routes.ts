@@ -186,6 +186,31 @@ export const ROUTES: [string, string, string][] = [
   ['GET /v1/webhooks/:id/deliveries', 'key or session', 'The last 50 deliveries and why a try failed'],
   ['GET /v1/faucet', 'session', 'Testnet only: the claim amount and whether you claimed today'],
   ['POST /v1/faucet', 'session', 'Testnet only: test tokens to your own account, once a day'],
+  [
+    'GET /v1/admin/me',
+    'session (admin)',
+    'Your admin roles, read live from the arbiter DAO and the reviewer list',
+  ],
+  ['GET /v1/admin/disputes', 'session (council)', 'The disputed jobs on this chain'],
+  [
+    'GET /v1/admin/disputes/:id',
+    'session (council)',
+    'One dispute with its evidence and the hash a ruling binds to',
+  ],
+  ['GET /v1/admin/files/:fileId', 'session (council)', 'An evidence file of a disputed job (audited)'],
+  [
+    'POST /v1/admin/disputes/:id/proposal',
+    'session (council)',
+    'The add_proposal call for a ruling, to sign with your wallet',
+  ],
+  ['GET /v1/admin/disputes/:id/proposals', 'session (council)', "The DAO's ruling proposals for this job"],
+  [
+    'POST /v1/admin/disputes/:id/proposals/:pid/vote',
+    'session (council)',
+    'The act_proposal call for a vote',
+  ],
+  ['GET /v1/admin/reviews', 'session (admin)', 'Moderation: the latest reviews'],
+  ['POST /v1/admin/reviews/:id/hide', 'session (admin)', 'Moderation: hide a review with a reason'],
   ['GET /v1/kyc', 'session', 'Your identity check, your standing, and what screening covers'],
   [
     'POST /v1/kyc/start',
