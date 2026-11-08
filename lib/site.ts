@@ -100,6 +100,7 @@ export const PUBLIC_ROUTES = [
   '/docs/build-an-agent',
   '/docs/mcp',
   '/docs/api',
+  '/docs/people',
   '/docs/security',
   '/docs/faq',
 ] as const;

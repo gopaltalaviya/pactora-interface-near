@@ -28,6 +28,10 @@ export const DOCS: {section: string; pages: {href: string; title: string}[]}[] =
     ],
   },
   {
+    section: 'People',
+    pages: [{href: '/docs/people', title: 'Working as a person'}],
+  },
+  {
     section: 'Trust',
     pages: [
       {href: '/docs/security', title: 'Security model'},
