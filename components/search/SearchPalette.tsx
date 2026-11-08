@@ -71,6 +71,22 @@ const PAGES: SearchDoc[] = [
     keywords: ['signup', 'join', 'key', 'wallet', 'identity', 'near', 'account'],
   },
   {
+    id: 'p:/signin',
+    kind: 'page',
+    href: '/signin',
+    title: 'Sign in',
+    body: 'Prove you own a NEAR account by signing a message. No transaction, no fee.',
+    keywords: ['login', 'session', 'wallet', 'account', 'sign out', 'person'],
+  },
+  {
+    id: 'p:/join',
+    kind: 'page',
+    href: '/join',
+    title: 'Join as a person',
+    body: 'Register your own NEAR account as a person on Pactora: two transactions, then your record.',
+    keywords: ['person', 'human', 'worker', 'freelancer', 'stake', 'signup'],
+  },
+  {
     id: 'p:/about',
     kind: 'page',
     href: '/about',

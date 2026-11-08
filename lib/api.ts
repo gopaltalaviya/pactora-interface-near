@@ -226,6 +226,8 @@ async function request<T>(path: string, init: RequestInit, fallback: string): Pr
       );
     throw new ApiError(problem.code ?? 'UNKNOWN', problem.detail ?? `${fallback} (${res.status})`);
   }
+  // DELETE /v1/session answers 204 with no body, and that is the whole answer.
+  if (res.status === 204) return undefined as T;
   if (body === undefined) throw new ApiError('BAD_RESPONSE', BAD_RESPONSE);
   return body as T;
 }
@@ -318,6 +320,43 @@ export interface Challenge {
   recipient: string;
   expiresAt: string;
 }
+
+/** `POST /v1/session/challenge`: the same shape as an agent's, for signing in. */
+export type SessionChallenge = Challenge;
+
+/** A person record, as a session reports it. */
+export interface PersonRef {
+  publicId: string;
+  chainAgentId: string;
+  name: string;
+}
+
+/** `POST /v1/session`. The token is a bearer secret, shown once. */
+export interface CreatedSession {
+  token: string;
+  account: string;
+  chainId: ChainId;
+  expiresAt: string;
+  person: PersonRef | null;
+}
+
+/** `GET /v1/session`. */
+export interface SessionInfo {
+  account: string;
+  chainId: ChainId;
+  expiresAt: string;
+  person: PersonRef | null;
+}
+
+/** `POST /v1/people`. 201 on the first call, 200 when it was already recorded. */
+export interface RegisteredPerson {
+  publicId: string;
+  chainAgentId: string;
+  name: string;
+  kind: 'person';
+}
+
+const bearer = (token: string) => ({authorization: `Bearer ${token}`});
 
 const ED25519_KEY = /^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
@@ -461,6 +500,96 @@ export const api = {
       'registration failed',
     );
   },
+
+  /** `POST /v1/session/challenge`: a single-use message for the account to sign in with. */
+  sessionChallenge(body: {accountId: string; chainId?: ChainId}): Promise<SessionChallenge> {
+    return request<SessionChallenge>(
+      '/v1/session/challenge',
+      {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
+      'could not start the sign-in',
+    );
+  },
+
+  /**
+   * Sign in, the way `register` proves ownership: ask for a challenge, have the
+   * wallet sign it (NEP-413), post the signature. The token that comes back is
+   * a bearer secret for this browser tab and is never logged or put in a URL.
+   */
+  async createSession(
+    body: {accountId: string; chainId?: ChainId},
+    sign: (challenge: {
+      message: string;
+      recipient: string;
+      nonce: string;
+    }) => Promise<{accountId: string; publicKey: string; signature: string}>,
+  ): Promise<CreatedSession> {
+    const challenge = await api.sessionChallenge(body);
+    const signed = await sign({
+      message: challenge.message,
+      recipient: challenge.recipient,
+      nonce: challenge.nonce,
+    });
+    // A wallet signs as whichever account is selected in it: say so plainly.
+    if (signed.accountId !== body.accountId) {
+      throw new Error(
+        `The wallet signed as ${signed.accountId}, not ${body.accountId}. Switch accounts and try again.`,
+      );
+    }
+    return request<CreatedSession>(
+      '/v1/session',
+      {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({
+          accountId: body.accountId,
+          ...(body.chainId ? {chainId: body.chainId} : {}),
+          nonce: challenge.nonce,
+          publicKey: signed.publicKey,
+          signature: signed.signature,
+        }),
+      },
+      'sign-in failed',
+    );
+  },
+
+  /** Who this session is, and whether it is still good (a 401 means it is not). */
+  getSession: (token: string, signal?: AbortSignal) =>
+    request<SessionInfo>(
+      '/v1/session',
+      {headers: bearer(token), ...(signal ? {signal} : {})},
+      'could not read the session',
+    ),
+
+  /** Sign out this session. */
+  deleteSession: (token: string) =>
+    request<void>('/v1/session', {method: 'DELETE', headers: bearer(token)}, 'could not sign out'),
+
+  /** Sign out every session of the account, on every device. */
+  deleteAllSessions: (token: string) =>
+    request<void>(
+      '/v1/sessions',
+      {method: 'DELETE', headers: bearer(token)},
+      'could not sign out everywhere',
+    ),
+
+  /**
+   * Record the signed-in account's on-chain agent (owner = wallet = this
+   * account) as a person. No API key is issued. 409 INVALID_STATE means the
+   * chain does not show an accepted, unfrozen agent for this account yet.
+   */
+  registerPerson: (
+    token: string,
+    body: {chainAgentId: string; name: string; description?: string; capabilities?: string[]},
+  ) =>
+    request<RegisteredPerson>(
+      '/v1/people',
+      {
+        method: 'POST',
+        headers: {'content-type': 'application/json', ...bearer(token)},
+        body: JSON.stringify(body),
+      },
+      'could not record the person',
+    ),
 
   /**
    * Start a run.

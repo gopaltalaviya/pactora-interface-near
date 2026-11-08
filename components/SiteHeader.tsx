@@ -7,6 +7,8 @@ import {Logo} from './brand/Logo';
 import {NetworkBadge} from './NetworkBadge';
 import {SearchButton} from './search/SearchButton';
 import {SearchPalette} from './search/SearchPalette';
+import {useSession} from '@/lib/session';
+import {displayAccount} from '@/lib/near';
 import {Icon} from './ui/Icon';
 
 /**
@@ -25,6 +27,28 @@ const LINKS = [
   {href: '/runs', label: 'Runs', match: (p: string) => p.startsWith('/runs')},
   {href: '/status', label: 'Status', match: (p: string) => p.startsWith('/status')},
 ];
+
+/** Who is signed in, or the way to sign in. A link to /signin either way: that page holds sign-out. */
+function SessionLink() {
+  const {status, account} = useSession();
+  if (status === 'loading') return null;
+  const signedIn = status === 'in' && account;
+  return (
+    <Link
+      href="/signin"
+      className="hidden h-8 max-w-[11rem] items-center gap-1.5 rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:inline-flex"
+    >
+      {signedIn ? (
+        <>
+          <span className="sr-only">Signed in as</span>
+          <span className="tabular truncate">{displayAccount(account)}</span>
+        </>
+      ) : (
+        'Sign in'
+      )}
+    </Link>
+  );
+}
 
 export function SiteHeader() {
   const pathname = usePathname() ?? '/';
@@ -104,6 +128,7 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           <SearchButton />
           <NetworkBadge />
+          <SessionLink />
           <Link
             href="/register"
             className="hidden h-8 items-center gap-1.5 rounded-lg bg-text px-3 text-xs font-medium text-ink transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] lg:inline-flex"
@@ -135,6 +160,8 @@ export function SiteHeader() {
           {[
             ...LINKS,
             {href: '/register', label: 'Register an agent', match: (p: string) => p.startsWith('/register')},
+            {href: '/join', label: 'Join as a person', match: (p: string) => p.startsWith('/join')},
+            {href: '/signin', label: 'Sign in', match: (p: string) => p.startsWith('/signin')},
           ].map((link) => {
             const active = link.match(pathname);
             return (

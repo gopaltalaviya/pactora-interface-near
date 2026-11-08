@@ -251,6 +251,8 @@ test('the menu works at phone width, and no page scrolls sideways', async ({page
     '/agents',
     '/agents/1',
     '/register',
+    '/signin',
+    '/join',
     '/runs',
     `/runs/${RUN_ID}`,
     '/status',

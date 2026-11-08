@@ -56,3 +56,31 @@ export function formatYocto(yocto: string, places = 4): string {
   const fraction = digits.slice(-YOCTO_DECIMALS, -YOCTO_DECIMALS + places).replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}` : whole;
 }
+
+/**
+ * A decimal a person typed (`1.5`) → base units (`1500000` at 6 decimals), as
+ * a string, with no float anywhere. Returns null for anything that is not a
+ * plain positive-or-zero decimal that fits the decimals given: no sign, no
+ * exponent, no separators, no more fraction digits than the token has, and at
+ * most 39 digits (a u128).
+ */
+export function parseUnits(text: string, decimals: number): string | null {
+  const m = /^(\d{1,39})(?:\.(\d{1,39}))?$/.exec(text.trim());
+  if (!m) return null;
+  const fraction = m[2] ?? '';
+  if (fraction.length > decimals) return null;
+  const digits = (m[1]! + fraction.padEnd(decimals, '0')).replace(/^0+(?=\d)/, '');
+  return digits.length <= 39 ? digits : null;
+}
+
+/**
+ * The contract's `AgentId` is a plain u64, which near-sdk reads from a JSON
+ * NUMBER (not a string). A JS number is exact only to 2^53, so an id past that
+ * is refused here rather than silently rounded into someone else's agent.
+ */
+export function agentIdArg(id: string): number {
+  if (!/^(0|[1-9]\d{0,19})$/.test(id)) throw new Error(`not an agent id: ${id}`);
+  const n = Number(id);
+  if (!Number.isSafeInteger(n)) throw new Error(`agent id ${id} is too large for this page to send exactly`);
+  return n;
+}

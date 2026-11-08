@@ -24,7 +24,7 @@
  */
 
 import type {NearConnector} from '@hot-labs/near-connect';
-import {isAccountId} from './near';
+import {agentIdArg, isAccountId} from './near';
 
 // ─── amounts ───────────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ export const REGISTER_GAS = '100000000000000';
 
 // ─── the wallet surface this page uses ─────────────────────────────────────
 
-type Action =
+export type Action =
   | {type: 'CreateAccount'}
   | {type: 'Transfer'; params: {deposit: string}}
   | {
@@ -112,6 +112,144 @@ export interface SignedMessage {
   signature: string;
 }
 
+// ─── generic builders ──────────────────────────────────────────────────────
+
+/** The one yoctoNEAR a contract's `assert_one_yocto` asks for: it forces a full-access key, so a leaked agent key cannot call it. */
+export const ONE_YOCTO = '1';
+
+/** 100 Tgas, the budget the signer gives every call. */
+export const DEFAULT_GAS = REGISTER_GAS;
+/** 150 Tgas: `ft_transfer_call` runs the token, then the receiver's `ft_on_transfer`, then a resolve. */
+export const FT_TRANSFER_CALL_GAS = '150000000000000';
+
+/** A `FunctionCall` action. `deposit` is a yoctoNEAR decimal string; it defaults to none. */
+export function functionCall(
+  methodName: string,
+  args: Record<string, unknown>,
+  options: {gas?: string; deposit?: string} = {},
+): Action {
+  const deposit = options.deposit ?? '0';
+  const gas = options.gas ?? DEFAULT_GAS;
+  // Checked before a wallet is asked: both end up in a signed transaction.
+  if (!/^(0|[1-9]\d{0,38})$/.test(deposit))
+    throw new Error(`the deposit is not a yoctoNEAR amount: ${deposit}`);
+  if (!/^[1-9]\d{0,15}$/.test(gas)) throw new Error(`the gas is not a gas amount: ${gas}`);
+  return {type: 'FunctionCall', params: {methodName, args, gas, deposit}};
+}
+
+/**
+ * NEP-141 `ft_transfer_call`: send `amount` of `token` to `receiver` and let it
+ * act on `msg` (Pactora reads `{"Fund":{"agent_id":N}}` or `{"Stake":{"agent_id":N}}`).
+ * One yocto, as NEP-141 requires. `amount` is base units; `msg` is a JSON-able
+ * value and is sent as its JSON text.
+ */
+export function ftTransferCall(token: string, receiver: string, amount: string, msg: unknown): Transaction {
+  if (!/^[1-9]\d{0,38}$/.test(amount))
+    throw new Error(`the amount must be a positive whole number of base units: ${amount}`);
+  if (!isAccountId(token)) throw new Error(`the token is not a NEAR account id: ${token}`);
+  if (!isAccountId(receiver)) throw new Error(`the receiver is not a NEAR account id: ${receiver}`);
+  return {
+    receiverId: token,
+    actions: [
+      functionCall(
+        'ft_transfer_call',
+        {receiver_id: receiver, amount, msg: JSON.stringify(msg)},
+        {gas: FT_TRANSFER_CALL_GAS, deposit: ONE_YOCTO},
+      ),
+    ],
+  };
+}
+
+/** Sign and send one transaction as `signerId`; resolve with its hash. A failed outcome throws, with the chain's reason. */
+export async function sendTransaction(
+  wallet: NearWallet,
+  signerId: string,
+  tx: Transaction,
+  label = tx.actions.map((a) => (a.type === 'FunctionCall' ? a.params.methodName : a.type)).join(' + '),
+): Promise<{outcome: unknown; txHash: string | null}> {
+  const [outcome] = await wallet.signAndSendTransactions({
+    network: 'testnet',
+    signerId,
+    transactions: [tx],
+  });
+  const failed = failure(outcome);
+  if (failed) throw new Error(`${label} failed: ${failed}`);
+  const hash = (outcome as {transaction?: {hash?: unknown}} | undefined)?.transaction?.hash;
+  return {outcome, txHash: typeof hash === 'string' ? hash : null};
+}
+
+// ─── a person's registration ───────────────────────────────────────────────
+
+/**
+ * A person is an agent whose wallet is their own account: `register_agent`
+ * with `wallet = account`, then `accept_wallet`. No sub-account and no key for
+ * the signer. `register_agent` carries the storage deposit.
+ */
+export function registerPersonTransaction(input: {
+  pactora: string;
+  wallet: string;
+  cardUri: string;
+  storageDeposit?: string;
+}): Transaction {
+  return {
+    receiverId: input.pactora,
+    actions: [
+      functionCall(
+        'register_agent',
+        // per_task_cap and daily_cap null: the contract's defaults apply.
+        {wallet: input.wallet, card_uri: input.cardUri, per_task_cap: null, daily_cap: null},
+        {deposit: input.storageDeposit ?? REGISTRATION_AMOUNTS.storageDeposit},
+      ),
+    ],
+  };
+}
+
+/** `accept_wallet(agent_id)`, called by the wallet itself. Not payable. */
+export function acceptWalletTransaction(pactora: string, chainAgentId: string): Transaction {
+  return {
+    receiverId: pactora,
+    actions: [functionCall('accept_wallet', {agent_id: agentIdArg(chainAgentId)})],
+  };
+}
+
+/**
+ * Register the signed-in account as a person on chain. Two sequential calls:
+ * `accept_wallet` needs the id `register_agent` returns, which is only known
+ * once the first has landed. Pass `resume` (the id from an earlier attempt)
+ * to skip the first when it already succeeded.
+ */
+export async function registerPersonOnChain(
+  wallet: NearWallet,
+  input: {account: string; pactora: string; cardUri: string; resume?: string},
+  progress?: (stage: 'register' | 'accept', chainAgentId?: string) => void,
+): Promise<{chainAgentId: string; txHashes: string[]}> {
+  if (!isAccountId(input.account)) throw new Error(`the account is not a NEAR account id: ${input.account}`);
+  if (!isAccountId(input.pactora))
+    throw new Error(`the Pactora contract account is invalid: ${input.pactora}`);
+  const txHashes: string[] = [];
+  let chainAgentId = input.resume;
+  if (chainAgentId === undefined) {
+    progress?.('register');
+    const first = await sendTransaction(
+      wallet,
+      input.account,
+      registerPersonTransaction({pactora: input.pactora, wallet: input.account, cardUri: input.cardUri}),
+      'register_agent',
+    );
+    if (first.txHash) txHashes.push(first.txHash);
+    chainAgentId = agentIdFromOutcome(first.outcome);
+  }
+  progress?.('accept', chainAgentId);
+  const second = await sendTransaction(
+    wallet,
+    input.account,
+    acceptWalletTransaction(input.pactora, chainAgentId),
+    'accept_wallet',
+  );
+  if (second.txHash) txHashes.push(second.txHash);
+  return {chainAgentId, txHashes};
+}
+
 // ─── connecting ────────────────────────────────────────────────────────────
 
 let connector: Promise<NearConnector> | null = null;
@@ -135,8 +273,24 @@ function getConnector(): Promise<NearConnector> {
   return connector;
 }
 
+/**
+ * A scripted wallet for the browser tests, honoured ONLY in a build made with
+ * `NEXT_PUBLIC_E2E_WALLET=1` (`pnpm test:e2e` does; a production build never
+ * does, and the branch is dead code there). The real connector opens wallet
+ * iframes from third-party hosts, which a test cannot drive.
+ */
+function scriptedWallet(): {accountId: string; wallet: NearWallet} | null {
+  if (process.env['NEXT_PUBLIC_E2E_WALLET'] !== '1') return null;
+  return (
+    (globalThis as {__pactoraTestWallet?: {accountId: string; wallet: NearWallet}}).__pactoraTestWallet ??
+    null
+  );
+}
+
 /** Open the wallet picker; resolve with the owner's account id. */
 export async function connect(): Promise<{accountId: string; wallet: NearWallet}> {
+  const scripted = scriptedWallet();
+  if (scripted) return scripted;
   const c = await getConnector();
   const wallet = (await c.connect()) as unknown as NearWallet;
   const [account] = await wallet.getAccounts({network: 'testnet'});
@@ -268,6 +422,90 @@ export async function registerOnChain(
     .filter((h): h is string => typeof h === 'string');
   return {chainAgentId: agentIdFromOutcome(outcomes[1]), txHashes};
 }
+
+// ─── the owner's actions on one agent ──────────────────────────────────────
+
+/** Money into the agent's purse (spendable by the agent, within its caps). */
+export const fundTransaction = (token: string, pactora: string, chainAgentId: string, amount: string) =>
+  ftTransferCall(token, pactora, amount, {Fund: {agent_id: agentIdArg(chainAgentId)}});
+
+/** Money into the agent's stake (the bond that makes it hireable as a worker). */
+export const stakeTransaction = (token: string, pactora: string, chainAgentId: string, amount: string) =>
+  ftTransferCall(token, pactora, amount, {Stake: {agent_id: agentIdArg(chainAgentId)}});
+
+const call = (pactora: string, action: Action): Transaction => ({receiverId: pactora, actions: [action]});
+const U128 = /^(0|[1-9]\d{0,38})$/;
+const u128 = (value: string, what: string) => {
+  if (!U128.test(value)) throw new Error(`${what} must be a whole number of base units: ${value}`);
+  return value;
+};
+
+/** `set_caps`: the most the agent may spend per task and per day. One yocto. */
+export const setCapsTransaction = (
+  pactora: string,
+  chainAgentId: string,
+  perTaskCap: string,
+  dailyCap: string,
+) => {
+  if (BigInt(u128(perTaskCap, 'the per-task cap')) > BigInt(u128(dailyCap, 'the daily cap'))) {
+    throw new Error('the per-task cap cannot be above the daily cap');
+  }
+  return call(
+    pactora,
+    functionCall(
+      'set_caps',
+      {agent_id: agentIdArg(chainAgentId), per_task_cap: perTaskCap, daily_cap: dailyCap},
+      {deposit: ONE_YOCTO},
+    ),
+  );
+};
+
+/** `request_unstake`: starts the withdrawal delay for `amount` of the stake. One yocto. */
+export const requestUnstakeTransaction = (pactora: string, chainAgentId: string, amount: string) =>
+  call(
+    pactora,
+    functionCall(
+      'request_unstake',
+      {agent_id: agentIdArg(chainAgentId), amount: u128(amount, 'the amount')},
+      {deposit: ONE_YOCTO},
+    ),
+  );
+
+/** `cancel_unstake`: puts the pending amount back into the stake. One yocto. */
+export const cancelUnstakeTransaction = (pactora: string, chainAgentId: string) =>
+  call(pactora, functionCall('cancel_unstake', {agent_id: agentIdArg(chainAgentId)}, {deposit: ONE_YOCTO}));
+
+/** `complete_unstake`: after the delay, pays the pending stake to the owner. One yocto. */
+export const completeUnstakeTransaction = (pactora: string, chainAgentId: string) =>
+  call(pactora, functionCall('complete_unstake', {agent_id: agentIdArg(chainAgentId)}, {deposit: ONE_YOCTO}));
+
+/** `withdraw`: from the purse to `receiver` (the owner when omitted). One yocto. */
+export const withdrawTransaction = (
+  pactora: string,
+  chainAgentId: string,
+  amount: string,
+  receiver?: string,
+) => {
+  if (receiver !== undefined && !isAccountId(receiver)) throw new Error(`not a NEAR account id: ${receiver}`);
+  return call(
+    pactora,
+    functionCall(
+      'withdraw',
+      {agent_id: agentIdArg(chainAgentId), amount: u128(amount, 'the amount'), receiver: receiver ?? null},
+      {deposit: ONE_YOCTO},
+    ),
+  );
+};
+
+/** `storage_deposit`: NEAR (yocto) that pays for the agent's records. Not one yocto: the whole deposit is kept. */
+export const storageDepositTransaction = (pactora: string, chainAgentId: string, yoctoNear: string) => {
+  if (!/^[1-9]\d{0,38}$/.test(yoctoNear))
+    throw new Error(`the deposit must be a positive amount of yoctoNEAR`);
+  return call(
+    pactora,
+    functionCall('storage_deposit', {agent_id: agentIdArg(chainAgentId)}, {deposit: yoctoNear}),
+  );
+};
 
 // ─── NEP-413 ───────────────────────────────────────────────────────────────
 

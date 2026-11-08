@@ -133,6 +133,7 @@ function send(res, status, body) {
     'content-type': status >= 400 ? 'application/problem+json' : 'application/json',
     'access-control-allow-origin': '*',
     'access-control-allow-headers': 'authorization, content-type',
+    'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   });
   res.end(status === 204 ? undefined : JSON.stringify(body));
 }
@@ -176,9 +177,88 @@ const status = () => ({
   ],
 });
 
-createServer((req, res) => {
+/** Read a JSON request body (the session and people routes post one). */
+async function readBody(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+// People: sign-in (POST /v1/session) and the person record. The token carries
+// the account (ps_<account>_<random>), so parallel tests signing in as
+// different accounts never share state in this server. A token starting
+// `ps_expired` is always refused, to test the 401 path.
+const sessionToken = (account) => `ps_${account}_${'e'.repeat(32)}`;
+function sessionAccount(req) {
+  const m = /^Bearer ps_([a-z0-9._-]+)_[a-z]{32}$/.exec(req.headers.authorization ?? '');
+  return m && !m[1].startsWith('expired') ? m[1] : null;
+}
+const NONCE = 'ab'.repeat(32);
+
+async function people(req, res, url) {
+  if (url.pathname === '/v1/session/challenge' && req.method === 'POST') {
+    const {accountId} = await readBody(req);
+    return send(res, 201, {
+      nonce: NONCE,
+      message: `Pactora: sign in.
+Chain: near:testnet
+Account: ${accountId}
+Nonce: ${NONCE}`,
+      recipient: 'pactora',
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    });
+  }
+  if (url.pathname === '/v1/session' && req.method === 'POST') {
+    const body = await readBody(req);
+    if (body.nonce !== NONCE || !body.signature)
+      return send(res, 401, {code: 'UNAUTHORIZED', detail: 'bad signature'});
+    return send(res, 201, {
+      token: sessionToken(body.accountId),
+      account: body.accountId,
+      chainId: 'near:testnet',
+      expiresAt: '2030-01-01T00:00:00.000Z',
+      person:
+        body.accountId === 'veteran.testnet' ? {publicId: 'p-9', chainAgentId: '9', name: 'Veteran'} : null,
+    });
+  }
+  if (url.pathname === '/v1/session' || url.pathname === '/v1/sessions' || url.pathname === '/v1/people') {
+    const account = sessionAccount(req);
+    if (!account) return send(res, 401, {code: 'UNAUTHORIZED', detail: 'no session'});
+    if (url.pathname === '/v1/session' && req.method === 'GET') {
+      return send(res, 200, {
+        account,
+        chainId: 'near:testnet',
+        expiresAt: '2030-01-01T00:00:00.000Z',
+        person: account === 'veteran.testnet' ? {publicId: 'p-9', chainAgentId: '9', name: 'Veteran'} : null,
+      });
+    }
+    if (req.method === 'DELETE') return send(res, 204, null);
+    if (url.pathname === '/v1/people' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (body.chainAgentId === '13')
+        return send(res, 409, {code: 'INVALID_STATE', detail: 'the wallet has not accepted the agent'});
+      return send(res, 201, {
+        publicId: 'p-new',
+        chainAgentId: body.chainAgentId,
+        name: body.name,
+        kind: 'person',
+      });
+    }
+  }
+  return null;
+}
+
+createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://127.0.0.1:${PORT}`);
   if (req.method === 'OPTIONS') return send(res, 204, null);
+  if (url.pathname.startsWith('/v1/session') || url.pathname === '/v1/people') {
+    if ((await people(req, res, url)) !== null) return;
+    return send(res, 404, {code: 'NOT_FOUND', detail: 'not found'});
+  }
   if (url.pathname === '/v1/network') return send(res, 200, network);
   if (url.pathname === '/v1/status') return send(res, 200, status());
   if (url.pathname === '/v1/agents') {

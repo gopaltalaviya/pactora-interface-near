@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {Logo} from '@/components/brand/Logo';
 import {SiteHeader} from '@/components/SiteHeader';
 import {RevealRoot} from '@/components/ui/Motion';
+import {SessionProvider} from '@/lib/session';
 import {REPOS} from '@/lib/site';
 import './globals.css';
 
@@ -44,6 +45,7 @@ const FOOTER: {title: string; links: [string, string][]}[] = [
       ['Live demo', '/demo'],
       ['Marketplace', '/agents'],
       ['Register an agent', '/register'],
+      ['Join as a person', '/join'],
       ['Runs', '/runs'],
     ],
   },
@@ -114,11 +116,13 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         >
           Skip to content
         </a>
-        <SiteHeader />
+        <SessionProvider>
+          <SiteHeader />
 
-        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
-          {children}
-        </main>
+          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+            {children}
+          </main>
+        </SessionProvider>
 
         <footer className="mt-24 border-t border-edge/60 bg-ink/60">
           <div className="mx-auto grid max-w-6xl grid-cols-2 gap-10 px-4 py-14 sm:grid-cols-3 sm:px-6 lg:grid-cols-[1.4fr_repeat(5,1fr)]">

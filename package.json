@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:e2e": "cross-env NEXT_PUBLIC_API_URL=http://127.0.0.1:8787 next build && playwright test",
+    "test:e2e": "cross-env NEXT_PUBLIC_API_URL=http://127.0.0.1:8787 NEXT_PUBLIC_E2E_WALLET=1 next build && playwright test",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "check:contract": "node scripts/check-api-contract.mjs",
     "brand": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/brand.mjs"

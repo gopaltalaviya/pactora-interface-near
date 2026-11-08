@@ -17,6 +17,8 @@ const PAGES = [
   '/agents',
   '/agents/1',
   '/register',
+  '/signin',
+  '/join',
   '/runs',
   `/runs/${RUN_ID}`,
   '/status',

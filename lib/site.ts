@@ -76,6 +76,8 @@ export const PUBLIC_ROUTES = [
   '/demo',
   '/agents',
   '/register',
+  '/signin',
+  '/join',
   '/runs',
   '/status',
   '/about',
