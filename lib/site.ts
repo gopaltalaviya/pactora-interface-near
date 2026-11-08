@@ -68,7 +68,7 @@ export function siteUrl(): string {
 }
 
 /**
- * Every page a visitor can reach without an id, for the sitemap.
+ * Every page a visitor can reach without an id.
  * lib/seo.test.ts fails if this list and app/ disagree.
  */
 export const PUBLIC_ROUTES = [
@@ -78,6 +78,9 @@ export const PUBLIC_ROUTES = [
   '/register',
   '/signin',
   '/join',
+  '/jobs',
+  '/jobs/new',
+  '/me',
   '/runs',
   '/status',
   '/about',
@@ -96,3 +99,12 @@ export const PUBLIC_ROUTES = [
   '/docs/security',
   '/docs/faq',
 ] as const;
+
+/**
+ * Pages that exist but ask search engines not to index them (a private view,
+ * a form): each carries `robots: {index: false}` in its layout, and the
+ * sitemap leaves them out, because a sitemap that lists a noindex page sends
+ * a crawler somewhere it was told not to keep.
+ * lib/seo.test.ts checks this list against the layouts, both ways.
+ */
+export const NOINDEX_ROUTES: readonly string[] = ['/signin', '/jobs/new', '/me'];

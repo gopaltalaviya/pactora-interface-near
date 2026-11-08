@@ -59,7 +59,7 @@ export function Field({
   srOnlyLabel?: boolean;
   children: ReactNode;
   htmlFor: string;
-  hintId?: string;
+  hintId?: string | undefined;
   className?: string;
 }) {
   return (
@@ -119,6 +119,15 @@ export function TextArea({className = '', ...rest}: ComponentProps<'textarea'>) 
         {...rest}
         className="w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted/70"
       />
+    </div>
+  );
+}
+
+/** A native select in the same frame as the text inputs. */
+export function Select({className = '', ...rest}: ComponentProps<'select'>) {
+  return (
+    <div className={`${FRAME} border-edge hover:border-edge-strong ${className}`}>
+      <select {...rest} className="h-10 w-full bg-transparent text-sm outline-none" />
     </div>
   );
 }

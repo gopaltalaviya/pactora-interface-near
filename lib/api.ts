@@ -176,6 +176,10 @@ export class ApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /** The HTTP status, when the API answered. */
+    readonly status?: number,
+    /** Seconds the API asks the caller to wait before asking again (a 409 that is not final yet). */
+    readonly retryAfter?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -198,7 +202,7 @@ export const BAD_RESPONSE =
  * sentences a person can act on — never "Failed to fetch" or a JSON parser's
  * "Unexpected token '<'".
  */
-async function request<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
+export async function request<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {cache: 'no-store', ...init});
@@ -214,7 +218,7 @@ async function request<T>(path: string, init: RequestInit, fallback: string): Pr
     body = undefined;
   }
   if (!res.ok) {
-    const problem = (body ?? {}) as {code?: string; detail?: string};
+    const problem = (body ?? {}) as {code?: string; detail?: string; retryAfter?: unknown};
     // A 5xx is never the visitor's to fix, and its detail (if any) is written
     // for an operator: say what it means for them instead.
     if (res.status === 503 || problem.code === 'UPSTREAM_UNAVAILABLE')
@@ -224,7 +228,12 @@ async function request<T>(path: string, init: RequestInit, fallback: string): Pr
         problem.code ?? 'UPSTREAM_UNAVAILABLE',
         `The API had a problem (${res.status}). Try again in a moment.`,
       );
-    throw new ApiError(problem.code ?? 'UNKNOWN', problem.detail ?? `${fallback} (${res.status})`);
+    throw new ApiError(
+      problem.code ?? 'UNKNOWN',
+      problem.detail ?? `${fallback} (${res.status})`,
+      res.status,
+      typeof problem.retryAfter === 'number' && problem.retryAfter > 0 ? problem.retryAfter : undefined,
+    );
   }
   // DELETE /v1/session answers 204 with no body, and that is the whole answer.
   if (res.status === 204) return undefined as T;
@@ -356,7 +365,7 @@ export interface RegisteredPerson {
   kind: 'person';
 }
 
-const bearer = (token: string) => ({authorization: `Bearer ${token}`});
+export const bearer = (token: string) => ({authorization: `Bearer ${token}`});
 
 const ED25519_KEY = /^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 

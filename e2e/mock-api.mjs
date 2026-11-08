@@ -4,6 +4,7 @@
  * API's shapes — it proves nothing about the API itself, which has its own
  * tests and the live-chain checks in pactora-backend-near/scripts.
  */
+import {createHash, randomUUID} from 'node:crypto';
 import {createServer} from 'node:http';
 
 const PORT = Number(process.env.MOCK_API_PORT ?? 8787);
@@ -132,7 +133,7 @@ function send(res, status, body) {
   res.writeHead(status, {
     'content-type': status >= 400 ? 'application/problem+json' : 'application/json',
     'access-control-allow-origin': '*',
-    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-allow-headers': 'authorization, content-type, idempotency-key',
     'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   });
   res.end(status === 204 ? undefined : JSON.stringify(body));
@@ -221,8 +222,7 @@ Nonce: ${NONCE}`,
       account: body.accountId,
       chainId: 'near:testnet',
       expiresAt: '2030-01-01T00:00:00.000Z',
-      person:
-        body.accountId === 'veteran.testnet' ? {publicId: 'p-9', chainAgentId: '9', name: 'Veteran'} : null,
+      person: personOf(body.accountId),
     });
   }
   if (url.pathname === '/v1/session' || url.pathname === '/v1/sessions' || url.pathname === '/v1/people') {
@@ -233,7 +233,7 @@ Nonce: ${NONCE}`,
         account,
         chainId: 'near:testnet',
         expiresAt: '2030-01-01T00:00:00.000Z',
-        person: account === 'veteran.testnet' ? {publicId: 'p-9', chainAgentId: '9', name: 'Veteran'} : null,
+        person: personOf(account),
       });
     }
     if (req.method === 'DELETE') return send(res, 204, null);
@@ -252,11 +252,1321 @@ Nonce: ${NONCE}`,
   return null;
 }
 
+// ─── the job board: listings, bids, jobs, /v1/me, person actions ─────────────
+// Stateful, in memory. Every test works on a fixture of its own (an id no other
+// test touches), so tests running in parallel never see each other's changes.
+// It proves the pages follow the API's shapes; it proves nothing about the API.
+
+const PEOPLE = {
+  'veteran.testnet': {agentId: '9', publicId: 'p-9', chainAgentId: '9', name: 'Veteran'},
+  'olive.testnet': {
+    agentId: '11',
+    chainAgentId: '101',
+    name: 'Olive',
+    location: 'Pune',
+    capabilities: ['photography'],
+  },
+  'wade.testnet': {
+    agentId: '22',
+    chainAgentId: '102',
+    name: 'Wade',
+    location: 'Pune',
+    capabilities: ['photography', 'writing'],
+  },
+  'nora.testnet': {agentId: '33', chainAgentId: '103', name: 'Nora', location: 'Delhi', capabilities: []},
+  'mia.testnet': {
+    agentId: '66',
+    chainAgentId: '106',
+    name: 'Mia',
+    location: 'Goa',
+    capabilities: ['writing'],
+    earnings: {settledCount: 3, receivedBaseUnits: '2970000'},
+    spent: '1000000',
+  },
+};
+const personOf = (account) => {
+  const p = PEOPLE[account];
+  return p ? {publicId: p.publicId ?? `p-${p.agentId}`, chainAgentId: p.chainAgentId, name: p.name} : null;
+};
+const agentOfAccount = (account) => PEOPLE[account]?.agentId ?? null;
+
+const base = (n) => String(n);
+const display = (units) => {
+  const d = String(units).padStart(7, '0');
+  const frac = d.slice(-6).replace(/0+$/, '');
+  return `${d.slice(0, -6)}${frac ? `.${frac}` : ''} USDC`;
+};
+const feeOf = (price) => Math.max(100, Math.floor((Number(price) * 100) / 10_000));
+
+const listings = new Map();
+const jobs = new Map();
+const idempotency = new Map();
+let counter = 0;
+const nextId = (prefix) => `${prefix}${String(++counter).padStart(4, '0')}`;
+const jobUuid = () => `bbbbbbbb-0000-4000-8000-${String(++counter).padStart(12, '0')}`;
+
+const DANA = {agentId: '31', kind: 'agent', name: 'DanaBot', publicId: 'a-31'};
+const clientOf = (account) => ({
+  agentId: agentOfAccount(account),
+  kind: 'person',
+  name: PEOPLE[account].name,
+  publicId: `p-${agentOfAccount(account)}`,
+});
+
+function addListing(id, over = {}) {
+  const createdAt = over.createdAt ?? new Date().toISOString();
+  const l = {
+    listingId: id,
+    chainId: 'near:testnet',
+    client: DANA,
+    title: `Listing ${id}`,
+    description: 'Photograph the shopfront at 12 Main Street, in daylight, two photos.',
+    category: 'physical',
+    interactionMode: 'capture',
+    skills: ['photography'],
+    location: 'Pune',
+    maxPriceBaseUnits: '5000000',
+    maxWorkers: 1,
+    hiringMode: 'applications',
+    estimatedMinutes: 45,
+    deadline: '2030-01-01T00:00:00.000Z',
+    criteria: 'Both photos are sharp and show the whole sign.',
+    acceptWindowSeconds: 600,
+    workWindowSeconds: 1800,
+    status: 'open',
+    reservedBaseUnits: '5000000',
+    createdAt,
+    updatedAt: createdAt,
+    funding: 'person',
+    slots: [],
+    applications: [],
+    ...over,
+  };
+  listings.set(id, l);
+  return l;
+}
+
+function addApplication(l, over = {}) {
+  const price = over.price ?? 4_000_000;
+  const a = {
+    applicationId: nextId('app-'),
+    status: 'pending',
+    price,
+    proposal: 'I know the street well and can shoot it on Tuesday morning.',
+    reason: null,
+    reopenable: false,
+    jobId: null,
+    createdAt: over.createdAt ?? new Date().toISOString(),
+    decidedAt: null,
+    applicantAgentId: '22',
+    applicant: {
+      agentId: '22',
+      publicId: 'p-22',
+      kind: 'person',
+      name: 'Wade',
+      location: 'Pune',
+      score: 70,
+      completed: 4,
+    },
+    ...over,
+  };
+  l.applications.push(a);
+  return a;
+}
+
+const application = (a) => ({
+  applicationId: a.applicationId,
+  status: a.status,
+  priceBaseUnits: base(a.price),
+  priceDisplay: display(a.price),
+  feeBaseUnits: base(feeOf(a.price)),
+  workerReceivesBaseUnits: base(a.price - feeOf(a.price)),
+  proposal: a.proposal,
+  reason: a.reason,
+  reopenable: a.reopenable,
+  jobId: a.jobId,
+  createdAt: a.createdAt,
+  decidedAt: a.decidedAt,
+});
+
+const listingView = (l) => {
+  const ceiling = Number(l.maxPriceBaseUnits);
+  return {
+    listingId: l.listingId,
+    chainId: l.chainId,
+    client: l.client,
+    title: l.title,
+    description: l.description,
+    category: l.category,
+    interactionMode: l.interactionMode,
+    skills: l.skills,
+    location: l.location,
+    maxPriceBaseUnits: l.maxPriceBaseUnits,
+    maxPriceDisplay: display(ceiling),
+    feeAtCeilingBaseUnits: base(feeOf(ceiling)),
+    workerReceivesAtCeilingBaseUnits: base(ceiling - feeOf(ceiling)),
+    maxWorkers: l.maxWorkers,
+    slotsFilled: l.slots.length,
+    hiringMode: l.hiringMode,
+    estimatedMinutes: l.estimatedMinutes,
+    deadline: l.deadline,
+    criteria: l.criteria,
+    acceptWindowSeconds: l.acceptWindowSeconds,
+    workWindowSeconds: l.workWindowSeconds,
+    status: l.status,
+    reservedBaseUnits: l.reservedBaseUnits,
+    createdAt: l.createdAt,
+    updatedAt: l.updatedAt,
+  };
+};
+
+// Seeds ----------------------------------------------------------------------
+addListing('lst-view', {createdAt: '2026-10-01T10:00:00.000Z', title: 'Photograph a shopfront'});
+addListing('lst-apply', {createdAt: '2026-10-02T10:00:00.000Z', title: 'Bid on me'});
+const withdrawable = addListing('lst-withdraw', {
+  createdAt: '2026-10-03T10:00:00.000Z',
+  title: 'Withdraw from me',
+});
+addApplication(withdrawable, {price: 3_000_000});
+const limited = addListing('lst-limit', {createdAt: '2026-10-04T10:00:00.000Z', title: 'No bids left here'});
+for (const status of ['withdrawn', 'rejected', 'withdrawn']) addApplication(limited, {status});
+const instant = addListing('lst-instant', {
+  createdAt: '2026-10-05T10:00:00.000Z',
+  title: 'Take a slot',
+  hiringMode: 'instant',
+  maxWorkers: 2,
+});
+void instant;
+addListing('lst-match', {
+  createdAt: '2026-10-06T10:00:00.000Z',
+  title: 'Fits a photographer',
+  skills: ['photography', 'matchtest'],
+  location: 'Pune',
+});
+addListing('lst-nomatch', {
+  createdAt: '2026-10-07T10:00:00.000Z',
+  title: 'Fits nobody here',
+  skills: ['matchtest', 'welding'],
+  location: 'Chennai',
+});
+for (let i = 1; i <= 14; i++) {
+  addListing(`lst-board-${String(i).padStart(2, '0')}`, {
+    createdAt: new Date(Date.UTC(2026, 9, 20, 12, i)).toISOString(),
+    title: `Board listing ${String(i).padStart(2, '0')}`,
+    category: i <= 2 ? 'judgment' : 'expertise',
+    interactionMode: i % 2 ? 'task' : 'conversation',
+    skills: ['boardtest'],
+    location: i > 9 ? 'Mumbai' : 'Pune',
+  });
+}
+
+const OWN = {client: clientOf('olive.testnet')};
+const own = (id, over = {}) =>
+  addListing(id, {...OWN, createdAt: '2026-10-10T10:00:00.000Z', title: `Mine ${id}`, ...over});
+const paged = own('lst-own-page', {maxWorkers: 3, title: 'Mine with many bids'});
+for (let i = 1; i <= 25; i++) {
+  addApplication(paged, {
+    price: 1_000_000 + ((i * 7) % 25) * 100_000,
+    createdAt: new Date(Date.UTC(2026, 10, 1, 8, i)).toISOString(),
+    applicant: {
+      agentId: String(200 + i),
+      publicId: `p-${200 + i}`,
+      kind: 'person',
+      name: `Bidder ${String(i).padStart(2, '0')}`,
+      location: 'Pune',
+      score: 40 + i,
+      completed: i,
+    },
+    applicantAgentId: String(200 + i),
+  });
+}
+const twoBids = (id, over = {}) => {
+  const l = own(id, over);
+  addApplication(l, {price: 4_000_000, createdAt: '2026-11-01T08:00:00.000Z'});
+  addApplication(l, {
+    price: 3_000_000,
+    createdAt: '2026-11-01T09:00:00.000Z',
+    applicantAgentId: '33',
+    applicant: {
+      agentId: '33',
+      publicId: 'p-33',
+      kind: 'person',
+      name: 'Nora',
+      location: 'Delhi',
+      score: 55,
+      completed: 1,
+    },
+  });
+  return l;
+};
+twoBids('lst-own-fund');
+twoBids('lst-own-signer', {funding: 'signer'});
+twoBids('lst-own-reject');
+twoBids('lst-own-close');
+twoBids('lst-own-edit');
+twoBids('lst-own-cancel');
+const filled = twoBids('lst-own-filled', {status: 'open'});
+filled.slots.push({slot: 1, jobId: 'bbbbbbbb-0000-4000-8000-00000000f001'});
+filled.applications[0].status = 'selected';
+filled.applications[0].jobId = 'bbbbbbbb-0000-4000-8000-00000000f001';
+for (let i = 1; i <= 2; i++) {
+  const l = own(`lst-mia-${i}`, {client: clientOf('mia.testnet'), title: `Mia listing ${i}`});
+  void l;
+}
+
+// Jobs -----------------------------------------------------------------------
+const EVENT_KIND = {
+  create: 'job.created',
+  accept: 'job.accepted',
+  submit: 'job.submitted',
+  approve: 'job.settled',
+  dispute: 'job.disputed',
+  cancel: 'job.refunded',
+};
+const METHOD = {
+  create: 'create_job',
+  accept: 'accept_job',
+  submit: 'submit_result',
+  approve: 'approve',
+  dispute: 'dispute',
+  cancel: 'cancel_job',
+};
+const RULES = {
+  create: {party: 'client', from: ['created'], to: 'created'},
+  accept: {party: 'worker', from: ['created'], to: 'accepted'},
+  submit: {party: 'worker', from: ['accepted'], to: 'submitted'},
+  approve: {party: 'client', from: ['submitted'], to: 'settled'},
+  dispute: {party: 'client', from: ['submitted'], to: 'disputed'},
+  cancel: {party: 'client', from: ['created'], to: 'refunded'},
+};
+
+function addJob(id, over = {}) {
+  const j = {
+    jobId: id,
+    chainJobId: '5000',
+    state: 'created',
+    amount: '4000000',
+    fee: null,
+    client: '11',
+    worker: '22',
+    result: null,
+    resultMismatch: false,
+    createdAt: '2026-11-02T09:00:00.000Z',
+    settledAt: null,
+    events: [{kind: 'job.created', txHash: 'T0', occurredAt: '2026-11-02T09:00:00.000Z'}],
+    behaviour: 'normal',
+    signerOverride: null,
+    confirmed: {},
+    streams: new Set(),
+    dispute: null,
+    declined: null,
+    ...over,
+  };
+  jobs.set(id, j);
+  return j;
+}
+const JOB = (n) => `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, '0')}`;
+addJob(JOB(1), {
+  state: 'settled',
+  fee: '40000',
+  settledAt: '2026-11-02T10:00:00.000Z',
+  result: {answer: 'Done.'},
+  events: [
+    {
+      kind: 'job.created',
+      txHash: '6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm',
+      occurredAt: '2026-11-02T09:00:00.000Z',
+    },
+    {kind: 'job.accepted', txHash: null, occurredAt: '2026-11-02T09:05:00.000Z'},
+    {
+      kind: 'job.settled',
+      txHash: '8Ha3ThYvqv4WQx2t4ZCSFmAS5hj7VG4EHVgPeLJP7tUZ',
+      occurredAt: '2026-11-02T10:00:00.000Z',
+    },
+  ],
+});
+addJob(JOB(2));
+addJob(JOB(3), {chainJobId: '5003'});
+addJob(JOB(4), {state: 'accepted', chainJobId: '5004'});
+addJob(JOB(5), {
+  state: 'submitted',
+  chainJobId: '5005',
+  result: {answer: 'Photos attached.'},
+  resultHash: 'abc',
+});
+addJob(JOB(6), {state: 'submitted', chainJobId: '5006', result: {answer: 'Photos attached.'}});
+addJob(JOB(7), {state: 'created', chainJobId: '5007'});
+addJob(JOB(8), {
+  state: 'submitted',
+  chainJobId: '5008',
+  result: {answer: 'Different.'},
+  resultMismatch: true,
+});
+addJob(JOB(9), {state: 'submitted', chainJobId: '5009', result: {answer: 'Slow.'}, behaviour: 'slow'});
+addJob(JOB(10), {state: 'submitted', chainJobId: '5010', result: {answer: 'Reverts.'}, behaviour: 'revert'});
+addJob(JOB(11), {state: 'created', chainJobId: null});
+addJob(JOB(12), {state: 'created', chainJobId: '5012', signerOverride: 'someone.testnet'});
+addJob(JOB(13), {state: 'accepted', chainJobId: '5013'});
+addJob(JOB(14), {state: 'created', chainJobId: '5014'});
+addJob(JOB(15), {state: 'submitted', chainJobId: '5015', result: {answer: 'x'}});
+addJob(JOB(17), {state: 'submitted', chainJobId: '5017', result: {answer: 'y'}});
+addJob(JOB(16), {
+  state: 'created',
+  chainJobId: '5016',
+  declined: {reason: 'Too far away for me.', at: '2026-11-02T09:30:00.000Z'},
+});
+for (let i = 1; i <= 3; i++) {
+  addJob(JOB(30 + i), {
+    client: i === 2 ? '66' : '55',
+    worker: i === 2 ? '55' : '66',
+    state: i === 1 ? 'settled' : 'accepted',
+    chainJobId: String(6000 + i),
+    amount: '1000000',
+    fee: '10000',
+    createdAt: `2026-11-0${i}T09:00:00.000Z`,
+  });
+}
+
+// Listing jobs (docs/26 F6-F8): delivered through drafts. Olive (11) is the
+// client, Wade (22) the worker; a test that changes one clones it first.
+const LISTING_SPEC = {
+  capability: 'photography',
+  input: {
+    listing: {
+      listingId: 'lst-shop',
+      title: 'Photograph two shop fronts',
+      description: 'A clear daytime photo of each of two shop fronts.',
+      criteria: '- Both shop fronts are shown\n- Each sign is readable',
+    },
+    application: {applicationId: 'app-1', proposal: 'Within the hour.'},
+    priceBaseUnits: '4000000',
+  },
+};
+const listingJob = (n, over = {}) =>
+  addJob(JOB(n), {
+    state: 'accepted',
+    chainJobId: String(7000 + n),
+    spec: LISTING_SPEC,
+    drafts: [],
+    files: [],
+    messages: [],
+    ...over,
+  });
+listingJob(40); // accepted, nothing delivered yet
+listingJob(41, {state: 'created'}); // not accepted: chat and drafts closed
+listingJob(42); // filled below: a round awaiting review, with a photo and a message
+listingJob(43); // filled below: an accepted draft, ready to submit
+
+const jobView = (j) => ({
+  jobId: j.jobId,
+  chainJobId: j.chainJobId,
+  chainId: 'near:testnet',
+  network: 'NEAR Testnet',
+  state: j.state,
+  path: 'escrow',
+  amount: j.amount,
+  amountDisplay: display(j.amount),
+  fee: j.fee,
+  spec: j.spec ?? {capability: 'photo-capture', input: {}},
+  specHash: '0x' + 'ab'.repeat(32),
+  result: j.result,
+  resultHash: j.result ? '0x' + 'cd'.repeat(32) : null,
+  resultMismatch: j.resultMismatch,
+  clientAgentId: j.client,
+  workerAgentId: j.worker,
+  createdAt: j.createdAt,
+  settledAt: j.settledAt,
+  events: j.events.map((e) => ({
+    kind: e.kind,
+    txHash: e.txHash,
+    explorerUrl: e.txHash ? `${EXPLORER}/txns/${e.txHash}` : null,
+    occurredAt: e.occurredAt,
+  })),
+  declined: j.declined,
+  dispute: j.dispute,
+});
+const jobRow = (j, agentId) => ({
+  jobId: j.jobId,
+  chainJobId: j.chainJobId,
+  chainId: 'near:testnet',
+  state: j.state,
+  path: 'escrow',
+  amount: j.amount,
+  amountDisplay: display(j.amount),
+  spec: {capability: 'photo-capture'},
+  specHash: '0x' + 'ab'.repeat(32),
+  role: j.worker === agentId ? 'worker' : 'client',
+  hasResult: j.result !== null,
+  resultMismatch: j.resultMismatch,
+  clientAgentId: j.client,
+  workerAgentId: j.worker,
+  createdAt: j.createdAt,
+});
+
+function pushEvent(j, kind, txHash) {
+  const e = {kind, txHash, occurredAt: new Date().toISOString()};
+  j.events.push(e);
+  for (const res of j.streams)
+    res.write(`id: ${j.events.length}\nevent: ${kind}\ndata: ${JSON.stringify({kind})}\n\n`);
+}
+
+function jobEvents(req, res, j) {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+    'access-control-allow-origin': '*',
+  });
+  res.write('retry: 3000\n\n');
+  j.events.forEach((e, i) =>
+    res.write(`id: ${i + 1}\nevent: ${e.kind}\ndata: ${JSON.stringify({kind: e.kind})}\n\n`),
+  );
+  j.streams.add(res);
+  const beat = setInterval(() => res.write(': heartbeat\n\n'), 20_000);
+  req.on('close', () => {
+    clearInterval(beat);
+    j.streams.delete(res);
+  });
+}
+
+const problem = (res, status, code, detail, extra = {}) => send(res, status, {code, detail, ...extra});
+
+function transition(j, action, txHash) {
+  const rule = RULES[action];
+  j.state = rule.to;
+  if (action === 'create') j.chainJobId = String(9000 + counter++);
+  if (action === 'approve') {
+    j.fee = String(feeOf(j.amount));
+    j.settledAt = new Date().toISOString();
+  }
+  pushEvent(j, EVENT_KIND[action], txHash);
+}
+
+async function personActions(req, res, url, account) {
+  const m = /^\/v1\/jobs\/([^/]+)\/person-actions\/(prepare|confirm)$/.exec(url.pathname);
+  const j = jobs.get(m[1]);
+  if (!j) return problem(res, 404, 'NOT_FOUND', 'no such job');
+  const me = agentOfAccount(account);
+  const body = await readBody(req);
+  const rule = RULES[body.action];
+  if (!rule) return problem(res, 400, 'VALIDATION', 'unknown action');
+  const partyAgent = rule.party === 'client' ? j.client : j.worker;
+  if (me !== partyAgent) return problem(res, 403, 'FORBIDDEN', `only the ${rule.party} may ${body.action}`);
+
+  if (m[2] === 'prepare') {
+    if (!rule.from.includes(j.state)) return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+    if (body.action === 'create' && j.chainJobId)
+      return problem(res, 409, 'INVALID_STATE', 'job is already on chain');
+    if (body.action !== 'create' && !j.chainJobId)
+      return problem(res, 409, 'INVALID_STATE', 'job is not on chain yet');
+    if (body.action === 'approve' && j.drafts && !draftSummary(j).readyToApprove)
+      return problem(res, 409, 'INVALID_STATE', 'approve waits for the accepted draft on chain');
+    if (body.action === 'approve' && j.resultMismatch)
+      return problem(
+        res,
+        409,
+        'RESULT_MISMATCH',
+        'the chain committed a different result hash than the delivery',
+      );
+    const out = {
+      jobId: j.jobId,
+      action: body.action,
+      signerId: j.signerOverride ?? account,
+      functionCall: {
+        receiverId: 'pactora.testnet',
+        methodName: METHOD[body.action],
+        args: {
+          job_id: j.chainJobId ? Number(j.chainJobId) : null,
+          ...(body.action === 'create' ? {worker: Number(j.worker)} : {}),
+        },
+        gas: '100000000000000',
+        deposit: '0',
+      },
+      expectedEvent: EVENT_KIND[body.action],
+    };
+    if (body.action === 'submit' && j.drafts) {
+      // A listing job: the submission is the accepted draft's hash, nothing typed.
+      const acc = j.drafts.find((d) => d.review?.decision === 'accept_draft');
+      if (!acc)
+        return problem(res, 409, 'INVALID_STATE', 'a listing job is submitted from an accepted draft');
+      j.result = {draftId: acc.draftId, snapshotHash: acc.snapshotHash, round: acc.round};
+      out.resultHash = acc.snapshotHash;
+      j.resultHash = acc.snapshotHash;
+    } else if (body.action === 'submit') {
+      if (!body.output || typeof body.output !== 'object' || !body.producedAt)
+        return problem(res, 400, 'VALIDATION', 'a delivery needs an output and producedAt');
+      j.result = body.output;
+      out.resultHash = '0x' + 'cd'.repeat(32);
+    }
+    if (body.action === 'dispute') {
+      if (typeof body.reason !== 'string' || body.reason.trim().length < 10)
+        return problem(res, 400, 'VALIDATION', 'a dispute needs a reason of at least 10 characters');
+      j.dispute = {reason: body.reason, reasonHash: '0x' + 'ef'.repeat(32), at: new Date().toISOString()};
+      out.reasonHash = j.dispute.reasonHash;
+    }
+    j.prepared = [...(j.prepared ?? []), body.action];
+    return send(res, 200, out);
+  }
+
+  // confirm
+  if (j.confirmed[body.txHash]) return send(res, 200, {...j.confirmed[body.txHash], replayed: true});
+  if (j.behaviour === 'revert')
+    return problem(
+      res,
+      409,
+      'INVALID_STATE',
+      'the transaction reverted: no matching event in a successful receipt',
+    );
+  j.attempts = {...(j.attempts ?? {}), [body.txHash]: (j.attempts?.[body.txHash] ?? 0) + 1};
+  if (j.behaviour === 'slow' && j.attempts[body.txHash] < 2)
+    return problem(res, 409, 'INVALID_STATE', 'the transaction is not final yet', {retryAfter: 1});
+  if (!rule.from.includes(j.state)) return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+  transition(j, body.action, body.txHash);
+  j.confirmCount = (j.confirmCount ?? 0) + 1;
+  const done = {
+    jobId: j.jobId,
+    action: body.action,
+    txHash: body.txHash,
+    state: j.state,
+    chainJobId: j.chainJobId,
+    resultMismatch: j.resultMismatch,
+    explorerUrl: `${EXPLORER}/txns/${body.txHash}`,
+    replayed: false,
+  };
+  j.confirmed[body.txHash] = done;
+  return send(res, 200, done);
+}
+
+function newJob(l, a, workerAgentId) {
+  const id = jobUuid();
+  const j = addJob(id, {
+    chainJobId: null,
+    client: l.client.agentId,
+    worker: workerAgentId,
+    amount: base(a?.price ?? l.maxPriceBaseUnits),
+    events: [{kind: 'job.created', txHash: null, occurredAt: new Date().toISOString()}],
+  });
+  l.slots.push({slot: l.slots.length + 1, jobId: j.jobId});
+  if (l.slots.length >= l.maxWorkers) l.status = 'filled';
+  l.updatedAt = new Date().toISOString();
+  return j;
+}
+
+const jobSummary = (j) => ({
+  jobId: j.jobId,
+  chainJobId: j.chainJobId,
+  state: j.state,
+  amount: j.amount,
+  amountDisplay: display(j.amount),
+  specHash: '0x' + 'ab'.repeat(32),
+  spec: {capability: 'photo-capture'},
+});
+
+async function market(req, res, url) {
+  const account = sessionAccount(req);
+  const me = account ? agentOfAccount(account) : null;
+  const path = url.pathname;
+
+  if (path === '/v1/me') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    const p = PEOPLE[account];
+    if (!p)
+      return send(res, 200, {
+        account,
+        chainId: 'near:testnet',
+        person: null,
+        earnings: {settledCount: 0, receivedBaseUnits: '0'},
+        spentBaseUnits: '0',
+      });
+    return send(res, 200, {
+      account,
+      chainId: 'near:testnet',
+      person: {
+        publicId: p.publicId ?? `p-${p.agentId}`,
+        agentId: p.agentId,
+        chainAgentId: p.chainAgentId,
+        name: p.name,
+        description: null,
+        location: p.location ?? null,
+        capabilities: p.capabilities ?? [],
+      },
+      earnings: p.earnings ?? {settledCount: 0, receivedBaseUnits: '0'},
+      spentBaseUnits: p.spent ?? '0',
+    });
+  }
+
+  if (path === '/v1/jobs' && req.method === 'GET') {
+    if (!account || !me) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    const limit = Number(url.searchParams.get('limit') ?? 20);
+    const after = url.searchParams.get('cursor');
+    const mine = [...jobs.values()]
+      .filter((j) => j.client === me || j.worker === me)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const start = after ? mine.findIndex((j) => j.jobId === after) + 1 : 0;
+    const rows = mine.slice(start, start + limit);
+    const more = start + limit < mine.length;
+    return send(res, 200, {
+      count: rows.length,
+      nextCursor: more ? rows.at(-1).jobId : null,
+      jobs: rows.map((j) => jobRow(j, me)),
+    });
+  }
+
+  if ((await delivery(req, res, path, me)) !== null) return;
+
+  const jobMatch = /^\/v1\/jobs\/([^/]+)(\/events|\/person-actions\/(?:prepare|confirm))?$/.exec(path);
+  if (jobMatch) {
+    const j = jobs.get(jobMatch[1]);
+    if (!j) return problem(res, 404, 'NOT_FOUND', 'no such job');
+    if (jobMatch[2] === '/events') return jobEvents(req, res, j);
+    if (jobMatch[2]) {
+      if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+      return personActions(req, res, url, account);
+    }
+    return send(res, 200, jobView(j));
+  }
+
+  if (path === '/v1/listings' && req.method === 'GET') {
+    const q = url.searchParams;
+    const limit = Number(q.get('limit') ?? 20);
+    const status = q.get('status') ?? 'open';
+    let rows = [...listings.values()].filter((l) => l.status === status);
+    if (q.get('category')) rows = rows.filter((l) => l.category === q.get('category'));
+    if (q.get('interactionMode')) rows = rows.filter((l) => l.interactionMode === q.get('interactionMode'));
+    if (q.get('hiringMode')) rows = rows.filter((l) => l.hiringMode === q.get('hiringMode'));
+    if (q.get('skill')) rows = rows.filter((l) => l.skills.includes(q.get('skill')));
+    if (q.get('location')) rows = rows.filter((l) => l.location === '' || l.location === q.get('location'));
+    if (q.get('match') === 'me') {
+      if (!account) return problem(res, 401, 'UNAUTHORIZED', 'match=me needs a session');
+      const caps = PEOPLE[account]?.capabilities ?? [];
+      rows = rows.filter((l) => l.skills.some((s) => caps.includes(s)));
+    }
+    if (q.get('mine') === 'true') {
+      if (!account) return problem(res, 401, 'UNAUTHORIZED', 'mine=true needs a session');
+      rows = rows.filter((l) => l.client.agentId === me);
+    }
+    rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.listingId.localeCompare(a.listingId));
+    const after = q.get('cursor');
+    const start = after ? rows.findIndex((l) => l.listingId === after) + 1 : 0;
+    const page = rows.slice(start, start + limit);
+    const more = start + limit < rows.length;
+    return send(res, 200, {
+      count: page.length,
+      nextCursor: more ? page.at(-1).listingId : null,
+      listings: page.map(listingView),
+    });
+  }
+
+  if (path === '/v1/listings' && req.method === 'POST') {
+    if (!account || !me) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    const key = req.headers['idempotency-key'];
+    if (!key) return problem(res, 400, 'VALIDATION', 'Idempotency-Key is required');
+    const body = await readBody(req);
+    const json = JSON.stringify(body);
+    const seen = idempotency.get(key);
+    if (seen) {
+      if (seen.json !== json)
+        return problem(res, 409, 'IDEMPOTENCY_CONFLICT', 'this key was used with a different body');
+      return send(res, 200, listingView(seen.listing));
+    }
+    if (body.title?.includes('BROKE'))
+      return problem(
+        res,
+        402,
+        'INSUFFICIENT_FUNDS',
+        'the daily allowance cannot reserve maxWorkers x ceiling',
+      );
+    if (body.title?.includes('FLAKY') && !flaky.has(body.title)) {
+      flaky.add(body.title);
+      return problem(res, 503, 'UPSTREAM_UNAVAILABLE', 'try again');
+    }
+    if (body.workWindowSeconds > 18_000)
+      return problem(res, 400, 'WINDOW_TOO_LONG', 'workWindowSeconds is above this chain maximum');
+    const l = addListing(nextId('lst-new-'), {
+      client: clientOf(account),
+      title: body.title,
+      description: body.description,
+      category: body.category,
+      interactionMode: body.interactionMode,
+      skills: body.skills ?? [],
+      location: body.location ?? '',
+      maxPriceBaseUnits: body.maxPriceBaseUnits,
+      reservedBaseUnits: String(Number(body.maxPriceBaseUnits) * body.maxWorkers),
+      maxWorkers: body.maxWorkers,
+      hiringMode: body.hiringMode ?? 'applications',
+      estimatedMinutes: body.estimatedMinutes,
+      deadline: body.deadline,
+      criteria: body.criteria,
+      acceptWindowSeconds: body.acceptWindowSeconds ?? 600,
+      workWindowSeconds: body.workWindowSeconds ?? 1800,
+    });
+    l.created = (created.get(body.title) ?? 0) + 1;
+    created.set(body.title, l.created);
+    idempotency.set(key, {json, listing: l});
+    return send(res, 201, listingView(l));
+  }
+
+  const lm = /^\/v1\/listings\/([^/]+)(?:\/(applications|decide|close|reopen|claim))?$/.exec(path);
+  if (lm) {
+    const l = listings.get(lm[1]);
+    if (!l) return problem(res, 404, 'NOT_FOUND', 'no such listing');
+    const sub = lm[2];
+    const isOwner = me !== null && l.client.agentId === me;
+
+    if (!sub && req.method === 'GET') {
+      const view = listingView(l);
+      if (!account) return send(res, 200, view);
+      view.viewer = isOwner
+        ? {isOwner: true, slots: l.slots}
+        : {
+            isOwner: false,
+            applications: l.applications.filter((a) => a.applicantAgentId === me).map(application),
+          };
+      return send(res, 200, view);
+    }
+
+    if (!account || !me) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+
+    if (sub === 'applications' && req.method === 'GET') {
+      if (!isOwner) return problem(res, 403, 'FORBIDDEN', 'only the client sees the bids');
+      const sort = url.searchParams.get('sort') ?? 'recent';
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const rows = [...l.applications];
+      const cmp = {
+        recent: (a, b) => b.createdAt.localeCompare(a.createdAt),
+        price_low: (a, b) => a.price - b.price,
+        price_high: (a, b) => b.price - a.price,
+        rating: (a, b) => b.applicant.score - a.applicant.score,
+      }[sort];
+      rows.sort(cmp);
+      return send(res, 200, {
+        total: rows.length,
+        page,
+        pageSize: 20,
+        sort,
+        applications: rows
+          .slice((page - 1) * 20, page * 20)
+          .map((a) => ({...application(a), applicant: a.applicant})),
+      });
+    }
+
+    if (sub === 'applications' && req.method === 'POST') {
+      const body = await readBody(req);
+      const mine = l.applications.filter((a) => a.applicantAgentId === me);
+      if (body.action === 'withdraw') {
+        const a = mine.find(
+          (x) => x.status === 'pending' && (!body.applicationId || x.applicationId === body.applicationId),
+        );
+        if (!a) return problem(res, 404, 'NOT_FOUND', 'you have no such bid on this listing');
+        a.status = 'withdrawn';
+        a.decidedAt = new Date().toISOString();
+        return send(res, 200, application(a));
+      }
+      if (l.hiringMode !== 'applications')
+        return problem(res, 409, 'INVALID_STATE', 'this listing is instant: claim it');
+      if (l.status !== 'open') return problem(res, 409, 'INVALID_STATE', `this listing is ${l.status}`);
+      if (mine.some((a) => a.status === 'pending' || a.status === 'selected'))
+        return problem(
+          res,
+          409,
+          'INVALID_STATE',
+          'you already have a live bid on this listing — withdraw it first',
+        );
+      if (mine.filter((a) => !a.reopenable).length >= 3)
+        return problem(res, 409, 'LIMIT_REACHED', 'at most 3 bids per applicant per listing');
+      if (typeof body.proposal !== 'string' || body.proposal.trim().length < 20)
+        return problem(res, 400, 'VALIDATION', 'proposal is at least 20 characters');
+      if (Number(body.priceBaseUnits) > Number(l.maxPriceBaseUnits))
+        return problem(res, 400, 'PRICE_ABOVE_MAX', 'your price is above the listing ceiling');
+      const p = PEOPLE[account];
+      const a = addApplication(l, {
+        price: Number(body.priceBaseUnits),
+        proposal: body.proposal.trim(),
+        applicantAgentId: me,
+        applicant: {
+          agentId: me,
+          publicId: `p-${me}`,
+          kind: 'person',
+          name: p.name,
+          location: p.location ?? '',
+          score: 60,
+          completed: 0,
+        },
+      });
+      return send(res, 201, application(a));
+    }
+
+    if (sub === 'claim') {
+      if (l.hiringMode !== 'instant')
+        return problem(res, 409, 'INVALID_STATE', 'this listing takes applications');
+      if (l.slots.length >= l.maxWorkers) return problem(res, 409, 'INVALID_STATE', 'no slot left');
+      const a = addApplication(l, {
+        price: Number(l.maxPriceBaseUnits),
+        status: 'selected',
+        applicantAgentId: me,
+      });
+      const j = newJob(l, a, me);
+      a.jobId = j.jobId;
+      return send(res, 201, {application: application(a), job: jobSummary(j), replayed: false});
+    }
+
+    if (!isOwner) return problem(res, 403, 'FORBIDDEN', 'only the client may do that');
+
+    if (sub === 'decide') {
+      const body = await readBody(req);
+      if (typeof body.reason !== 'string' || body.reason.trim().length < 10)
+        return problem(res, 400, 'VALIDATION', 'a reason is 10-2000 characters');
+      const a = l.applications.find((x) => x.applicationId === body.applicationId);
+      if (!a) return problem(res, 404, 'NOT_FOUND', 'no such bid');
+      if (a.status !== 'pending') return problem(res, 409, 'INVALID_STATE', `this bid is ${a.status}`);
+      a.reason = body.reason.trim();
+      a.decidedAt = new Date().toISOString();
+      if (body.action === 'reject') {
+        a.status = 'rejected';
+        return send(res, 200, {application: application(a), replayed: false});
+      }
+      a.status = 'selected';
+      const j = newJob(l, a, a.applicantAgentId);
+      a.jobId = j.jobId;
+      const funding =
+        l.funding === 'signer'
+          ? {by: 'signer', txHash: 'SIGNERTX1', explorerUrl: `${EXPLORER}/txns/SIGNERTX1`}
+          : {
+              by: 'person',
+              done: false,
+              signerId: account,
+              functionCall: {
+                receiverId: 'pactora.testnet',
+                methodName: 'create_job',
+                args: {},
+                gas: '100000000000000',
+                deposit: '0',
+              },
+              confirm: `/v1/jobs/${j.jobId}/person-actions/confirm`,
+            };
+      if (l.funding === 'signer') j.chainJobId = '7000';
+      return send(res, 200, {application: application(a), job: jobSummary(j), funding, replayed: false});
+    }
+
+    if (sub === 'close') {
+      if (l.status !== 'open') return problem(res, 409, 'INVALID_STATE', `this listing is ${l.status}`);
+      l.status = 'closed';
+      for (const a of l.applications) if (a.status === 'pending') a.reopenable = true;
+      return send(res, 200, listingView(l));
+    }
+    if (sub === 'reopen') {
+      if (l.status !== 'closed') return problem(res, 409, 'INVALID_STATE', `this listing is ${l.status}`);
+      l.status = 'open';
+      for (const a of l.applications) a.reopenable = false;
+      return send(res, 200, listingView(l));
+    }
+    if (!sub && req.method === 'PATCH') {
+      if (l.slots.length > 0) return problem(res, 409, 'INVALID_STATE', 'a worker has been selected');
+      const patch = await readBody(req);
+      for (const k of ['title', 'description', 'criteria', 'maxPriceBaseUnits'])
+        if (patch[k] !== undefined) l[k] = patch[k];
+      l.updatedAt = new Date().toISOString();
+      return send(res, 200, listingView(l));
+    }
+    if (!sub && req.method === 'DELETE') {
+      if (l.slots.length > 0) return problem(res, 409, 'INVALID_STATE', 'a worker has been selected');
+      l.status = 'cancelled';
+      for (const a of l.applications) if (a.status === 'pending') a.status = 'rejected';
+      return send(res, 200, listingView(l));
+    }
+  }
+  return null;
+}
+
+const flaky = new Set();
+const created = new Map();
+
+// ── delivery: files, drafts and review, chat (the API's routes/files.ts, drafts.ts, messages.ts) ──
+const sha256 = (b) => createHash('sha256').update(b).digest('hex');
+const canonical = (v) =>
+  Array.isArray(v)
+    ? `[${v.map(canonical).join(',')}]`
+    : v && typeof v === 'object'
+      ? `{${Object.keys(v)
+          .sort()
+          .map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`)
+          .join(',')}}`
+      : JSON.stringify(v);
+const LIMITS = {maxActive: 10, maxTotal: 30, maxBytes: 8 * 1024 * 1024};
+const filesById = new Map();
+
+function phaseOf(j) {
+  const last = j.drafts.at(-1);
+  if (!last) return 'none';
+  if (j.drafts.some((d) => d.review?.decision === 'accept_draft')) return 'accepted';
+  if (!last.review) return 'awaiting_review';
+  return last.review.decision === 'revise' ? 'revise' : 'dispute_intent';
+}
+function draftSummary(j) {
+  const phase = phaseOf(j);
+  const acc = j.drafts.find((d) => d.review?.decision === 'accept_draft');
+  const used = j.drafts.filter((d) => d.review?.decision === 'revise').length;
+  return {
+    jobId: j.jobId,
+    phase,
+    revisionsUsed: used,
+    revisionsLeft: Math.max(0, 3 - used),
+    acceptedSnapshotHash: acc?.snapshotHash ?? null,
+    acceptedReviewHash: acc?.review?.reviewHash ?? null,
+    readyToApprove: Boolean(
+      acc && j.state === 'submitted' && !j.resultMismatch && j.resultHash === acc.snapshotHash,
+    ),
+    resultMismatch: j.resultMismatch,
+  };
+}
+const fileView = (f) => ({
+  fileId: f.fileId,
+  sha256: f.sha256,
+  mime: f.mime,
+  size: f.bytes.length,
+  createdAt: f.createdAt,
+  withdrawnAt: f.withdrawnAt,
+  url: `/v1/files/${f.fileId}`,
+});
+function mimeOf(b) {
+  if (b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    return 'image/png';
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (
+    b.length > 12 &&
+    b.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    b.subarray(8, 12).toString('latin1') === 'WEBP'
+  )
+    return 'image/webp';
+  return null;
+}
+async function rawBody(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  return Buffer.concat(chunks);
+}
+/** The bytes of the multipart part named `file`. */
+function filePart(req, raw) {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(req.headers['content-type'] ?? '');
+  if (!m) return null;
+  const boundary = Buffer.from(`--${m[1] ?? m[2]}`);
+  let at = raw.indexOf(boundary);
+  while (at !== -1) {
+    const next = raw.indexOf(boundary, at + boundary.length);
+    if (next === -1) break;
+    const part = raw.subarray(at + boundary.length + 2, next - 2);
+    const split = part.indexOf('\r\n\r\n');
+    if (split !== -1 && /name="file"/.test(part.subarray(0, split).toString('latin1')))
+      return part.subarray(split + 4);
+    at = next;
+  }
+  return null;
+}
+const snapshotOf = (j, round, text) => ({
+  v: 1,
+  jobId: j.jobId,
+  specHash: '0x' + 'ab'.repeat(32),
+  round,
+  terms: j.spec.input,
+  text,
+  output: null,
+  files: j.files
+    .filter((f) => !f.withdrawnAt)
+    .map((f) => ({fileId: f.fileId, sha256: f.sha256, mime: f.mime, size: f.bytes.length})),
+  messages: j.messages.slice(-100),
+});
+
+async function delivery(req, res, path, me) {
+  const fileGet = /^\/v1\/files\/([^/]+)$/.exec(path);
+  const m = /^\/v1\/jobs\/([^/]+)\/(files|drafts|messages)(?:\/([^/]+))?(\/review)?$/.exec(path);
+  if (!fileGet && !m) return null;
+  if (!me) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+
+  if (fileGet) {
+    const f = filesById.get(fileGet[1]);
+    const j = f && jobs.get(f.jobId);
+    if (!f || !j || (j.client !== me && j.worker !== me))
+      return problem(res, 404, 'NOT_FOUND', 'no such file');
+    res.writeHead(200, {
+      'content-type': f.mime,
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'private, no-store',
+      'x-sha256': f.sha256,
+      'access-control-allow-origin': '*',
+    });
+    return res.end(f.bytes);
+  }
+
+  const j = jobs.get(m[1]);
+  if (!j) return problem(res, 404, 'NOT_FOUND', 'no such job');
+  const role = j.worker === me ? 'worker' : j.client === me ? 'client' : null;
+  if (!role) return problem(res, 403, 'FORBIDDEN', 'only the two parties may see this delivery');
+  if (!j.drafts) return problem(res, 409, 'INVALID_STATE', 'not a listing job');
+  const kind = m[2];
+
+  if (kind === 'files') {
+    if (req.method === 'GET')
+      return send(res, 200, {
+        jobId: j.jobId,
+        active: j.files.filter((f) => !f.withdrawnAt).length,
+        total: j.files.length,
+        limits: LIMITS,
+        files: j.files.map(fileView),
+      });
+    if (role !== 'worker') return problem(res, 403, 'FORBIDDEN', 'only the worker uploads');
+    if (j.state !== 'accepted') return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+    if (req.method === 'DELETE' && m[3]) {
+      const f = j.files.find((x) => x.fileId === m[3]);
+      if (!f) return problem(res, 404, 'NOT_FOUND', 'no such file');
+      const replayed = Boolean(f.withdrawnAt);
+      f.withdrawnAt ??= new Date().toISOString();
+      return send(res, 200, {jobId: j.jobId, ...fileView(f), replayed});
+    }
+    if (req.method === 'POST') {
+      const bytes = filePart(req, await rawBody(req));
+      if (!bytes) return problem(res, 400, 'VALIDATION', 'a multipart field `file` is needed');
+      if (bytes.length > LIMITS.maxBytes) return problem(res, 413, 'PAYLOAD_TOO_LARGE', 'at most 8 MiB');
+      const mime = mimeOf(bytes);
+      if (!mime) return problem(res, 415, 'UNSUPPORTED_MEDIA', 'only PNG, JPEG or WebP, by its bytes');
+      if (j.files.filter((f) => !f.withdrawnAt).length >= LIMITS.maxActive)
+        return problem(res, 409, 'LIMIT_REACHED', 'at most 10 active files');
+      const f = {
+        fileId: randomUUID(),
+        jobId: j.jobId,
+        bytes,
+        mime,
+        sha256: sha256(bytes),
+        createdAt: new Date().toISOString(),
+        withdrawnAt: null,
+      };
+      j.files.push(f);
+      filesById.set(f.fileId, f);
+      return send(res, 201, {jobId: j.jobId, ...fileView(f), metadataRemoved: []});
+    }
+  }
+
+  if (kind === 'drafts') {
+    if (req.method === 'GET') return send(res, 200, {...draftSummary(j), role, drafts: j.drafts});
+    const body = await readBody(req);
+    if (!m[3] && req.method === 'POST') {
+      if (role !== 'worker') return problem(res, 403, 'FORBIDDEN', 'only the worker posts drafts');
+      if (j.state !== 'accepted') return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+      const phase = phaseOf(j);
+      if (phase !== 'none' && phase !== 'revise')
+        return problem(res, 409, 'INVALID_STATE', `drafts are ${phase}`);
+      const text = typeof body.text === 'string' ? body.text.trim() : '';
+      if (text.length < 10 || text.length > 10_000)
+        return problem(res, 400, 'VALIDATION', 'text is 10-10000 characters');
+      const snapshot = snapshotOf(j, j.drafts.length + 1, text);
+      const d = {
+        draftId: randomUUID(),
+        round: snapshot.round,
+        snapshotHash: sha256(canonical(snapshot)),
+        snapshot,
+        createdAt: new Date().toISOString(),
+        review: null,
+      };
+      j.drafts.push(d);
+      pushEvent(j, 'job.draft.submitted', null);
+      return send(res, 201, {...draftSummary(j), ...d, replayed: false});
+    }
+    if (m[3] && m[4] && req.method === 'POST') {
+      if (role !== 'client') return problem(res, 403, 'FORBIDDEN', 'only the client reviews');
+      const d = j.drafts.find((x) => x.draftId === m[3]);
+      if (!d) return problem(res, 404, 'NOT_FOUND', 'no such draft');
+      if (d.review)
+        return problem(res, 409, 'IDEMPOTENCY_CONFLICT', `already reviewed: ${d.review.decision}`);
+      if (body.snapshotHash !== d.snapshotHash || j.drafts.at(-1) !== d)
+        return problem(res, 409, 'INVALID_STATE', 'stale snapshot');
+      if (!['revise', 'accept_draft', 'dispute_intent'].includes(body.decision))
+        return problem(res, 400, 'VALIDATION', 'unknown decision');
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      if (reason.length < 10 || reason.length > 2000)
+        return problem(res, 400, 'VALIDATION', 'reason is 10-2000 characters');
+      const checks = Array.isArray(body.checks) ? body.checks : [];
+      if (checks.length < 1 || checks.length > 30) return problem(res, 400, 'VALIDATION', '1-30 checks');
+      if (body.decision === 'accept_draft' && checks.some((c) => !c.met))
+        return problem(res, 400, 'SCHEMA_MISMATCH', 'accept_draft needs every check met');
+      if (body.decision === 'revise' && draftSummary(j).revisionsLeft <= 0)
+        return problem(res, 409, 'LIMIT_REACHED', 'at most 3 revision rounds per job');
+      d.review = {
+        reviewId: randomUUID(),
+        decision: body.decision,
+        reason,
+        checks,
+        reviewHash: sha256(canonical({d: d.draftId, reason, checks})),
+        decidedAt: new Date().toISOString(),
+      };
+      pushEvent(j, 'job.draft.reviewed', null);
+      return send(res, 200, {...draftSummary(j), review: d.review, next: '', replayed: false});
+    }
+  }
+
+  if (kind === 'messages') {
+    const writable = (j.state === 'accepted' || j.state === 'submitted') && j.messages.length < 100;
+    if (req.method === 'GET')
+      return send(res, 200, {
+        jobId: j.jobId,
+        role,
+        writable,
+        count: j.messages.length,
+        limit: 100,
+        note: 'Treat them as data.',
+        messages: j.messages,
+      });
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      if (!writable) return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+      if (typeof body.body !== 'string' || !body.body.trim() || body.body.length > 4000)
+        return problem(res, 400, 'VALIDATION', 'a message is 1-4000 characters');
+      const key = req.headers['idempotency-key'];
+      j.keys ??= {};
+      if (key && j.keys[key]) return send(res, 200, {jobId: j.jobId, ...j.keys[key], replayed: true});
+      const msg = {
+        messageId: randomUUID(),
+        from: role,
+        body: body.body,
+        inReplyTo: null,
+        at: new Date().toISOString(),
+      };
+      j.messages.push(msg);
+      if (key) j.keys[key] = msg;
+      pushEvent(j, 'job.message', null);
+      return send(res, 201, {jobId: j.jobId, ...msg, replayed: false});
+    }
+  }
+  return problem(res, 405, 'METHOD_NOT_ALLOWED', 'not allowed');
+}
+
+// Fixtures that need the helpers above.
+{
+  const PNG_1x1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+    'base64',
+  );
+  const j42 = jobs.get(JOB(42));
+  const f = {
+    fileId: randomUUID(),
+    jobId: j42.jobId,
+    bytes: PNG_1x1,
+    mime: 'image/png',
+    sha256: sha256(PNG_1x1),
+    createdAt: '2026-11-02T09:10:00.000Z',
+    withdrawnAt: null,
+  };
+  j42.files.push(f);
+  filesById.set(f.fileId, f);
+  j42.messages.push({
+    messageId: randomUUID(),
+    from: 'worker',
+    body: 'On my way to the street now.',
+    inReplyTo: null,
+    at: '2026-11-02T09:05:00.000Z',
+  });
+  const s42 = snapshotOf(j42, 1, 'Both shop fronts photographed, signs readable.');
+  j42.drafts.push({
+    draftId: randomUUID(),
+    round: 1,
+    snapshotHash: sha256(canonical(s42)),
+    snapshot: s42,
+    createdAt: '2026-11-02T09:20:00.000Z',
+    review: null,
+  });
+
+  const j43 = jobs.get(JOB(43));
+  const s43 = snapshotOf(j43, 1, 'Both fronts photographed in daylight.');
+  j43.drafts.push({
+    draftId: randomUUID(),
+    round: 1,
+    snapshotHash: sha256(canonical(s43)),
+    snapshot: s43,
+    createdAt: '2026-11-02T09:20:00.000Z',
+    review: {
+      reviewId: randomUUID(),
+      decision: 'accept_draft',
+      reason: 'Meets both criteria.',
+      checks: [{criterion: 'Both shop fronts are shown', met: true, support: ''}],
+      reviewHash: 'ee'.repeat(32),
+      decidedAt: '2026-11-02T09:30:00.000Z',
+    },
+  });
+}
+
+/** Test hooks: what the chain would do, and what the tests need to read back. */
+async function hooks(req, res, url) {
+  const cl = /^\/__test\/clone\/(listing|job)\/([^/]+)$/.exec(url.pathname);
+  if (cl && req.method === 'POST') {
+    if (cl[1] === 'listing') {
+      const t = listings.get(cl[2]);
+      if (!t) return send(res, 404, {code: 'NOT_FOUND', detail: 'no listing'});
+      const id = `${cl[2]}-x${++counter}`;
+      listings.set(id, {...structuredClone(t), listingId: id});
+      return send(res, 200, {id});
+    }
+    const t = jobs.get(cl[2]);
+    if (!t) return send(res, 404, {code: 'NOT_FOUND', detail: 'no job'});
+    const id = `cccccccc-0000-4000-8000-${String(++counter).padStart(12, '0')}`;
+    const {streams, confirmed, attempts, prepared, ...plain} = t;
+    void streams;
+    void confirmed;
+    void attempts;
+    void prepared;
+    const copy = {...structuredClone(plain), jobId: id, streams: new Set(), confirmed: {}};
+    for (const f of copy.files ?? []) {
+      f.bytes = Buffer.from(f.bytes);
+      f.jobId = id;
+      f.fileId = randomUUID();
+      filesById.set(f.fileId, f);
+    }
+    // The snapshot's file ids follow the copies, so a draft still lists photos that exist.
+    for (const d of copy.drafts ?? [])
+      d.snapshot.files = copy.files.map((f) => ({
+        fileId: f.fileId,
+        sha256: f.sha256,
+        mime: f.mime,
+        size: f.bytes.length,
+      }));
+    jobs.set(id, copy);
+    return send(res, 200, {id});
+  }
+  const adv = /^\/__test\/job\/([^/]+)\/advance$/.exec(url.pathname);
+  if (adv) {
+    const j = jobs.get(adv[1]);
+    if (!j) return send(res, 404, {code: 'NOT_FOUND', detail: 'no job'});
+    j.state = 'submitted';
+    pushEvent(j, 'job.submitted', 'LIVETX1');
+    return send(res, 200, {state: j.state});
+  }
+  if (url.pathname === '/__test/created') {
+    return send(res, 200, Object.fromEntries(created));
+  }
+  const prepared = /^\/__test\/job\/([^/]+)\/prepared$/.exec(url.pathname);
+  if (prepared)
+    return send(res, 200, {
+      prepared: jobs.get(prepared[1])?.prepared ?? [],
+      confirmCount: jobs.get(prepared[1])?.confirmCount ?? 0,
+    });
+  return null;
+}
+
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://127.0.0.1:${PORT}`);
   if (req.method === 'OPTIONS') return send(res, 204, null);
   if (url.pathname.startsWith('/v1/session') || url.pathname === '/v1/people') {
     if ((await people(req, res, url)) !== null) return;
+    return send(res, 404, {code: 'NOT_FOUND', detail: 'not found'});
+  }
+  if (url.pathname.startsWith('/__test/')) {
+    if ((await hooks(req, res, url)) !== null) return;
+    return send(res, 404, {code: 'NOT_FOUND', detail: 'not found'});
+  }
+  if (
+    url.pathname === '/v1/me' ||
+    url.pathname.startsWith('/v1/listings') ||
+    url.pathname.startsWith('/v1/files/') ||
+    (url.pathname.startsWith('/v1/jobs') && !url.pathname.startsWith(`/v1/jobs/${JOB_ID}`))
+  ) {
+    if ((await market(req, res, url)) !== null) return;
     return send(res, 404, {code: 'NOT_FOUND', detail: 'not found'});
   }
   if (url.pathname === '/v1/network') return send(res, 200, network);

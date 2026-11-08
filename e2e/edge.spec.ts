@@ -387,6 +387,8 @@ test('deep links to a docs section land on it; back and forward work', async ({p
 });
 
 test('the header fits a 320px phone on every main page (menu button reachable)', async ({page}) => {
+  // Some twenty pages, each loaded to network idle: slow on a busy machine.
+  test.slow();
   await page.setViewportSize({width: 320, height: 700});
   for (const path of [
     '/',
@@ -396,6 +398,9 @@ test('the header fits a 320px phone on every main page (menu button reachable)',
     '/register',
     '/signin',
     '/join',
+    '/jobs',
+    '/jobs/new',
+    '/me',
     '/docs',
     '/docs/concepts',
     '/about',

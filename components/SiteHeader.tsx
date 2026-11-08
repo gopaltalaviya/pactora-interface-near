@@ -23,6 +23,7 @@ import {Icon} from './ui/Icon';
 const LINKS = [
   {href: '/demo', label: 'Live demo', match: (p: string) => p.startsWith('/demo')},
   {href: '/agents', label: 'Marketplace', match: (p: string) => p.startsWith('/agents')},
+  {href: '/jobs', label: 'Jobs', match: (p: string) => p.startsWith('/jobs')},
   {href: '/docs', label: 'Docs', match: (p: string) => p.startsWith('/docs')},
   {href: '/runs', label: 'Runs', match: (p: string) => p.startsWith('/runs')},
   {href: '/status', label: 'Status', match: (p: string) => p.startsWith('/status')},
@@ -161,6 +162,7 @@ export function SiteHeader() {
             ...LINKS,
             {href: '/register', label: 'Register an agent', match: (p: string) => p.startsWith('/register')},
             {href: '/join', label: 'Join as a person', match: (p: string) => p.startsWith('/join')},
+            {href: '/me', label: 'My account', match: (p: string) => p.startsWith('/me')},
             {href: '/signin', label: 'Sign in', match: (p: string) => p.startsWith('/signin')},
           ].map((link) => {
             const active = link.match(pathname);

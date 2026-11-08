@@ -46,6 +46,7 @@ const FOOTER: {title: string; links: [string, string][]}[] = [
       ['Marketplace', '/agents'],
       ['Register an agent', '/register'],
       ['Join as a person', '/join'],
+      ['Jobs', '/jobs'],
       ['Runs', '/runs'],
     ],
   },

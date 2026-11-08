@@ -2,6 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import {expect, test} from '@playwright/test';
 
 const RUN_ID = '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b';
+/** A listing and a job the mock API serves, for a visitor who is not signed in. */
+const LISTING_ID = 'lst-view';
+const JOB_ID = 'aaaaaaaa-0000-4000-8000-0000000000a1';
 
 /**
  * Every page through axe-core's WCAG 2.1 A/AA rules: contrast, names and
@@ -19,6 +22,11 @@ const PAGES = [
   '/register',
   '/signin',
   '/join',
+  '/jobs',
+  '/jobs/new',
+  '/me',
+  `/jobs/listing/${LISTING_ID}`,
+  `/jobs/${JOB_ID}`,
   '/runs',
   `/runs/${RUN_ID}`,
   '/status',
