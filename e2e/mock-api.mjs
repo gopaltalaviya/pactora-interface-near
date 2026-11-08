@@ -912,6 +912,7 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await kycRoutes(req, res, path, account, me)) !== null) return;
   if ((await profileRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await feedRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await delivery(req, res, path, me)) !== null) return;
@@ -1182,6 +1183,66 @@ async function market(req, res, url) {
 
 const flaky = new Set();
 const created = new Map();
+
+// ── identity checks (the API's routes/kyc.ts) ──
+// "Abu Abbas" is a strong sanctions match: the account is held and no
+// session opens. Any other name opens a simulated session. Kept per account.
+const kycOf = new Map();
+async function kycRoutes(req, res, path, account, me) {
+  if (!path.startsWith('/v1/kyc')) return null;
+  if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+  if (!me) return problem(res, 403, 'FORBIDDEN', 'identity checks are for people');
+  const s = kycOf.get(account) ?? {standing: 'clear', verification: null, session: null};
+  kycOf.set(account, s);
+  if (path === '/v1/kyc' && req.method === 'GET') {
+    return send(res, 200, {
+      standing: s.standing,
+      provider: {name: 'simulated', simulated: true},
+      screening: true,
+      walletScreening: 'not available: no sanctions list names NEAR accounts',
+      verification: s.verification,
+    });
+  }
+  if (path === '/v1/kyc/start' && req.method === 'POST') {
+    const b = await readBody(req);
+    const name = String(b.legalName ?? '').trim();
+    if (name.length < 2) return problem(res, 422, 'SCHEMA_MISMATCH', 'legalName is 2-200 characters');
+    const v = {
+      verificationId: `vvvvvvvv-0000-4000-8000-${String(++counter).padStart(12, '0')}`,
+      provider: 'simulated',
+      status: 'pending',
+      documentVerified: false,
+      createdAt: new Date().toISOString(),
+      decidedAt: null,
+    };
+    if (name.toLowerCase() === 'abu abbas') {
+      s.standing = 'hold';
+      s.verification = {...v, status: 'held'};
+      return send(res, 202, {...s.verification, next: 'a compliance review is needed'});
+    }
+    s.session = `sim_${String(counter).padStart(24, 'a')}`;
+    s.verification = v;
+    return send(res, 201, {
+      ...v,
+      url: `http://localhost:3000/kyc/simulated?session=${s.session}`,
+      simulated: true,
+    });
+  }
+  const sim = /^\/v1\/kyc\/simulated\/([^/]+)$/.exec(path);
+  if (sim && req.method === 'POST') {
+    if (sim[1] !== s.session) return problem(res, 404, 'NOT_FOUND', 'no such session of yours');
+    const b = await readBody(req);
+    const ok = b.outcome === 'approved' && b.documentVerified !== false;
+    s.verification = {
+      ...s.verification,
+      status: ok ? 'approved' : 'rejected',
+      documentVerified: ok,
+      decidedAt: new Date().toISOString(),
+    };
+    return send(res, 200, {status: s.verification.status, simulated: true});
+  }
+  return problem(res, 404, 'NOT_FOUND', 'not found');
+}
 
 // ── profiles and two-way reviews (the API's routes/profiles.ts) ──
 // A directory of 23 published profiles (two people), with reviews on the
@@ -1802,6 +1863,7 @@ async function hooks(req, res, url) {
   if (newPerson) {
     PEOPLE[newPerson[1]] = {agentId: '77', chainAgentId: '177', name: 'Pat', capabilities: []};
     myProfiles.delete(newPerson[1]);
+    kycOf.delete(newPerson[1]);
     return send(res, 200, {account: newPerson[1]});
   }
   const theirs = /^\/__test\/job\/([^/]+)\/their-review\/(client|worker)$/.exec(url.pathname);
@@ -1846,6 +1908,7 @@ createServer(async (req, res) => {
     url.pathname.startsWith('/v1/notifications') ||
     url.pathname === '/v1/faucet' ||
     url.pathname.startsWith('/v1/profiles') ||
+    url.pathname.startsWith('/v1/kyc') ||
     (url.pathname.startsWith('/v1/jobs') && !url.pathname.startsWith(`/v1/jobs/${JOB_ID}`))
   ) {
     if ((await market(req, res, url)) !== null) return;

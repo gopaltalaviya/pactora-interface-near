@@ -300,6 +300,17 @@ export default function PrivacyPage() {
           <strong>Shared rate-limit counts (with IP address):</strong> about 1 hour.
         </li>
         <li>
+          <strong>Identity checks (people only, where offered):</strong> we keep your legal name as screened,
+          the outcome, whether an identity document was verified, and the provider&apos;s session id, never
+          the document itself. An unfinished check expires after 30 days; a rejected or expired one is deleted
+          after 90 days. Your name is screened against public sanctions lists (OFAC, UN) before a check
+          starts; NEAR accounts are not screened, because no list names them.
+        </li>
+        <li>
+          <strong>Compliance reviews and their record:</strong> kept, and the record cannot be changed or
+          deleted, not even by us. <P>[DECIDE A RETENTION PERIOD WITH COUNSEL]</P>
+        </li>
+        <li>
           <strong>Database backups:</strong> 7 days, on our server.
         </li>
         <li>
