@@ -81,6 +81,7 @@ export const PUBLIC_ROUTES = [
   '/jobs',
   '/jobs/new',
   '/me',
+  '/notifications',
   '/runs',
   '/status',
   '/about',
@@ -107,4 +108,4 @@ export const PUBLIC_ROUTES = [
  * a crawler somewhere it was told not to keep.
  * lib/seo.test.ts checks this list against the layouts, both ways.
  */
-export const NOINDEX_ROUTES: readonly string[] = ['/signin', '/jobs/new', '/me'];
+export const NOINDEX_ROUTES: readonly string[] = ['/signin', '/jobs/new', '/me', '/notifications'];

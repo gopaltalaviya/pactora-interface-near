@@ -20,6 +20,8 @@ import {
   type ListingStatus,
 } from '@/lib/market';
 import {displayAccount} from '@/lib/near';
+import {notifications, type FaucetClaim, type FaucetStatus} from '@/lib/notifications';
+import {safeHref} from '@/lib/links';
 import {useSession} from '@/lib/session';
 
 /**
@@ -129,6 +131,8 @@ function Signed() {
           </div>
         )}
       </Card>
+
+      <FaucetCard units={units} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat
@@ -330,6 +334,82 @@ function MyJobs() {
           )}
         </>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Test tokens to try Pactora with (docs/26 F23): testnet only, once a day,
+ * from a faucet with a limited float. Not shown where there is no faucet.
+ */
+function FaucetCard({units}: {units: (base: string) => string}) {
+  const {authed} = useSession();
+  const [status, setStatus] = useState<FaucetStatus | null>(null);
+  const [claim, setClaim] = useState<FaucetClaim | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    authed((t) => notifications.faucet(t, controller.signal))
+      .then(setStatus)
+      .catch(() => {
+        if (!controller.signal.aborted) setStatus(null);
+      });
+    return () => controller.abort();
+  }, [authed]);
+
+  if (!status || !status.testnet || !status.available) return null;
+
+  async function take() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      setClaim(await authed((t) => notifications.claim(t)));
+    } catch (err) {
+      setProblem(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const href = claim ? safeHref(claim.explorerUrl) : null;
+  const claimed = status.claimedToday || claim !== null;
+  return (
+    <Card
+      title="Test tokens"
+      labelledBy="faucet"
+      description="Testnet only: tokens with no value, to try hiring, bidding and staking."
+    >
+      <div className="space-y-3 text-sm">
+        <p>
+          Claim {units(status.amount)} once a day (UTC), sent to your own account
+          {claim?.registered ? '; your account was registered with the token first' : ''}.
+        </p>
+        {claim ? (
+          <p role="status" data-testid="faucet-sent">
+            Sent {units(claim.amount)} from {claim.from}.{' '}
+            {href && (
+              <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
+                View transaction
+              </a>
+            )}
+          </p>
+        ) : claimed ? (
+          <p className="text-muted" data-testid="faucet-claimed">
+            You have claimed today. Come back tomorrow.
+          </p>
+        ) : (
+          <Button size="sm" disabled={busy} loading={busy} onClick={() => void take()}>
+            Claim test tokens
+          </Button>
+        )}
+        {problem && (
+          <p role="alert" className="text-xs text-broken">
+            {problem}
+          </p>
+        )}
+      </div>
     </Card>
   );
 }

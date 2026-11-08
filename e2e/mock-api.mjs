@@ -912,6 +912,7 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await feedRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await delivery(req, res, path, me)) !== null) return;
 
   const jobMatch = /^\/v1\/jobs\/([^/]+)(\/events|\/person-actions\/(?:prepare|confirm))?$/.exec(path);
@@ -1180,6 +1181,84 @@ async function market(req, res, url) {
 
 const flaky = new Set();
 const created = new Map();
+
+// ── notifications and the faucet (the API's routes/agent-events.ts, faucet.ts) ──
+// Accounts named `nell-<anything>.testnet` are people with a seeded feed of
+// 25 notifications (3 unread); `fay-<anything>.testnet` people with a faucet
+// to claim from. Each test names its own (with the browser in it), so the
+// browsers sharing this server never share state; /__test/feed/reset puts
+// one back.
+const feeds = new Map();
+const faucetClaimed = new Set();
+const FEED_KINDS = ['job.created', 'job.accepted', 'job.draft.submitted', 'job.message', 'settled'];
+function feedOf(account) {
+  if (!feeds.has(account)) {
+    const items = Array.from({length: 25}, (_, i) => ({
+      seq: i + 1,
+      kind: FEED_KINDS[i % FEED_KINDS.length],
+      role: i % 2 ? 'worker' : 'client',
+      jobId: JOB(1),
+      payload: {},
+      at: new Date(Date.UTC(2026, 10, 2, 9, i)).toISOString(),
+    }));
+    feeds.set(account, {items, readSeq: 22});
+  }
+  return feeds.get(account);
+}
+const isFeedPerson = (account) => /^(nell|fay)-[a-z0-9-]+\.testnet$/.test(account ?? '');
+
+async function feedRoutes(req, res, path, account, me, url) {
+  if (path !== '/v1/notifications' && path !== '/v1/notifications/read' && path !== '/v1/faucet') return null;
+  if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+  if (path === '/v1/faucet') {
+    const known = isFeedPerson(account) || Boolean(me);
+    if (!known) return problem(res, 403, 'FORBIDDEN', 'no person');
+    if (req.method === 'GET')
+      return send(res, 200, {
+        available: true,
+        testnet: true,
+        amount: '5000000',
+        claimedToday: faucetClaimed.has(account),
+        day: new Date().toISOString().slice(0, 10),
+        remainingToday: '495000000',
+      });
+    if (faucetClaimed.has(account))
+      return problem(res, 409, 'LIMIT_REACHED', `${account} already claimed today`);
+    faucetClaimed.add(account);
+    const tx = `FAUCET${++counter}`;
+    return send(res, 201, {
+      account,
+      amount: '5000000',
+      txHash: tx,
+      explorerUrl: `${EXPLORER}/txns/${tx}`,
+      registered: true,
+      from: 'faucet.testnet',
+    });
+  }
+  if (!isFeedPerson(account) && !me) return problem(res, 403, 'FORBIDDEN', 'no person agent');
+  const f = isFeedPerson(account) ? feedOf(account) : {items: [], readSeq: 0};
+  const latest = f.items.length;
+  if (path === '/v1/notifications/read') {
+    const body = await readBody(req);
+    const upTo = Math.min(Number(body.upTo ?? 0), latest);
+    f.readSeq = Math.max(f.readSeq, upTo);
+    return send(res, 200, {readSeq: f.readSeq, latest, unread: latest - f.readSeq});
+  }
+  const limit = Number(url.searchParams.get('limit') ?? 20);
+  const before = url.searchParams.get('before');
+  const rows = f.items
+    .filter((x) => !before || x.seq < Number(before))
+    .sort((a, b) => b.seq - a.seq)
+    .slice(0, limit);
+  const oldest = rows.at(-1)?.seq;
+  return send(res, 200, {
+    unread: latest - f.readSeq,
+    readSeq: f.readSeq,
+    latest,
+    before: oldest !== undefined && oldest > 1 ? oldest : null,
+    notifications: rows.map((x) => ({...x, read: x.seq <= f.readSeq})),
+  });
+}
 
 // ── delivery: files, drafts and review, chat (the API's routes/files.ts, drafts.ts, messages.ts) ──
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
@@ -1537,6 +1616,12 @@ async function hooks(req, res, url) {
     pushEvent(j, 'job.submitted', 'LIVETX1');
     return send(res, 200, {state: j.state});
   }
+  const feedReset = /^\/__test\/feed\/reset\/([^/]+)$/.exec(url.pathname);
+  if (feedReset) {
+    feeds.delete(feedReset[1]);
+    faucetClaimed.delete(feedReset[1]);
+    return send(res, 200, {reset: feedReset[1]});
+  }
   if (url.pathname === '/__test/created') {
     return send(res, 200, Object.fromEntries(created));
   }
@@ -1564,6 +1649,8 @@ createServer(async (req, res) => {
     url.pathname === '/v1/me' ||
     url.pathname.startsWith('/v1/listings') ||
     url.pathname.startsWith('/v1/files/') ||
+    url.pathname.startsWith('/v1/notifications') ||
+    url.pathname === '/v1/faucet' ||
     (url.pathname.startsWith('/v1/jobs') && !url.pathname.startsWith(`/v1/jobs/${JOB_ID}`))
   ) {
     if ((await market(req, res, url)) !== null) return;

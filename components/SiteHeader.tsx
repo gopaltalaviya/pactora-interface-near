@@ -7,6 +7,7 @@ import {Logo} from './brand/Logo';
 import {NetworkBadge} from './NetworkBadge';
 import {SearchButton} from './search/SearchButton';
 import {SearchPalette} from './search/SearchPalette';
+import {NotificationsBell} from '@/components/market/NotificationsBell';
 import {useSession} from '@/lib/session';
 import {displayAccount} from '@/lib/near';
 import {Icon} from './ui/Icon';
@@ -129,6 +130,7 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           <SearchButton />
           <NetworkBadge />
+          <NotificationsBell />
           <SessionLink />
           <Link
             href="/register"
