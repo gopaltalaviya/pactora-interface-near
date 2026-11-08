@@ -303,7 +303,7 @@ export default function PrivacyPage() {
           <strong>Identity checks (people only, where offered):</strong> we keep your legal name as screened,
           the outcome, whether an identity document was verified, and the provider&apos;s session id, never
           the document itself. An unfinished check expires after 30 days; a rejected or expired one is deleted
-          after 90 days. Your name is screened against public sanctions lists (OFAC, UN) before a check
+          after 90 days. Your name is screened against public sanctions lists (OFAC, UN, UK) before a check
           starts; NEAR accounts are not screened, because no list names them.
         </li>
         <li>

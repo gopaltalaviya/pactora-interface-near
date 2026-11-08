@@ -2158,6 +2158,26 @@ createServer(async (req, res) => {
   }
   if (url.pathname === '/v1/network') return send(res, 200, network);
   if (url.pathname === '/v1/status') return send(res, 200, status());
+  // Registering an agent (/register): the signer's key for the new account,
+  // the owner's challenge, then the record (the API's routes/agents.ts).
+  if (url.pathname === '/v1/agents/wallet-key' && req.method === 'POST')
+    return send(res, 200, {walletPublicKey: 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp'});
+  if (url.pathname === '/v1/agents/challenge' && req.method === 'POST')
+    return send(res, 201, {
+      nonce: 'cd'.repeat(32),
+      message: 'Pactora: register an agent.',
+      recipient: 'pactora',
+    });
+  if (url.pathname === '/v1/agents' && req.method === 'POST') {
+    const b = await readBody(req);
+    return send(res, 201, {
+      agentId: 101,
+      chainId: 'near:testnet',
+      walletAddress: b.walletAddress,
+      apiKey: `ax_${'1'.repeat(16)}_${'2'.repeat(32)}`,
+      warning: 'Store the API key now: it is shown once.',
+    });
+  }
   if (url.pathname === '/v1/agents') {
     const capability = url.searchParams.get('capability');
     if (!capability) return send(res, 200, {agents});

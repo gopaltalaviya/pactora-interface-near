@@ -11,8 +11,15 @@ import {ErrorState, Notice} from '@/components/ui/States';
 import {agentCard, agentCardUri} from '@/lib/agent-card';
 import {API_URL, ApiError, api, formatUnits, type NetworkInfo, type RegisteredAgent} from '@/lib/api';
 import {safeHref} from '@/lib/links';
-import {displayAccount, formatYocto, subAccount} from '@/lib/near';
-import {connect, REGISTRATION_AMOUNTS, registerOnChain, signChallenge, type NearWallet} from '@/lib/wallet';
+import {displayAccount, formatYocto, parseUnits, subAccount} from '@/lib/near';
+import {
+  connect,
+  fundTransaction,
+  REGISTRATION_AMOUNTS,
+  registerOnChain,
+  signChallenge,
+  type NearWallet,
+} from '@/lib/wallet';
 
 /**
  * Register an agent (NEAR-PORT §5).
@@ -49,7 +56,7 @@ const STEPS = [
   {title: 'Connect a wallet', body: 'Your NEAR account owns the agent. This page never sees a key.'},
   {
     title: 'Two transactions on NEAR',
-    body: 'Create the agent account under yours, then register it with the Pactora contract.',
+    body: 'Create the agent account under yours, then register it with the Pactora contract (and, if you choose, a third: its first funding).',
   },
   {
     title: 'Sign the challenge',
@@ -81,6 +88,9 @@ export default function RegisterPage() {
   const [description, setDescription] = useState('');
   const [capabilities, setCapabilities] = useState('market-research');
   const [price, setPrice] = useState('20000');
+  // F20: an optional first Fund deposit, signed right after register_agent assigns the id.
+  const [fundAmount, setFundAmount] = useState('');
+  const [funded, setFunded] = useState(false);
 
   useEffect(() => {
     api
@@ -136,7 +146,17 @@ export default function RegisterPage() {
       cardError = (err as Error).message;
     }
   }
+  const fundBase = fundAmount && token ? parseUnits(fundAmount, token.decimals) : null;
+  const fundError =
+    fundAmount === ''
+      ? undefined
+      : !token
+        ? undefined
+        : fundBase === null || fundBase === '0'
+          ? `Not an amount of ${token.symbol}.`
+          : undefined;
   const formInvalid =
+    fundError !== undefined ||
     nameTooLong ||
     descTooLong ||
     tooManyCaps ||
@@ -195,6 +215,18 @@ export default function RegisterPage() {
         });
         chain = {wallet: walletAccount, ...sent};
         setOnChain(chain);
+      }
+
+      // The first funding, now that the id exists (a Fund names it). If the
+      // owner refuses this one signature, the agent is still registered.
+      if (fundBase && !funded && network) {
+        await wallet.signAndSendTransactions({
+          signerId: owner,
+          transactions: [
+            fundTransaction(network.contracts.PaymentToken, pactora, chain.chainAgentId, fundBase),
+          ],
+        });
+        setFunded(true);
       }
 
       setStage('record');
@@ -345,6 +377,30 @@ export default function RegisterPage() {
               </div>
             )}
           </div>
+
+          <Field
+            label="First funding (optional)"
+            htmlFor="reg-fund"
+            hintId="reg-fund-hint"
+            hint={
+              token
+                ? `${token.symbol} moved from your account into the agent's purse right after it is registered, so it can hire at once. One more signature; leave empty to fund later.`
+                : 'Moved into the agent’s purse after registration.'
+            }
+            error={fundError}
+          >
+            <TextInput
+              id="reg-fund"
+              mono
+              value={fundAmount}
+              onChange={(e) => setFundAmount(e.target.value.replace(/[^\d.]/g, ''))}
+              disabled={busy || funded}
+              inputMode="decimal"
+              autoComplete="off"
+              aria-describedby="reg-fund-hint"
+              invalid={fundError !== undefined}
+            />
+          </Field>
 
           <div className="space-y-2">
             <Field

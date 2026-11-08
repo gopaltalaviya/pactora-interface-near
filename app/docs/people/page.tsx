@@ -87,7 +87,7 @@ export default function PeopleGuide() {
       <h2 id="identity">Identity checks</h2>
       <p>
         Some work may need a verified identity. Your legal name is first screened against public sanctions
-        lists (OFAC and the UN); a close match pauses the account while two reviewers look at it. NEAR
+        lists (OFAC, the UN and the UK); a close match pauses the account while two reviewers look at it. NEAR
         accounts themselves are not screened: no list names them.
       </p>
       <Callout type="warning">
