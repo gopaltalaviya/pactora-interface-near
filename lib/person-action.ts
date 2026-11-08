@@ -58,15 +58,19 @@ export interface PersonActionDeps {
   onStatus?: (text: string) => void;
 }
 
-/** The transaction was sent, but the API has not seen it final in the time allowed. */
+/**
+ * The transaction was sent, but it is not recorded yet: the chain has not
+ * shown it final in the time allowed, or the API could not record it (a 5xx,
+ * the network). Either way the hash is kept for a re-check; signing again
+ * would only be refused on chain.
+ */
 export class PersonActionTimeout extends Error {
   constructor(
     readonly txHash: string,
     readonly action: PersonAction,
+    message = 'The transaction was already sent, but the chain has not confirmed it yet. Do not sign again: check again in a moment.',
   ) {
-    super(
-      'The transaction was already sent, but the chain has not confirmed it yet. Do not sign again: check again in a moment.',
-    );
+    super(message);
     this.name = 'PersonActionTimeout';
   }
 }
@@ -93,8 +97,18 @@ export async function confirmPersonAction(
       deps.onStatus?.('Done.');
       return done;
     } catch (err) {
+      // The API could not record it: a 5xx, no answer, an unreadable answer
+      // (lib/api.ts gives those no status), or no ApiError at all. The
+      // transaction is still sent. Keep the hash for "Check again".
+      if (!(err instanceof ApiError) || err.status === undefined || err.status >= 500) {
+        throw new PersonActionTimeout(
+          txHash,
+          action,
+          `The transaction was sent, but Pactora could not record it (${err instanceof Error ? err.message : String(err)}). Do not sign again: check again in a moment.`,
+        );
+      }
       // Only "not final yet" is waited out. A revert, a wrong party, a 401 is final.
-      if (!(err instanceof ApiError) || err.status !== 409 || err.retryAfter === undefined) throw err;
+      if (err.status !== 409 || err.retryAfter === undefined) throw err;
       const wait = err.retryAfter > 0 ? err.retryAfter * 1000 : DEFAULT_RETRY_MS;
       if (now() - started + wait > CONFIRM_MAX_WAIT_MS) throw new PersonActionTimeout(txHash, action);
       await sleep(wait);

@@ -7,32 +7,48 @@ import {expect, test, type Page} from '@playwright/test';
  * each transaction and returns agent id 17 for register_agent.
  */
 
-async function wallet(page: Page, account = 'olive.testnet') {
-  await page.addInitScript((accountId) => {
-    const w = window as unknown as {__txs: unknown[]; __pactoraTestWallet: unknown};
-    w.__txs = [];
-    let hash = 0;
-    w.__pactoraTestWallet = {
-      accountId,
-      wallet: {
-        getAccounts: async () => [{accountId}],
-        signMessage: async (p: {signerId?: string}) => ({
-          accountId: p.signerId ?? accountId,
-          publicKey: 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp',
-          signature: 'c2ln',
-        }),
-        signAndSendTransactions: async (p: {transactions: {actions: {params?: {methodName?: string}}[]}[]}) =>
-          p.transactions.map((tx) => {
-            w.__txs.push(tx);
-            const method = tx.actions.find((a) => a.params?.methodName)?.params?.methodName;
-            return {
-              status: {SuccessValue: btoa(method === 'register_agent' ? '17' : '')},
-              transaction: {hash: `TXHASH${++hash}`},
-            };
+async function wallet(page: Page, account = 'olive.testnet', fundFails = false) {
+  await page.addInitScript(
+    ([accountId, fails]) => {
+      const w = window as unknown as {__txs: unknown[]; __pactoraTestWallet: unknown};
+      w.__txs = [];
+      let hash = 0;
+      w.__pactoraTestWallet = {
+        accountId,
+        wallet: {
+          getAccounts: async () => [{accountId}],
+          signMessage: async (p: {signerId?: string}) => ({
+            accountId: p.signerId ?? accountId,
+            publicKey: 'ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp',
+            signature: 'c2ln',
           }),
-      },
-    };
-  }, account);
+          signAndSendTransactions: async (p: {
+            transactions: {actions: {params?: {methodName?: string}}[]}[];
+          }) =>
+            p.transactions.map((tx) => {
+              w.__txs.push(tx);
+              const method = tx.actions.find((a) => a.params?.methodName)?.params?.methodName;
+              // A token that refuses the transfer (no balance): the chain's Failure.
+              if (fails && method === 'ft_transfer_call') {
+                return {
+                  status: {
+                    Failure: {
+                      ActionError: {kind: {FunctionCallError: {ExecutionError: 'not enough balance'}}},
+                    },
+                  },
+                  transaction: {hash: `TXHASH${++hash}`},
+                };
+              }
+              return {
+                status: {SuccessValue: btoa(method === 'register_agent' ? '17' : '')},
+                transaction: {hash: `TXHASH${++hash}`},
+              };
+            }),
+        },
+      };
+    },
+    [account, fundFails] as const,
+  );
 }
 
 type Tx = {
@@ -94,4 +110,19 @@ test('without a funding, nothing extra is signed; a bad amount is refused before
     (t) => t.actions.find((a) => a.params?.methodName)?.params?.methodName ?? '',
   );
   expect(methods).not.toContain('ft_transfer_call');
+});
+
+test('a first funding the chain refuses is reported, and the agent is still registered with its key', async ({
+  page,
+}) => {
+  await wallet(page, 'olive.testnet', true);
+  await fillForm(page);
+  await page.getByLabel('First funding (optional)').fill('1.5');
+  await page
+    .getByRole('button', {name: /Register/})
+    .last()
+    .click();
+  await expect(page.getByText(/ax_1{16}_2{32}/)).toBeVisible({timeout: 15_000});
+  await expect(page.getByText(/The first funding failed, so the agent.s purse is empty/)).toBeVisible();
+  await expect(page.getByText(/not enough balance/)).toBeVisible();
 });

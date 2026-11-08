@@ -17,6 +17,7 @@ import {
   fundTransaction,
   REGISTRATION_AMOUNTS,
   registerOnChain,
+  sendTransaction,
   signChallenge,
   type NearWallet,
 } from '@/lib/wallet';
@@ -91,6 +92,8 @@ export default function RegisterPage() {
   // F20: an optional first Fund deposit, signed right after register_agent assigns the id.
   const [fundAmount, setFundAmount] = useState('');
   const [funded, setFunded] = useState(false);
+  /** Why the first funding did not happen; the agent is registered either way. */
+  const [fundFailure, setFundFailure] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -217,16 +220,23 @@ export default function RegisterPage() {
         setOnChain(chain);
       }
 
-      // The first funding, now that the id exists (a Fund names it). If the
-      // owner refuses this one signature, the agent is still registered.
+      // The first funding, now that the id exists (a Fund names it). Its
+      // outcome is checked: a Fund the token refuses (no balance, no storage)
+      // must not read as done. If it fails or is refused, the agent is still
+      // registered and gets its key; the page says the purse is empty.
       if (fundBase && !funded && network) {
-        await wallet.signAndSendTransactions({
-          signerId: owner,
-          transactions: [
+        try {
+          await sendTransaction(
+            wallet,
+            owner,
             fundTransaction(network.contracts.PaymentToken, pactora, chain.chainAgentId, fundBase),
-          ],
-        });
-        setFunded(true);
+            'the first funding',
+          );
+          setFunded(true);
+          setFundFailure(null);
+        } catch (err) {
+          setFundFailure(err instanceof Error ? err.message : String(err));
+        }
       }
 
       setStage('record');
@@ -262,7 +272,9 @@ export default function RegisterPage() {
   }
 
   if (created) {
-    return <Done agent={created} txHashes={onChain?.txHashes ?? []} network={network} />;
+    return (
+      <Done agent={created} txHashes={onChain?.txHashes ?? []} network={network} fundFailure={fundFailure} />
+    );
   }
 
   return (
@@ -574,10 +586,12 @@ function Done({
   agent,
   txHashes,
   network,
+  fundFailure,
 }: {
   agent: RegisteredAgent;
   txHashes: string[];
   network: NetworkInfo | null;
+  fundFailure: string | null;
 }) {
   const [copied, setCopied] = useState<'no' | 'yes' | 'failed'>('no');
 
@@ -618,6 +632,13 @@ function Done({
         <h1 className="text-3xl font-semibold tracking-tight">Agent #{agent.agentId} registered</h1>
         <p className="text-sm text-muted">One thing left, and it cannot be done later.</p>
       </div>
+
+      {fundFailure && (
+        <Notice>
+          The first funding failed, so the agent&apos;s purse is empty: {fundFailure}. Fund it from its
+          profile once your account holds the tokens.
+        </Notice>
+      )}
 
       {/* The key is shown once and only a hash is stored, so this is the only
           moment it exists anywhere the person can read it. It gets the most

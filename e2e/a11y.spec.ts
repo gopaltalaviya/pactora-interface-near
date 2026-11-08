@@ -4,7 +4,8 @@ import {expect, test} from '@playwright/test';
 const RUN_ID = '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b';
 /** A listing and a job the mock API serves, for a visitor who is not signed in. */
 const LISTING_ID = 'lst-view';
-const JOB_ID = 'aaaaaaaa-0000-4000-8000-0000000000a1';
+// JOB(1) of the mock (e2e/mock-api.mjs): a job it serves, so the scan sees a real job page, not "not found".
+const JOB_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 
 /**
  * Every page through axe-core's WCAG 2.1 A/AA rules: contrast, names and

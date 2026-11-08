@@ -9,16 +9,18 @@ import {useSession} from '@/lib/session';
 /**
  * The header's link to /notifications with the unread count, for a signed-in
  * person. It asks again every 30 s and on every page change; nothing is
- * shown while signed out or for an account with no person record (the API
- * answers 403 for those, and there is nothing to notify).
+ * shown while signed out or for an account with no person record. Those are
+ * not asked at all: the API answers 403, which the browser logs as an error
+ * on every page an admin or reviewer without a person record opens.
  */
 export function NotificationsBell() {
-  const {status, authed} = useSession();
+  const {status, person, authed} = useSession();
+  const hasPerson = person !== null;
   const pathname = usePathname();
   const [unread, setUnread] = useState<number | null>(null);
 
   useEffect(() => {
-    if (status !== 'in') {
+    if (status !== 'in' || !hasPerson) {
       setUnread(null);
       return;
     }
@@ -35,7 +37,7 @@ export function NotificationsBell() {
       controller.abort();
       clearInterval(timer);
     };
-  }, [status, authed, pathname]);
+  }, [status, hasPerson, authed, pathname]);
 
   if (unread === null) return null;
   const badge = badgeText(unread);

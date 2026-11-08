@@ -285,6 +285,9 @@ const PEOPLE = {
   },
 };
 const personOf = (account) => {
+  // The feed's test accounts are people too: the real API has a feed only
+  // for an account with a person record, and the header asks only then.
+  if (isFeedPerson(account)) return {publicId: `p-${account}`, chainAgentId: '0', name: account};
   const p = PEOPLE[account];
   return p ? {publicId: p.publicId ?? `p-${p.agentId}`, chainAgentId: p.chainAgentId, name: p.name} : null;
 };
@@ -605,6 +608,14 @@ addJob(JOB(8), {
 addJob(JOB(9), {state: 'submitted', chainJobId: '5009', result: {answer: 'Slow.'}, behaviour: 'slow'});
 addJob(JOB(10), {state: 'submitted', chainJobId: '5010', result: {answer: 'Reverts.'}, behaviour: 'revert'});
 addJob(JOB(11), {state: 'created', chainJobId: null});
+// The indexer records the approval before the browser's confirm, and confirm
+// then fails (a 500): the job has moved on, and the page has no buttons left.
+addJob(JOB(19), {
+  state: 'submitted',
+  chainJobId: '5019',
+  result: {answer: 'Fast indexer.'},
+  behaviour: 'indexerFirst',
+});
 addJob(JOB(12), {state: 'created', chainJobId: '5012', signerOverride: 'someone.testnet'});
 addJob(JOB(13), {state: 'accepted', chainJobId: '5013'});
 addJob(JOB(14), {state: 'created', chainJobId: '5014'});
@@ -818,6 +829,10 @@ async function personActions(req, res, url, account) {
       'INVALID_STATE',
       'the transaction reverted: no matching event in a successful receipt',
     );
+  if (j.behaviour === 'indexerFirst') {
+    if (rule.from.includes(j.state)) transition(j, body.action, body.txHash);
+    return problem(res, 500, 'INTERNAL', 'could not record the confirmation');
+  }
   j.attempts = {...(j.attempts ?? {}), [body.txHash]: (j.attempts?.[body.txHash] ?? 0) + 1};
   if (j.behaviour === 'slow' && j.attempts[body.txHash] < 2)
     return problem(res, 409, 'INVALID_STATE', 'the transaction is not final yet', {retryAfter: 1});

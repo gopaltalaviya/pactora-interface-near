@@ -153,6 +153,22 @@ describe('runPersonAction', () => {
     expect(again.confirm).toHaveBeenCalledWith('ps_token', JOB, 'approve', HASH);
   });
 
+  it('keeps the hash for a re-check, never a re-sign, when the API cannot record a sent transaction (5xx, network)', async () => {
+    for (const failure of [
+      // As lib/api.ts throws them: a 5xx and an unreachable API carry no status.
+      new ApiError('INTERNAL', 'The API had a problem (500). Try again in a moment.'),
+      new ApiError('UNREACHABLE', 'The API is unreachable.'),
+      new TypeError('Failed to fetch'),
+    ]) {
+      const t = setup({confirm: () => failure});
+      const err = await runPersonAction(t.deps, JOB, 'approve').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PersonActionTimeout);
+      expect((err as PersonActionTimeout).txHash).toBe(HASH);
+      expect((err as Error).message).toMatch(/sent.*do not sign again/i);
+      expect(t.signAndSendTransactions).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it('does not poll a refusal that is final (reverted, wrong party)', async () => {
     const reverted = setup({confirm: () => new ApiError('INVALID_STATE', 'the transaction reverted', 409)});
     await expect(runPersonAction(reverted.deps, JOB, 'approve')).rejects.toThrow(/reverted/);

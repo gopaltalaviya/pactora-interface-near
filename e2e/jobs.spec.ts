@@ -545,6 +545,18 @@ test('client: a reverted transaction is reported at once, not polled, and not si
   expect(await methods(page)).toEqual(['approve']);
 });
 
+test('client: when the job moves on before the confirm is recorded, the action and its error stay on the page', async ({
+  page,
+}) => {
+  await signInAs(page, 'olive.testnet');
+  await page.goto(`/jobs/${await fresh(page, 'job', JOB(19))}`);
+  await page.getByRole('button', {name: 'Approve and pay'}).click();
+  // The job reloads as settled: "Your move" has nothing left to offer.
+  await expect(page.getByRole('button', {name: 'Approve and pay'})).toHaveCount(0, {timeout: 15_000});
+  await expect(page.getByTestId('action-error')).toContainText('Pactora could not record it');
+  await expect(page.getByRole('button', {name: 'Check again'})).toBeVisible();
+});
+
 test('client: a job chosen but not yet on chain is funded from its own page', async ({page}) => {
   await signInAs(page, 'olive.testnet');
   await page.goto(`/jobs/${await fresh(page, 'job', JOB(11))}`);

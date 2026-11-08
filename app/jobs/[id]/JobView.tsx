@@ -466,6 +466,16 @@ function Actions({
         </Card>
       )}
 
+      {/* The job can move on chain while an action is still being confirmed
+          (the indexer saw it first), and then "Your move" has no buttons and
+          disappears. The action's progress, its error and "Check again" must
+          not disappear with it. */}
+      {actions.length === 0 && (state.busy || state.pending !== null || state.error) && (
+        <Card title="Your last action" labelledBy="last-action">
+          <ActionFeedback state={state} recheck={() => void person.recheck()} />
+        </Card>
+      )}
+
       {state.done && (
         <Notice tone="live">
           <p role="status" data-testid="action-done">
