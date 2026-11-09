@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useEffect, useState} from 'react';
-import {badgeText, bellLabel, notifications} from '@/lib/notifications';
+import {badgeText, bellLabel, notifications, REFRESH_NOTIFICATIONS} from '@/lib/notifications';
 import {useSession} from '@/lib/session';
 
 /**
@@ -32,10 +32,15 @@ export function NotificationsBell() {
           if (!controller.signal.aborted) setUnread(null);
         });
     void read();
+    // Every 30 s, and at once after something the person did on this tab (a
+    // bid, an action, a read), so the count does not lag an action by half a minute.
     const timer = setInterval(() => void read(), 30_000);
+    const onRefresh = () => void read();
+    window.addEventListener(REFRESH_NOTIFICATIONS, onRefresh);
     return () => {
       controller.abort();
       clearInterval(timer);
+      window.removeEventListener(REFRESH_NOTIFICATIONS, onRefresh);
     };
   }, [status, hasPerson, authed, pathname]);
 

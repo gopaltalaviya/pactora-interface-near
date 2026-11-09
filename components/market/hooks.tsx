@@ -9,6 +9,7 @@ import {Skeleton} from '@/components/ui/States';
 import {api, type NetworkInfo} from '@/lib/api';
 import {errorText} from '@/lib/errors';
 import {market, type ConfirmedAction, type Me, type PersonAction, type PrepareExtra} from '@/lib/market';
+import {refreshNotifications} from '@/lib/notifications';
 import {confirmPersonAction, PersonActionTimeout, runPersonAction} from '@/lib/person-action';
 import {useSession} from '@/lib/session';
 import {signInHref} from '@/lib/signin-next';
@@ -162,6 +163,7 @@ export function usePersonAction(onDone?: (result: ConfirmedAction) => void) {
   const finish = useCallback((result: ConfirmedAction) => {
     setState({busy: false, status: 'Done.', error: null, pending: null, done: result});
     latest.current.onDone?.(result);
+    refreshNotifications();
   }, []);
 
   const fail = useCallback((err: unknown, jobId: string, action: PersonAction) => {

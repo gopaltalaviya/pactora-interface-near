@@ -25,9 +25,15 @@ describe('canStart', () => {
     expect(canStart(base)).toBe(true);
     expect(canStart({...base, provider: null})).toBe(false);
     expect(canStart({...base, standing: 'blocked'})).toBe(false);
-    for (const s of ['pending', 'approved', 'held', 'screening'] as const)
+    for (const s of ['pending', 'approved', 'screening'] as const)
       expect(canStart(withStatus(s)), s).toBe(false);
-    for (const s of ['rejected', 'expired'] as const) expect(canStart(withStatus(s)), s).toBe(true);
+    for (const s of ['rejected', 'expired', 'cancelled_cleared'] as const)
+      expect(canStart(withStatus(s)), s).toBe(true);
+  });
+
+  it('lets a person whose hold was cleared start, and not one still on hold (live audit 2026-11-09)', () => {
+    expect(canStart({...withStatus('held'), standing: 'hold'})).toBe(false);
+    expect(canStart({...withStatus('held'), standing: 'clear'})).toBe(true);
   });
 });
 

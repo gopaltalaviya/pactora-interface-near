@@ -3,7 +3,7 @@ import {expectNoBlockingViolations, MOCK_API, signInAs} from './helpers';
 
 /**
  * Notifications and the test-token faucet (docs/26 F10, F23), against the
- * mock: `nell-…` accounts have 25 notifications with 3 unread, `fay-…` have
+ * mock: `nell-…` accounts have 28 shown notifications with 6 unread, `fay-…` have
  * a faucet to claim from. Each test uses an account named after its browser,
  * reset first, so the browsers sharing the mock never share state.
  */
@@ -19,26 +19,28 @@ test('the header shows the unread count, and the page lists, pages and marks rea
   const account = await own(page, info, 'nell');
   await signInAs(page, account);
   const bell = page.getByTestId('notifications-bell');
-  await expect(bell).toHaveAttribute('aria-label', 'Notifications, 3 unread');
-  await expect(page.getByTestId('notifications-badge')).toHaveText('3');
+  await expect(bell).toHaveAttribute('aria-label', 'Notifications, 6 unread');
+  await expect(page.getByTestId('notifications-badge')).toHaveText('6');
 
   await bell.click();
   await expect(page).toHaveURL(/\/notifications$/);
   await expect(page.getByRole('heading', {level: 1})).toHaveText('Notifications');
-  const list = page.getByRole('list', {name: 'Notifications'});
+  // Grouped by job or listing since 2026-11-09: count the items across the groups.
+  const list = page.getByTestId('notification-groups');
   await expect(list.getByRole('listitem')).toHaveCount(20);
   await expect(page.getByTestId('notification-25')).toHaveAttribute('data-read', 'no');
   await expect(page.getByTestId('notification-22')).toHaveAttribute('data-read', 'yes');
   await expect(page.getByTestId('notification-25')).toContainText('— you are the');
-  await expect(page.getByTestId('notification-25').getByRole('link', {name: 'Open the job'})).toHaveAttribute(
+  // The link sits on the group's heading, once for every item about that job.
+  await expect(list.getByRole('link', {name: 'Open the job'}).first()).toHaveAttribute(
     'href',
     /^\/jobs\/[0-9a-f-]{36}$/,
   );
   // Opening the page does not mark anything read.
-  await expect(page.getByTestId('unread-count')).toHaveText('3 unread');
+  await expect(page.getByTestId('unread-count')).toHaveText('6 unread');
 
   await page.getByRole('button', {name: 'Older'}).click();
-  await expect(list.getByRole('listitem')).toHaveCount(25);
+  await expect(list.getByRole('listitem')).toHaveCount(28);
   await expect(page.getByRole('button', {name: 'Older'})).toHaveCount(0);
 
   await page.getByRole('button', {name: 'Mark all as read'}).click();
@@ -75,7 +77,7 @@ test('an account with no person record gets no bell', async ({page}) => {
 test('a person with nothing yet sees an empty page that says what will appear', async ({page}) => {
   await signInAs(page, 'nora.testnet');
   await page.goto('/notifications');
-  await expect(page.getByText('Nothing yet')).toBeVisible();
+  await expect(page.getByText('No notifications yet')).toBeVisible();
 });
 
 test('the faucet: claim once, see the transaction, and be told to come back tomorrow', async ({
@@ -101,6 +103,6 @@ test('the notifications page passes an accessibility scan', async ({page}, info)
   const account = await own(page, info, 'nell');
   await signInAs(page, account);
   await page.goto('/notifications');
-  await expect(page.getByRole('list', {name: 'Notifications'})).toBeVisible();
+  await expect(page.getByTestId('notification-groups')).toBeVisible();
   await expectNoBlockingViolations(page, 'notifications');
 });

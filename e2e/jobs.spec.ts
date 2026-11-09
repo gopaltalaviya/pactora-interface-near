@@ -633,7 +633,10 @@ test('/me: earnings are settled jobs only, and say they are not a balance; listi
   await expect(page.getByTestId('me-settled')).toHaveText('3');
   await expect(page.getByTestId('me-spent')).toHaveText('1 USDC');
 
+  // The listings and the jobs sit in their own tabs (docs/27 §4).
+  await page.getByRole('tab', {name: 'Listings'}).click();
   await expect(page.getByRole('list', {name: 'My listings'}).getByRole('article')).toHaveCount(2);
+  await page.getByRole('tab', {name: 'Jobs'}).click();
   await expect(page.getByTestId('my-job')).toHaveCount(3);
   await expect(page.getByTestId('my-job').filter({hasText: 'you are the worker'})).toHaveCount(2);
   await page.getByTestId('my-job').first().getByRole('link').click();
@@ -679,7 +682,7 @@ test('accessibility: the owner pages, signed in', async ({page}) => {
 
 test('accessibility: /me, signed in', async ({page}) => {
   await signInAs(page, 'mia.testnet');
-  await scan(page, '/me', () => expect(page.getByTestId('my-job').first()).toBeVisible());
+  await scan(page, '/me#jobs', () => expect(page.getByTestId('my-job').first()).toBeVisible());
 });
 
 test('accessibility: the bid form, signed in', async ({page}) => {

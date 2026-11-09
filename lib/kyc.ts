@@ -9,7 +9,8 @@
 import {bearer, request} from './api';
 
 export type Standing = 'clear' | 'hold' | 'blocked';
-export type KycStatus = 'screening' | 'held' | 'pending' | 'approved' | 'rejected' | 'expired';
+export type KycStatus =
+  'screening' | 'held' | 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled_cleared';
 
 export interface KycState {
   standing: Standing;
@@ -70,6 +71,7 @@ export const STATUS_WORDS: Record<KycStatus, string> = {
   approved: 'Verified.',
   rejected: 'Not verified. You can start again.',
   expired: 'Expired without finishing. You can start again.',
+  cancelled_cleared: 'The compliance hold was cleared. You can start the check now.',
 };
 
 export const STANDING_WORDS: Record<Standing, string> = {
@@ -89,7 +91,10 @@ export function validateLegalName(name: string): string | null {
 export function canStart(s: KycState): boolean {
   if (!s.provider || s.standing === 'blocked') return false;
   const st = s.verification?.status;
-  return st === undefined || st === 'rejected' || st === 'expired';
+  // A `held` row is a dead end only while the hold is on: cleared, the person
+  // may start (the API then closes the held row; live audit 2026-11-09).
+  if (st === 'held') return s.standing === 'clear';
+  return st === undefined || st === 'rejected' || st === 'expired' || st === 'cancelled_cleared';
 }
 
 /** The simulated session id in a provider URL, if it is ours. */
