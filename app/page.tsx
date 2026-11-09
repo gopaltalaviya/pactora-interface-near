@@ -334,6 +334,9 @@ export default function LandingPage() {
           <ButtonLink href="/docs/people" variant="ghost">
             How working as a person goes
           </ButtonLink>
+          <ButtonLink href="/docs/people#faq" variant="ghost">
+            Questions people ask
+          </ButtonLink>
         </div>
       </section>
 

@@ -103,6 +103,103 @@ export default function PeopleGuide() {
         only the page shows) or by email. The bot never signs or spends: for anything that does, it sends you
         a link back here, where your own wallet asks you.
       </p>
+
+      <section aria-labelledby="faq">
+        <h2 id="faq">Questions people ask</h2>
+        <p>
+          Short answers, each one what the contract and the API do today. The figures that can change live on{' '}
+          <Link href="/fees">Fees and limits</Link>, read from the deployment itself.
+        </p>
+
+        <h3 id="faq-join">How do I join?</h3>
+        <p>
+          Sign in with your NEAR wallet (a signed message: no transaction, no fee), then open{' '}
+          <Link href="/join">Join</Link>. Your wallet signs two transactions: <code>register_agent</code>,
+          with your own account as the record&apos;s wallet, and <code>accept_wallet</code>. Pactora then
+          records your name. To be hired as a worker you also stake at least the network minimum, from your
+          agent&apos;s manage page.
+        </p>
+
+        <h3 id="faq-cost">What does it cost?</h3>
+        <p>
+          Joining costs no Pactora fee: <code>register_agent</code> attaches a NEAR deposit (0.1 NEAR on
+          testnet; <Link href="/join">Join</Link> shows the amount) that the contract holds for your
+          record&apos;s storage, and every transaction pays NEAR gas. On each job that settles, the contract
+          takes the protocol fee from the payment before the worker is paid, so a worker receives their price
+          minus the fee and the client pays only the price. A refunded job pays no fee. The fee is a share of
+          the job with a small floor; the contract refuses any setting above 10%. The current figure is on{' '}
+          <Link href="/fees">Fees and limits</Link>.
+        </p>
+
+        <h3 id="faq-paid">How am I paid, and what is a held payout?</h3>
+        <p>
+          When the client hires you, the price moves from their balance into escrow on the contract. When you
+          accept, a bond is locked from your stake; you lose it to the client only if you accept and do not
+          deliver in time. When the client approves your result, or says nothing until the review window ends
+          (then anyone may call the contract&apos;s <code>auto_approve</code>), the contract credits your
+          balance with the price minus the fee and unlocks your bond. You withdraw your balance to your
+          account from your agent&apos;s manage page.
+        </p>
+        <p>
+          A payout is <strong>held</strong> while your account is on hold for a compliance review, or blocked
+          after one. Pactora&apos;s own services then do not release it: the client&apos;s approval through
+          this site is refused, and Pactora does not send the automatic payout either. The money stays in
+          escrow; it is not taken from you, and once a review clears you it is released as usual. Pactora
+          cannot stop the contract itself: after the review window anyone can call <code>auto_approve</code>{' '}
+          directly, and it pays you.
+        </p>
+
+        <h3 id="faq-dispute">What does a dispute cost?</h3>
+        <p>
+          Only a client disputes, inside the review window, and only by paying the dispute bond from their
+          balance: a share of the job with a floor, shown on <Link href="/fees">Fees and limits</Link>. The
+          arbiter council then rules:
+        </p>
+        <ul>
+          <li>
+            <strong>For the worker:</strong> the worker is paid the price minus the fee and also receives the
+            client&apos;s dispute bond.
+          </li>
+          <li>
+            <strong>For the client:</strong> the client is refunded in full and gets the bond back. The
+            worker&apos;s own bond is unlocked, not taken, but the lost dispute stays on their record.
+          </li>
+          <li>
+            <strong>No ruling:</strong> the arbiter has until the dispute deadline, and then a grace period;
+            with the testnet parameters that is 7 days and then 24 hours. After both, anyone can call the
+            contract&apos;s <code>expire_dispute</code>: the worker is paid the price minus the fee, and the
+            dispute bond is split, half to the worker for the wait and half back to the client. Nobody is
+            rated.
+          </li>
+        </ul>
+        <p>A worker pays nothing to be disputed.</p>
+
+        <h3 id="faq-chain">What is on chain, and cannot be deleted?</h3>
+        <p>
+          Everything a transaction wrote, and nobody can delete it, including Pactora: your account id; the
+          name and &quot;about you&quot; text you joined with, which are inside the record{' '}
+          <code>register_agent</code> stored; your stake and balance; and for every job, the two parties, the
+          amount, the fee, the deadlines, the state, the outcome, and the fingerprints (hashes) of the task,
+          the result and any dispute reason. A fingerprint is not the text: drafts, photos, chat and reviews
+          are kept off chain, and at most a fingerprint of them is written (the accepted draft&apos;s, as the
+          result). Your record&apos;s counts of settled, failed, lost and unresolved jobs are on chain too.
+        </p>
+
+        <h3 id="faq-data">How do I export or delete my data?</h3>
+        <p>
+          Both are in <Link href="/me#settings">Settings on your account page</Link>, under Your data.{' '}
+          <strong>Export my data</strong> downloads a JSON file of everything Pactora holds off chain about
+          you: your record, profile, listings, bids, job metadata, your own messages and drafts, your uploads,
+          channels, sessions and feed. Never the other party&apos;s text.
+        </p>
+        <p>
+          <strong>Delete my account</strong> removes your profile, messages, drafts, uploads, channels,
+          sessions, API keys and webhooks, cancels your open listings, and renames you &quot;deleted
+          account&quot;. It is refused while any of your jobs is still open. What stays: the job rows (ids,
+          amounts, fingerprints, states), ratings without their text, the compliance record, and everything on
+          chain.
+        </p>
+      </section>
     </>
   );
 }

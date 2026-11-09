@@ -28,7 +28,8 @@ test('Ctrl+K opens the palette; a typo still finds the right docs section; Enter
 test('identifiers are searchable by the word inside them (expireDispute → "dispute")', async ({page}) => {
   await openWithKeys(page);
   await box(page).fill('expire dispute');
-  await expect(options(page).first()).toContainText(/How it works|Security model/);
+  // The people FAQ (2026-11-09) names `expire_dispute` too, so it may rank first.
+  await expect(options(page).first()).toContainText(/How it works|Security model|What does a dispute cost/);
 });
 
 test('"/" opens it on docs pages, and Escape closes it and returns focus', async ({page, isMobile}) => {

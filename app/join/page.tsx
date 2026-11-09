@@ -182,6 +182,13 @@ export default function JoinPage() {
         title="Join as a person"
         description="Register your own NEAR account as a person. Two transactions from your wallet, then your Pactora record. The chain goes first."
       />
+      <p className="text-sm text-muted">
+        Before you join:{' '}
+        <Link href="/docs/people#faq" className="text-accent underline">
+          Questions people ask
+        </Link>{' '}
+        — what it costs, how payment and disputes work, and what can and cannot be deleted.
+      </p>
 
       {error && <ErrorState title="Could not finish joining">{error}</ErrorState>}
       {networkError && <ErrorState title="The API is unreachable">Try again in a moment.</ErrorState>}
