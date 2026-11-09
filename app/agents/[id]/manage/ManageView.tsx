@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {useCallback, useEffect, useState, type ReactNode} from 'react';
+import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react';
 import {Badge} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card, Stat} from '@/components/ui/Card';
@@ -14,6 +14,7 @@ import {safeHref} from '@/lib/links';
 import {displayAccount, formatYocto, parseUnits} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {signInHref} from '@/lib/signin-next';
+import {AgentEditCard, KeyCard, ReissueCard, WebhooksCard} from '@/components/market/AgentAdmin';
 import {
   cancelUnstakeTransaction,
   completeUnstakeTransaction,
@@ -59,6 +60,20 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<Done | null>(null);
+  // The API's own id for this agent, when the marketplace lists it (the key routes need it).
+  const [apiAgentId, setApiAgentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .agents({limit: 200}, controller.signal)
+      .then((list) => {
+        const found = list.find((a) => String(a.chainAgentId ?? '') === chainAgentId);
+        if (found) setApiAgentId(String(found.agentId));
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [chainAgentId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -118,7 +133,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   );
 
   const back = {href: '/agents', label: 'Marketplace'};
-  const title = `Agent #${chainAgentId}`;
+  const title = `On-chain agent ${chainAgentId}`;
 
   if (loadError && !data) {
     return (
@@ -221,11 +236,29 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
         <Notice>
           {session.status === 'in'
             ? `You are signed in as ${displayAccount(session.account ?? '')}, which does not own this agent. You can read it; only ${displayAccount(agent.owner)} can change it.`
-            : 'You are not signed in. Sign in with the owner’s account to fund or change this agent.'}{' '}
+            : 'You are not signed in. Sign in with the owner’s account to fund or change this agent: one signature, no transaction.'}{' '}
           {session.status !== 'in' && (
-            <Link className="underline" href={signInHref(pathname)}>
-              Sign in
-            </Link>
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={busy === 'Sign in'}
+                disabled={busy !== null}
+                onClick={() => {
+                  setBusy('Sign in');
+                  setError(null);
+                  session
+                    .signIn()
+                    .catch((err: unknown) => setError(message(err)))
+                    .finally(() => setBusy(null));
+                }}
+              >
+                Sign in with your wallet
+              </Button>{' '}
+              <Link className="underline" href={signInHref(pathname)}>
+                or on the sign-in page
+              </Link>
+            </>
           )}
         </Notice>
       ) : null}
@@ -390,6 +423,20 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
         <Notice>The API does not name the payment token yet, so funding and staking are off.</Notice>
       )}
 
+      {isOwner && (
+        <section aria-labelledby="credentials" className="space-y-4">
+          <h2 id="credentials" className="text-lg font-semibold tracking-tight">
+            Credentials and record
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <ReissueCard chainAgentId={chainAgentId} suggestedAgentId={apiAgentId} />
+            <KeyCard />
+            <AgentEditCard agentId={apiAgentId ?? chainAgentId} decimals={decimals} symbol={symbol} />
+            <WebhooksCard />
+          </div>
+        </section>
+      )}
+
       <p className="text-xs text-muted">
         Every action is a transaction your wallet shows before it signs. Testnet only.{' '}
         <ButtonLink href="/status" size="sm" variant="ghost">
@@ -421,6 +468,12 @@ function AmountForm({
   const [text, setText] = useState('');
   const base = text.trim() === '' ? null : parseUnits(text, decimals);
   const invalid = text.trim() !== '' && (base === null || base === '0');
+  // Cleared once the transaction went out: a stale amount under "Fund sent." read as not sent (L18).
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !busy) setText('');
+    wasBusy.current = busy;
+  }, [busy]);
   return (
     <form
       className="space-y-3"

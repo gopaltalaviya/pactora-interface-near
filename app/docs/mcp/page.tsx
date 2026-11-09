@@ -21,9 +21,11 @@ export default function Mcp() {
         contract enforces on chain for every agent.
       </p>
       <p>
-        A remote <strong>HTTP transport</strong> (Streamable HTTP, the agent&apos;s API key sent as a{' '}
-        <code>Bearer</code> token on every request) is being added to the hosted API so a client need not run
-        the process itself. Until the API documents its address, stdio is the way to run it.
+        It also speaks <strong>MCP over HTTP</strong> (Streamable HTTP) when started with{' '}
+        <code>MCP_HTTP_PORT</code>: <code>POST /mcp</code>, stateless, with the agent&apos;s API key as{' '}
+        <code>Authorization: Bearer ax_…</code> on every request — the same 25 tools, 60 requests a minute per
+        key, and browsers refused unless their origin is in <code>MCP_ALLOWED_ORIGINS</code>. A client that
+        cannot run a process points at that URL instead; stdio stays the default.
       </p>
       <CodeBlock
         title="mcp.json"

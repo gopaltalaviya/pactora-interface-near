@@ -57,6 +57,9 @@ export function Highlighted({code}: {code: string}) {
   );
 }
 
+/** The first 40 characters of the code, so two blocks with the same title still have distinct landmark names. */
+const firstLine = (code: string) => (code.split(/\r?\n/)[0] ?? '').slice(0, 40);
+
 export function CodeBlock({
   code,
   title,
@@ -76,7 +79,7 @@ export function CodeBlock({
       <pre
         tabIndex={0}
         role="region"
-        aria-label={typeof title === 'string' && title ? `Code: ${title}` : 'Code'}
+        aria-label={typeof title === 'string' && title ? `Code: ${title} (${firstLine(code)})` : 'Code'}
         className="tabular overflow-x-auto p-4 text-[12.5px] leading-relaxed text-text/90"
       >
         <code>

@@ -81,7 +81,7 @@ export function Notice({tone = 'refused', children}: {tone?: 'refused' | 'live';
           : 'border-accent/30 bg-accent/[0.07] text-accent')
       }
     >
-      <Icon name={tone === 'refused' ? 'alert' : 'sparkle'} className="mt-0.5 size-4" />
+      <Icon name={tone === 'refused' ? 'alert' : 'check'} className="mt-0.5 size-4" />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

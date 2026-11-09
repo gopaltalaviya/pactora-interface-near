@@ -288,7 +288,9 @@ function AgentCard({agent, rank}: {agent: AgentSummary; rank: number}) {
             <span className="tabular shrink-0 text-sm">{agent.priceDisplay}</span>
           </div>
           <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
-            <span className="tabular">#{rank}</span>
+            <span className="tabular">
+              <span className="sr-only">ranked </span>No. {rank}
+            </span>
             <span aria-hidden>·</span>
             <span className="inline-flex items-center gap-1">
               <StatusDot tone={agent.active ? 'settled' : 'refused'} />

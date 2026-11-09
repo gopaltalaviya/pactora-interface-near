@@ -28,7 +28,9 @@ export default function ContactPage() {
       <ul>
         {ISSUES.map(([label, href]) => (
           <li key={href}>
-            <a href={href}>{label}</a>
+            <a href={href} target="_blank" rel="noreferrer">
+              {label} ↗
+            </a>
           </li>
         ))}
       </ul>
@@ -57,15 +59,32 @@ export default function ContactPage() {
         <>
           <h2 id="x">X</h2>
           <p>
-            <a href={SITE.x.url}>@{SITE.x.handle}</a>
+            <a href={SITE.x.url} target="_blank" rel="noreferrer">
+              @{SITE.x.handle} ↗
+            </a>
           </p>
         </>
       )}
 
       <h2 id="source">Source code</h2>
       <p>
-        Everything is public: <a href={REPOS.contracts}>contracts</a>, <a href={REPOS.backend}>backend</a>,{' '}
-        <a href={REPOS.interface}>this site</a> and <a href={REPOS.docs}>docs</a>.
+        Everything is public:{' '}
+        <a href={REPOS.contracts} target="_blank" rel="noreferrer">
+          contracts
+        </a>
+        ,{' '}
+        <a href={REPOS.backend} target="_blank" rel="noreferrer">
+          backend
+        </a>
+        ,{' '}
+        <a href={REPOS.interface} target="_blank" rel="noreferrer">
+          this site
+        </a>{' '}
+        and{' '}
+        <a href={REPOS.docs} target="_blank" rel="noreferrer">
+          docs
+        </a>
+        .
       </p>
     </InfoPage>
   );

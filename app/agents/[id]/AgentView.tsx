@@ -10,6 +10,7 @@ import {Monogram} from '@/components/ui/Monogram';
 import {CountUp} from '@/components/ui/Motion';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {TrustCard} from '@/components/TrustCard';
+import {ReportButton} from '@/components/market/Report';
 import {ErrorState, Loading, Skeleton} from '@/components/ui/States';
 import {ApiError, api, type AgentSummary, type NetworkInfo, type SkillStat} from '@/lib/api';
 import {safeHref} from '@/lib/links';
@@ -125,7 +126,9 @@ export function AgentView({agentId}: {agentId: number}) {
         eyebrow={`Agent #${agent.agentId}`}
         title={
           <span className="flex items-center gap-4">
-            <Monogram name={agent.name} size="size-12" />
+            <span aria-hidden>
+              <Monogram name={agent.name} size="size-12" />
+            </span>
             <span className="min-w-0 [overflow-wrap:anywhere]">{agent.name}</span>
           </span>
         }
@@ -199,6 +202,9 @@ export function AgentView({agentId}: {agentId: number}) {
       </div>
 
       <TrustCard agentId={agent.agentId} />
+      <div className="flex justify-end">
+        <ReportButton targetType="agent" targetId={String(agent.agentId)} what="this agent" />
+      </div>
 
       {agent.skills && agent.skills.length > 0 && <SkillTable skills={agent.skills} />}
 
@@ -219,11 +225,17 @@ export function AgentView({agentId}: {agentId: number}) {
             </dd>
           </div>
           <div className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:gap-3">
-            <dt className="w-32 shrink-0 text-muted">Pactora agent id</dt>
+            <dt className="w-32 shrink-0 text-muted">On-chain id</dt>
             <dd className="tabular flex min-w-0 items-center gap-2">
               {agent.chainAgentId !== null && agent.chainAgentId !== undefined ? (
                 <>
-                  <span>#{String(agent.chainAgentId)}</span>
+                  <span>
+                    on-chain id {String(agent.chainAgentId)}
+                    <span className="text-muted">
+                      {' '}
+                      (the contract&apos;s number; #{agent.agentId} is its id here)
+                    </span>
+                  </span>
                   {registryHref && (
                     <a
                       href={registryHref}
@@ -265,7 +277,7 @@ function SkillTable({skills}: {skills: SkillStat[]}) {
         When a job asks for a skill, the marketplace and the orchestrator rank on the record in that skill
         alone, counted from the same settled payments.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Record by skill, scrollable">
         <table aria-label="Record by skill" className="w-full text-left text-sm">
           <thead className="text-[11px] uppercase tracking-wider text-muted">
             <tr>

@@ -282,10 +282,17 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>
-            Agent profiles, API key hashes, jobs, runs, payments, disputes, job and run history, token
-            transfers, signer records:
+            Agent profiles, API key hashes, jobs, runs, payments, disputes, token transfers, signer records:
           </strong>{' '}
-          no automatic deletion today. We keep them while the Service runs. <P>[DECIDE A RETENTION PERIOD]</P>
+          kept while the Service runs; a deleted account&apos;s rows are scrubbed as described in section 5.{' '}
+          <P>[DECIDE A RETENTION PERIOD]</P>
+        </li>
+        <li>
+          <strong>Evidence photos and the job conversation:</strong> 180 days after the job settles or is
+          refunded, then purged (a dispute&apos;s notes and photos follow the same rule).{' '}
+          <strong>Drafts:</strong> 90 days after settlement. <strong>The job event log:</strong> 365 days.{' '}
+          <strong>Read notifications:</strong> 90 days. <strong>Sessions:</strong> 7 days at most, and sooner
+          when you sign out or your keys change.
         </li>
         <li>
           <strong>Server logs:</strong> rotated by size: each service keeps at most 5 × 10 MB, oldest dropped
@@ -334,9 +341,17 @@ export default function PrivacyPage() {
           yourself.
         </li>
         <li>
-          <strong>Delete:</strong> we can delete or remove data that is only in our database, where the law
-          allows and where we do not need it for security, legal or accounting reasons. There is no
-          self-service delete today. <P>[DESCRIBE THE DELETION PROCESS]</P>
+          <strong>Export:</strong> a signed-in person downloads everything we hold about them as one JSON file
+          from <Link href="/me#settings">their account page</Link> (&quot;Your data&quot;): record, profile,
+          listings, bids, jobs (metadata, never the other party&apos;s text), their own messages and drafts,
+          their uploads, channels, sessions and feed.
+        </li>
+        <li>
+          <strong>Delete:</strong> from the same card, in two steps. We remove the profile, messages, drafts,
+          uploads, channels, sessions, API keys and webhooks, cancel open listings and rename the record
+          &quot;deleted account&quot;. Deletion is refused while any of your jobs is still open; it names
+          them. We keep job rows (ids, amounts, hashes, states), the job event log, ratings without their
+          text, and the standing and compliance audit, where the law requires or security needs them.
         </li>
         <li>
           <strong>We cannot delete or change anything on the blockchain.</strong>
