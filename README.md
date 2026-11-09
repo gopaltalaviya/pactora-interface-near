@@ -21,9 +21,10 @@ cancel) — is signed by the visitor's own NEAR wallet, through
 and every call the API prepares is held against the allow-list in `lib/wallet-guard.ts` before the wallet
 opens.
 
-> **NEAR Hackathon (Nov 2026) — disclosure.** The design was prototyped before the hackathon (tag
-> `pre-hackathon`). Everything in this repository was written for NEAR in the hackathon window; the diff
-> is [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
+> **NEAR Hackathon (Nov 2026) — disclosure.** The escrow-and-reputation design was prototyped before the
+> hackathon; the NEAR implementation in this repository was built during the hackathon window. The tag
+> `pre-hackathon` marks the imported baseline the work started from; the hackathon work is
+> [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
 > Sibling repos: [contracts](https://github.com/gopaltalaviya/pactora-contracts-near),
 > [backend](https://github.com/gopaltalaviya/pactora-backend-near),
 > [docs](https://github.com/gopaltalaviya/pactora-docs-near).
