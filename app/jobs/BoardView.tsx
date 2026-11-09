@@ -1,5 +1,6 @@
 'use client';
 
+import {useRouter, useSearchParams} from 'next/navigation';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {errorText, useNetwork} from '@/components/market/hooks';
 import {ListingCard} from '@/components/market/ListingCard';
@@ -29,13 +30,17 @@ const PAGE = 12;
 export function BoardView() {
   const session = useSession();
   const token = useNetwork();
+  const params = useSearchParams();
+  const router = useRouter();
   const [category, setCategory] = useState<Category | ''>('');
   const [mode, setMode] = useState<InteractionMode | ''>('');
   const [skill, setSkill] = useState('');
   const [location, setLocation] = useState('');
+  // The text search (`q`, 2026-11-09) is in the URL, so a search can be linked and the back button keeps it.
+  const [q, setQ] = useState(params.get('q') ?? '');
   const [matchMe, setMatchMe] = useState(false);
   // Text filters wait for a pause in typing before they ask the server.
-  const [typed, setTyped] = useState({skill: '', location: ''});
+  const [typed, setTyped] = useState({skill: '', location: '', q: (params.get('q') ?? '').trim()});
   const [listings, setListings] = useState<Listing[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,9 +54,18 @@ export function BoardView() {
   const {authed} = session;
 
   useEffect(() => {
-    const t = setTimeout(() => setTyped({skill: skill.trim(), location: location.trim()}), 300);
+    const t = setTimeout(
+      () => setTyped({skill: skill.trim(), location: location.trim(), q: q.trim().slice(0, 100)}),
+      300,
+    );
     return () => clearTimeout(t);
-  }, [skill, location]);
+  }, [skill, location, q]);
+
+  useEffect(() => {
+    const current = new URLSearchParams(window.location.search).get('q') ?? '';
+    if (typed.q === current) return;
+    router.replace(typed.q ? `/jobs?q=${encodeURIComponent(typed.q)}` : '/jobs', {scroll: false});
+  }, [typed.q, router]);
 
   const query = useCallback(
     (cursor?: string): ListingQuery => ({
@@ -59,6 +73,7 @@ export function BoardView() {
       ...(mode ? {interactionMode: mode} : {}),
       ...(typed.skill ? {skill: typed.skill} : {}),
       ...(typed.location ? {location: typed.location} : {}),
+      ...(typed.q ? {q: typed.q} : {}),
       ...(matchMe && signedIn ? {match: 'me' as const} : {}),
       limit: PAGE,
       ...(cursor ? {cursor} : {}),
@@ -108,7 +123,9 @@ export function BoardView() {
     }
   }
 
-  const filtered = Boolean(category || mode || typed.skill || typed.location || (matchMe && signedIn));
+  const filtered = Boolean(
+    category || mode || typed.skill || typed.location || typed.q || (matchMe && signedIn),
+  );
 
   return (
     <div className="space-y-6">
@@ -124,6 +141,24 @@ export function BoardView() {
         aria-label="Filter listings"
         className="grid gap-4 rounded-xl border border-edge bg-surface/80 p-4 sm:grid-cols-2 lg:grid-cols-4"
       >
+        <div className="sm:col-span-2 lg:col-span-4">
+          <Field
+            label="Search"
+            htmlFor="f-q"
+            hint="Words in the title, description or skills; quote a phrase, minus a word to leave it out."
+          >
+            <TextInput
+              id="f-q"
+              type="search"
+              icon="search"
+              value={q}
+              maxLength={100}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="e.g. shopfront photos"
+              autoComplete="off"
+            />
+          </Field>
+        </div>
         <Field label="Category" htmlFor="f-category">
           <Select
             id="f-category"
@@ -173,7 +208,7 @@ export function BoardView() {
               checked={matchMe && signedIn}
               disabled={!signedIn}
               onChange={(e) => setMatchMe(e.target.checked)}
-              className="size-4"
+              className="size-6 accent-[var(--color-accent)]"
             />
             Matches me
           </label>

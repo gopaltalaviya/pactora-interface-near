@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
+import {useRouter, useSearchParams} from 'next/navigation';
 import {errorText} from '@/components/market/hooks';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Button} from '@/components/ui/Button';
@@ -22,18 +23,41 @@ import {
  * agents. Search is by name and headline; the API pages it 20 at a time.
  */
 export function DirectoryView() {
-  const [q, setQ] = useState('');
-  const [query, setQuery] = useState('');
+  // The search is in the URL (`?q=`), so a result can be linked and the back button keeps it.
+  const params = useSearchParams();
+  const router = useRouter();
+  const initialQ = params.get('q') ?? '';
+  const [q, setQ] = useState(initialQ);
+  const [query, setQuery] = useState(initialQ);
   const [kind, setKind] = useState<ProfileKind | ''>('');
   const [sort, setSort] = useState<DirectorySort>('rating');
+  const [available, setAvailable] = useState(params.get('available') === 'true');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<DirectoryPage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const next = new URLSearchParams();
+    if (query) next.set('q', query);
+    if (available) next.set('available', 'true');
+    const qs = next.toString();
+    const current = window.location.search.replace(/^\?/, '');
+    if (qs !== current) router.replace(`/people${qs ? `?${qs}` : ''}`, {scroll: false});
+  }, [query, available, router]);
+
+  useEffect(() => {
     const controller = new AbortController();
     profiles
-      .directory({...(query ? {q: query} : {}), ...(kind ? {kind} : {}), sort, page}, controller.signal)
+      .directory(
+        {
+          ...(query ? {q: query} : {}),
+          ...(kind ? {kind} : {}),
+          ...(available ? {available: true} : {}),
+          sort,
+          page,
+        },
+        controller.signal,
+      )
       .then((d) => {
         setData(d);
         setError(null);
@@ -42,7 +66,7 @@ export function DirectoryView() {
         if (!controller.signal.aborted) setError(errorText(err));
       });
     return () => controller.abort();
-  }, [query, kind, sort, page]);
+  }, [query, kind, sort, page, available]);
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
@@ -64,7 +88,13 @@ export function DirectoryView() {
         }}
       >
         <Field label="Name or headline" htmlFor="dir-q">
-          <TextInput id="dir-q" value={q} maxLength={100} onChange={(e) => setQ(e.target.value)} />
+          <TextInput
+            id="dir-q"
+            type="search"
+            value={q}
+            maxLength={100}
+            onChange={(e) => setQ(e.target.value)}
+          />
         </Field>
         <Field label="Who" htmlFor="dir-kind">
           <Select
@@ -95,6 +125,18 @@ export function DirectoryView() {
           </Select>
         </Field>
         <Button type="submit">Search</Button>
+        <label className="inline-flex items-center gap-3 text-sm sm:col-span-4">
+          <input
+            type="checkbox"
+            className="size-6 accent-[var(--color-accent)]"
+            checked={available}
+            onChange={(e) => {
+              setPage(1);
+              setAvailable(e.target.checked);
+            }}
+          />
+          Open to work only
+        </label>
       </form>
 
       {error && !data ? (
@@ -120,9 +162,12 @@ export function DirectoryView() {
                   >
                     {p.displayName}
                   </Link>
-                  <Badge tone={p.kind === 'person' ? 'live' : 'chain'}>
-                    {p.kind === 'person' ? 'Person' : 'Agent'}
-                  </Badge>
+                  <span className="flex items-center gap-1.5">
+                    {p.availability && <Badge tone="settled">Open to work</Badge>}
+                    <Badge tone={p.kind === 'person' ? 'live' : 'chain'}>
+                      {p.kind === 'person' ? 'Person' : 'Agent'}
+                    </Badge>
+                  </span>
                 </div>
                 {p.headline && <p className="mt-1 text-sm text-muted">{p.headline}</p>}
                 <p className="mt-2 text-sm">
@@ -131,9 +176,9 @@ export function DirectoryView() {
                   </span>
                   {ratingText(p.rating)} · {p.settledJobs} settled job{p.settledJobs === 1 ? '' : 's'}
                 </p>
-                {p.capabilities.length > 0 && (
+                {(p.skills?.length || p.capabilities.length) > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {p.capabilities.slice(0, 6).map((c) => (
+                    {[...new Set([...(p.skills ?? []), ...p.capabilities])].slice(0, 6).map((c) => (
                       <Tag key={c}>{c}</Tag>
                     ))}
                   </div>

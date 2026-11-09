@@ -14,7 +14,7 @@
  * that contains the whole query as a phrase gets a bonus.
  */
 
-export type DocKind = 'doc' | 'page' | 'agent' | 'action';
+export type DocKind = 'doc' | 'page' | 'agent' | 'action' | 'listing' | 'person';
 
 export interface SearchDoc {
   id: string;
@@ -192,7 +192,14 @@ function near(terms: string[], words: string[], span = 10): boolean {
 }
 
 const FIELD_WEIGHT = {title: 6, heading: 4, keywords: 3, body: 1};
-const KIND_BONUS: Record<DocKind, number> = {action: 0.6, page: 0.4, doc: 0, agent: 0.2};
+const KIND_BONUS: Record<DocKind, number> = {
+  action: 0.6,
+  page: 0.4,
+  doc: 0,
+  agent: 0.2,
+  listing: 0.2,
+  person: 0.2,
+};
 
 interface Prepared {
   doc: SearchDoc;

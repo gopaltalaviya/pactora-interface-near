@@ -8,6 +8,8 @@ import {Badge, Tag} from '@/components/ui/Badge';
 import {Card} from '@/components/ui/Card';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Skeleton} from '@/components/ui/States';
+import {ReportButton} from '@/components/market/Report';
+import {ScoreChart} from '@/components/market/ScoreChart';
 import {displayAccount} from '@/lib/near';
 import {authorText, profiles, ratingText, starsOf, type ProfileDetail} from '@/lib/profiles';
 
@@ -55,9 +57,13 @@ export function ProfileView({profileId}: {profileId: string}) {
         title={p.displayName}
         description={p.headline || undefined}
         actions={
-          <Badge tone={p.kind === 'person' ? 'live' : 'chain'}>
-            {p.kind === 'person' ? 'Person' : 'Agent'}
-          </Badge>
+          <>
+            <Badge tone={p.kind === 'person' ? 'live' : 'chain'}>
+              {p.kind === 'person' ? 'Person' : 'Agent'}
+            </Badge>
+            {p.availability && <Badge tone="settled">Open to work</Badge>}
+            {p.hireable === false && <Badge tone="refused">Not hireable yet</Badge>}
+          </>
         }
       />
       <Card title="About" labelledBy="about">
@@ -79,13 +85,47 @@ export function ProfileView({profileId}: {profileId: string}) {
             </p>
           )}
           {p.location && <p>Location: {p.location}</p>}
-          {p.capabilities.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {p.capabilities.map((c) => (
-                <Tag key={c}>{c}</Tag>
+          {(p.skills?.length || p.capabilities.length) > 0 && (
+            <ul className="flex flex-wrap gap-1.5" aria-label="Skills">
+              {[...new Set([...(p.skills ?? []), ...p.capabilities])].map((c) => (
+                <li key={c}>
+                  <Tag>{c}</Tag>
+                </li>
               ))}
+            </ul>
+          )}
+          {p.hireable === false && (
+            <p className="text-xs text-muted">
+              Not hireable yet: the stake is below the network minimum, so a client cannot select this person.
+            </p>
+          )}
+          {p.taskList && (
+            <div data-testid="task-list">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-muted">Task list</h3>
+              <p className="mt-1 text-xs text-muted">
+                {p.taskList.jobs.open} open job{p.taskList.jobs.open === 1 ? '' : 's'},{' '}
+                {p.taskList.jobs.settled} settled.
+              </p>
+              {p.taskList.listings.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {p.taskList.listings.map((l) => (
+                    <li key={l.listingId}>
+                      <Link
+                        href={`/jobs/listing/${encodeURIComponent(l.listingId)}`}
+                        className="text-accent underline"
+                      >
+                        {l.title}
+                      </Link>{' '}
+                      <span className="text-xs text-muted">({l.status})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
+          <div className="pt-2">
+            <ReportButton targetType="person" targetId={p.profileId} what="this profile" />
+          </div>
           {p.kind === 'agent' && p.chainAgentId && (
             <p>
               <Link href={`/agents/${p.chainAgentId}`} className="text-accent underline">
@@ -100,6 +140,20 @@ export function ProfileView({profileId}: {profileId: string}) {
         labelledBy="reviews"
         description="From the other side of settled jobs. Each is shown once both sides have reviewed, or 14 days after the job settled."
       >
+        {p.reviews.length > 1 && (
+          <div className="mb-4">
+            <ScoreChart
+              title="Rating over time"
+              unit="out of 5"
+              max={5}
+              points={p.reviews.map((r) => ({
+                at: r.at,
+                value: r.rating,
+                label: `${r.rating} from ${authorText(r)}`,
+              }))}
+            />
+          </div>
+        )}
         {p.reviews.length === 0 ? (
           <p className="text-sm text-muted">No reviews shown yet.</p>
         ) : (

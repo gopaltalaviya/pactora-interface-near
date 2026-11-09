@@ -26,7 +26,18 @@ describe('authorText', () => {
 });
 
 describe('the forms', () => {
-  const ok = {displayName: 'Priya', headline: '', bio: '', showAccount: false, published: true};
+  const ok = {
+    displayName: 'Priya',
+    headline: '',
+    bio: '',
+    showAccount: false,
+    published: true,
+    skills: [],
+    location: '',
+    availability: false,
+    showTaskList: false,
+    alerts: false,
+  };
   it('checks the profile as the API does, trimmed', () => {
     expect(validateProfile(ok)).toBeNull();
     expect(validateProfile({...ok, displayName: '   '})).toMatch(/display name/);
@@ -34,6 +45,10 @@ describe('the forms', () => {
     expect(validateProfile({...ok, headline: 'x'.repeat(141)})).toMatch(/140/);
     expect(validateProfile({...ok, bio: 'x'.repeat(2001)})).toMatch(/2000/);
     expect(validateProfile({...ok, bio: `  ${'x'.repeat(2000)}  `})).toBeNull();
+    expect(validateProfile({...ok, skills: Array.from({length: 21}, (_, i) => `s${i}`)})).toMatch(/20/);
+    expect(validateProfile({...ok, skills: ['x']})).toMatch(/2-50/);
+    expect(validateProfile({...ok, location: 'x'.repeat(121)})).toMatch(/120/);
+    expect(validateProfile({...ok, skills: ['photography'], location: 'Pune, Maharashtra'})).toBeNull();
   });
 
   it('checks a review: a whole rating 1-5 and 10-2000 characters', () => {

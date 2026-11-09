@@ -5,6 +5,8 @@ import {useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode
 import {DOCS} from '@/components/docs/DocsNav';
 import {Icon, type IconName} from '@/components/ui/Icon';
 import {api} from '@/lib/api';
+import {market} from '@/lib/market';
+import {profiles} from '@/lib/profiles';
 import {prepare, search, sectionsFromHtml, type DocKind, type SearchDoc, type SearchHit} from '@/lib/search';
 import {OPEN_SEARCH} from './events';
 
@@ -201,8 +203,10 @@ const GROUP: Record<DocKind, {label: string; icon: IconName}> = {
   doc: {label: 'Documentation', icon: 'sparkle'},
   page: {label: 'Pages', icon: 'arrowRight'},
   agent: {label: 'Agents', icon: 'users'},
+  listing: {label: 'Listings', icon: 'coins'},
+  person: {label: 'People', icon: 'users'},
 };
-const ORDER: DocKind[] = ['action', 'doc', 'page', 'agent'];
+const ORDER: DocKind[] = ['action', 'doc', 'page', 'agent', 'listing', 'person'];
 const CACHE = 'pactora:search-docs:v1';
 const RECENT = 'pactora:search-recent';
 
@@ -261,6 +265,10 @@ export function SearchPalette() {
   const [query, setQuery] = useState('');
   const [docs, setDocs] = useState<SearchDoc[] | null>(null);
   const [agents, setAgents] = useState<SearchDoc[]>([]);
+  // Open listings and published people are in the index too (2026-11-09): the
+  // board's and the directory's first pages, refreshed on every open.
+  const [listings, setListings] = useState<SearchDoc[]>([]);
+  const [people, setPeople] = useState<SearchDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
   const [recent, setRecent] = useState<Recent[]>([]);
@@ -328,6 +336,36 @@ export function SearchPalette() {
         ),
       )
       .catch(() => undefined);
+    market
+      .listings({limit: 50}, undefined, c.signal)
+      .then((page) =>
+        setListings(
+          page.listings.map((l) => ({
+            id: `listing:${l.listingId}`,
+            kind: 'listing' as const,
+            href: `/jobs/listing/${encodeURIComponent(l.listingId)}`,
+            title: l.title,
+            body: `${l.description.slice(0, 140)} · up to ${l.maxPriceDisplay}${l.location ? ` · ${l.location}` : ''}`,
+            keywords: l.skills,
+          })),
+        ),
+      )
+      .catch(() => undefined);
+    profiles
+      .directory({}, c.signal)
+      .then((page) =>
+        setPeople(
+          page.profiles.map((p) => ({
+            id: `person:${p.profileId}`,
+            kind: 'person' as const,
+            href: `/people/${p.profileId}`,
+            title: p.displayName,
+            body: `${p.kind === 'person' ? 'Person' : 'Agent'}${p.headline ? ` · ${p.headline}` : ''}${p.location ? ` · ${p.location}` : ''}`,
+            keywords: [...(p.skills ?? []), ...p.capabilities],
+          })),
+        ),
+      )
+      .catch(() => undefined);
     requestAnimationFrame(() => input.current?.focus());
     return () => c.abort();
   }, [open, docs]);
@@ -342,7 +380,10 @@ export function SearchPalette() {
     };
   }, [open]);
 
-  const index = useMemo(() => prepare([...ACTIONS, ...PAGES, ...(docs ?? []), ...agents]), [docs, agents]);
+  const index = useMemo(
+    () => prepare([...ACTIONS, ...PAGES, ...(docs ?? []), ...agents, ...listings, ...people]),
+    [docs, agents, listings, people],
+  );
   const hits = useMemo(() => (query.trim() ? search(index, query, 24) : []), [index, query]);
   const grouped = useMemo(() => {
     const out: {kind: DocKind; hits: SearchHit[]}[] = [];

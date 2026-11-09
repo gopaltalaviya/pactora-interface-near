@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {useCallback, useEffect, useState, type FormEvent, type ReactNode} from 'react';
+import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode} from 'react';
 import {
   ActionFeedback,
   errorText,
@@ -17,8 +17,12 @@ import {Card} from '@/components/ui/Card';
 import {Field, Select, TextArea, TextInput} from '@/components/ui/Field';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Notice, Skeleton} from '@/components/ui/States';
+import {ReportButton} from '@/components/market/Report';
+import {StandingBanner} from '@/components/market/Standing';
+import {subscribeToJob} from '@/lib/job-stream';
 import {safeHref} from '@/lib/links';
 import {LIMITS, validateBid, validateReason} from '@/lib/listing-form';
+import {refreshNotifications} from '@/lib/notifications';
 import {
   amountDisplay,
   bidStanding,
@@ -42,6 +46,19 @@ import {useSession} from '@/lib/session';
  * by the API's `viewer` field, not by this page guessing from the account.
  */
 
+/** Whether a media query matches now; false until mounted (the server cannot know). */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+
 export function ListingView({listingId}: {listingId: string}) {
   const session = useSession();
   const token = useNetwork();
@@ -64,6 +81,25 @@ export function ListingView({listingId}: {listingId: string}) {
     });
     return () => controller.abort();
   }, [status, authed, listingId, attempt]);
+
+  // A worker's page never learned they were hired (live audit 2026-11-09, M6):
+  // while the viewer has a live bid, ask again every 15 s, and follow the job's
+  // own stream once a bid is selected.
+  const liveBid =
+    listing?.viewer && !listing.viewer.isOwner
+      ? listing.viewer.applications.find((a) => a.status === 'pending' || a.status === 'selected')
+      : undefined;
+  const liveBidKey = liveBid ? `${liveBid.applicationId}:${liveBid.status}:${liveBid.jobId ?? ''}` : null;
+  useEffect(() => {
+    if (!liveBidKey) return;
+    const timer = setInterval(reload, 15_000);
+    const jobId = liveBidKey.split(':')[2];
+    const stop = jobId ? subscribeToJob(jobId, reload) : () => undefined;
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
+  }, [liveBidKey, reload]);
 
   const back = {href: '/jobs', label: 'Jobs'};
 
@@ -108,11 +144,18 @@ export function ListingView({listingId}: {listingId: string}) {
             <Badge tone="chain">{listing.category}</Badge>
             <Badge>{listing.interactionMode}</Badge>
             {listing.hiringMode === 'instant' && <Badge tone="live">instant hiring</Badge>}
+            {listing.hidden && <Badge tone="refused">hidden by moderation</Badge>}
           </>
         }
       />
 
+      {!owner && <StandingBanner />}
       <Details listing={listing} token={token} />
+      {!owner && (
+        <div className="flex justify-end">
+          <ReportButton targetType="listing" targetId={listing.listingId} what="this listing" />
+        </div>
+      )}
 
       {owner && listing.viewer?.isOwner ? (
         <OwnerPanel listing={listing} slots={listing.viewer.slots} token={token} reload={reload} />
@@ -243,6 +286,7 @@ function ApplicantPanel({
       await session.authed((t) => market.apply(t, listing.listingId, body));
       setPrice('');
       setProposal('');
+      refreshNotifications();
       reload();
     } catch (err) {
       setError(errorText(err));
@@ -425,9 +469,12 @@ function ApplicantPanel({
           </form>
         </Card>
       ) : (
-        <Notice>
-          <p data-testid="bid-blocked">{standing.blocked}</p>
-        </Notice>
+        <p
+          className="rounded-xl border border-edge bg-surface/80 px-4 py-3 text-sm text-muted"
+          data-testid="bid-blocked"
+        >
+          {standing.blocked}
+        </p>
       )}
     </div>
   );
@@ -458,6 +505,12 @@ function OwnerPanel({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // Buttons that swap out hand focus to their replacement (live audit 2026-11-09, M10).
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const confirmCancelButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (confirmCancel) confirmCancelButton.current?.focus();
+  }, [confirmCancel]);
   const [funding, setFunding] = useState<{
     jobId: string;
     signerId: string | undefined;
@@ -529,6 +582,7 @@ function OwnerPanel({
           )}
           {listing.status !== 'cancelled' && !confirmCancel && (
             <Button
+              ref={cancelButton}
               variant="danger"
               size="sm"
               disabled={busy !== null || !untouched}
@@ -540,6 +594,7 @@ function OwnerPanel({
           {confirmCancel && (
             <>
               <Button
+                ref={confirmCancelButton}
                 variant="danger"
                 size="sm"
                 loading={busy === 'cancel'}
@@ -547,16 +602,27 @@ function OwnerPanel({
               >
                 Yes, cancel it and reject every bid
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(false)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setConfirmCancel(false);
+                  setTimeout(() => cancelButton.current?.focus(), 0);
+                }}
+              >
                 Keep it
               </Button>
             </>
           )}
         </div>
-        <p className="mt-3 text-xs text-muted">
-          {untouched
-            ? 'Stopping hiring sets pending bids aside; reopening before the deadline revives them. Editing and cancelling are possible until you choose someone.'
-            : 'You have chosen a worker, so the listing can no longer be edited or cancelled. You can still stop hiring.'}
+        <p className="mt-3 text-xs text-muted" data-testid="manage-help">
+          {listing.status === 'cancelled'
+            ? 'This listing is cancelled: every pending bid was rejected, and nothing more can be done with it.'
+            : listing.status === 'closed'
+              ? 'Hiring is stopped. Pending bids are set aside (shown as pending, reopenable); reopening before the deadline revives them. Cancelling rejects them instead.'
+              : untouched
+                ? 'Stopping hiring sets pending bids aside; reopening before the deadline revives them. Cancelling rejects every pending bid. Editing and cancelling are possible until you choose someone.'
+                : 'You have chosen a worker, so the listing can no longer be edited or cancelled. You can still stop hiring.'}
         </p>
         {error && (
           <div className="mt-3">
@@ -814,6 +880,27 @@ function Applications({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const {authed} = session;
+  // The decision panel opens next to the chosen bid, takes focus, closes on
+  // Escape and hands focus back to the button that opened it (M10, M26).
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  // The cards (below md) and the table (from md) are both in the markup; the
+  // form is rendered in whichever is shown, so there is one of it.
+  const wide = useMediaQuery('(min-width: 768px)');
+  useEffect(() => {
+    if (deciding) reasonRef.current?.focus();
+  }, [deciding]);
+  const startDeciding = (e: React.MouseEvent<HTMLButtonElement>, id: string, action: 'select' | 'reject') => {
+    opener.current = e.currentTarget;
+    setDeciding({id, action});
+    setReason('');
+    setReasonError(null);
+  };
+  const stopDeciding = () => {
+    setDeciding(null);
+    const back = opener.current;
+    setTimeout(() => back?.focus(), 0);
+  };
 
   useEffect(() => {
     let live = true;
@@ -845,6 +932,7 @@ function Applications({
       setDeciding(null);
       setReason('');
       setAttempt((n) => n + 1);
+      refreshNotifications();
       if (deciding.action === 'select') onSelected(out);
     } catch (err) {
       setError(errorText(err));
@@ -855,6 +943,62 @@ function Applications({
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const symbol = token?.symbol ?? '';
+  const chosen = deciding ? data?.rows.find((r) => r.applicationId === deciding.id) : undefined;
+
+  const decisionForm = deciding ? (
+    <form
+      onSubmit={(e) => void decide(e)}
+      noValidate
+      aria-label={deciding.action === 'select' ? 'Select this bid' : 'Reject this bid'}
+      className="space-y-3 rounded-lg border border-edge-strong p-4"
+    >
+      <p className="text-sm">
+        {deciding.action === 'select' ? 'Selecting' : 'Rejecting'}{' '}
+        <strong>{chosen?.applicant.name ?? 'this bid'}</strong>
+        {chosen ? ` at ${chosen.priceDisplay}` : ''}.
+      </p>
+      <Field
+        label={
+          deciding.action === 'select'
+            ? 'Why this bid? (the worker sees it)'
+            : 'Why not? (the applicant sees it)'
+        }
+        htmlFor="decide-reason"
+        error={reasonError}
+        hintId="decide-reason-hint"
+        hint={`${LIMITS.reason.min}-${LIMITS.reason.max} characters. Escape closes this.`}
+      >
+        <TextArea
+          id="decide-reason"
+          ref={reasonRef}
+          rows={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              stopDeciding();
+            }
+          }}
+          aria-describedby="decide-reason-hint"
+          aria-invalid={Boolean(reasonError) || undefined}
+        />
+      </Field>
+      {deciding.action === 'select' && (
+        <p className="text-xs text-muted">
+          Selecting creates a job at the bid price. If you are a person, your wallet signs the funding next.
+        </p>
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" loading={busy}>
+          {deciding.action === 'select' ? 'Confirm selection' : 'Confirm rejection'}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={stopDeciding}>
+          Never mind
+        </Button>
+      </div>
+    </form>
+  ) : null;
 
   return (
     <Card
@@ -889,8 +1033,67 @@ function Applications({
       )}
       {data && data.rows.length > 0 && (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-left text-sm">
+          {/* On a phone the bids read as cards, each with its buttons in reach (live audit 2026-11-09, M5). */}
+          <ul aria-label="Bids" className="space-y-3 md:hidden">
+            {data.rows.map((a) => (
+              <li
+                key={a.applicationId}
+                className={`space-y-2 rounded-lg border p-3 text-sm ${deciding?.id === a.applicationId ? 'border-accent' : 'border-edge'}`}
+                data-testid="bid-card"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{a.applicant.name}</span>
+                  <Badge
+                    tone={a.status === 'selected' ? 'settled' : a.status === 'pending' ? 'live' : 'neutral'}
+                  >
+                    {a.status}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted">
+                  {a.applicant.location || 'no location'} · score {a.applicant.score} ·{' '}
+                  {a.applicant.completed} done
+                </p>
+                <p className="tabular">
+                  {a.priceDisplay}
+                  <span className="text-xs text-muted">
+                    {' '}
+                    · receives{' '}
+                    {token ? receivesDisplay(a.workerReceivesBaseUnits, token.decimals, symbol) : '—'}
+                  </span>
+                </p>
+                <p className="whitespace-pre-wrap break-words text-xs text-muted">{a.proposal}</p>
+                {a.reason && <p className="text-xs text-muted">{a.reason}</p>}
+                {a.status === 'pending' && listing.status === 'open' ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      size="sm"
+                      aria-label={`Select ${a.applicant.name}`}
+                      disabled={busy}
+                      onClick={(e) => startDeciding(e, a.applicationId, 'select')}
+                    >
+                      Select
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      aria-label={`Reject ${a.applicant.name}`}
+                      disabled={busy}
+                      onClick={(e) => startDeciding(e, a.applicationId, 'reject')}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                ) : a.jobId ? (
+                  <Link href={`/jobs/${a.jobId}`} className="text-accent underline">
+                    Open the job
+                  </Link>
+                ) : null}
+                {!wide && deciding?.id === a.applicationId && decisionForm}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[40rem] text-left text-sm" aria-label="Bids on this listing">
               <caption className="sr-only">Bids on this listing</caption>
               <thead className="text-xs text-muted">
                 <tr>
@@ -913,7 +1116,11 @@ function Applications({
               </thead>
               <tbody>
                 {data.rows.map((a) => (
-                  <tr key={a.applicationId} className="border-t border-edge align-top" data-testid="bid-row">
+                  <tr
+                    key={a.applicationId}
+                    className={`border-t border-edge align-top ${deciding?.id === a.applicationId ? 'bg-accent/5' : ''}`}
+                    data-testid="bid-row"
+                  >
                     <td className="py-3 pr-3">
                       <div className="font-medium">{a.applicant.name}</div>
                       <div className="text-xs text-muted">
@@ -947,11 +1154,8 @@ function Applications({
                             size="sm"
                             aria-label={`Select ${a.applicant.name}`}
                             disabled={busy}
-                            onClick={() => {
-                              setDeciding({id: a.applicationId, action: 'select'});
-                              setReason('');
-                              setReasonError(null);
-                            }}
+                            aria-expanded={deciding?.id === a.applicationId && deciding.action === 'select'}
+                            onClick={(e) => startDeciding(e, a.applicationId, 'select')}
                           >
                             Select
                           </Button>
@@ -960,11 +1164,8 @@ function Applications({
                             variant="secondary"
                             aria-label={`Reject ${a.applicant.name}`}
                             disabled={busy}
-                            onClick={() => {
-                              setDeciding({id: a.applicationId, action: 'reject'});
-                              setReason('');
-                              setReasonError(null);
-                            }}
+                            aria-expanded={deciding?.id === a.applicationId && deciding.action === 'reject'}
+                            onClick={(e) => startDeciding(e, a.applicationId, 'reject')}
                           >
                             Reject
                           </Button>
@@ -981,6 +1182,7 @@ function Applications({
                 ))}
               </tbody>
             </table>
+            {wide && deciding && <div className="mt-3">{decisionForm}</div>}
           </div>
           <nav aria-label="Bid pages" className="mt-4 flex items-center justify-between gap-3 text-sm">
             <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
@@ -999,50 +1201,6 @@ function Applications({
             </Button>
           </nav>
         </>
-      )}
-
-      {deciding && (
-        <form
-          onSubmit={(e) => void decide(e)}
-          noValidate
-          aria-label={deciding.action === 'select' ? 'Select this bid' : 'Reject this bid'}
-          className="mt-5 space-y-3 rounded-lg border border-edge-strong p-4"
-        >
-          <Field
-            label={
-              deciding.action === 'select'
-                ? 'Why this bid? (the worker sees it)'
-                : 'Why not? (the applicant sees it)'
-            }
-            htmlFor="decide-reason"
-            error={reasonError}
-            hintId="decide-reason-hint"
-            hint={`${LIMITS.reason.min}-${LIMITS.reason.max} characters.`}
-          >
-            <TextArea
-              id="decide-reason"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              aria-describedby="decide-reason-hint"
-              aria-invalid={Boolean(reasonError) || undefined}
-            />
-          </Field>
-          {deciding.action === 'select' && (
-            <p className="text-xs text-muted">
-              Selecting creates a job at the bid price. If you are a person, your wallet signs the funding
-              next.
-            </p>
-          )}
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" loading={busy}>
-              {deciding.action === 'select' ? 'Confirm selection' : 'Confirm rejection'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setDeciding(null)}>
-              Never mind
-            </Button>
-          </div>
-        </form>
       )}
     </Card>
   );

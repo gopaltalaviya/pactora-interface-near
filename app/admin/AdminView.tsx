@@ -1,7 +1,16 @@
 'use client';
 
 import {useCallback, useEffect, useState} from 'react';
-import {errorText, networkPromise, SignInGate} from '@/components/market/hooks';
+import Link from 'next/link';
+import {errorText, networkPromise, SignInGate, useNetwork} from '@/components/market/hooks';
+import {amountDisplay} from '@/lib/market';
+import {
+  REPORT_ACTIONS,
+  reports as reportsApi,
+  targetHref,
+  type Report,
+  type ReportAction,
+} from '@/lib/reports';
 import {describeError} from '@/lib/errors';
 import {Badge} from '@/components/ui/Badge';
 import {Button} from '@/components/ui/Button';
@@ -48,7 +57,7 @@ function Console() {
   const {authed} = useSession();
   const [me, setMe] = useState<AdminMe | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'disputes' | 'moderation' | 'compliance'>('disputes');
+  const [tab, setTab] = useState<'disputes' | 'moderation' | 'compliance' | 'reports'>('disputes');
 
   useEffect(() => {
     authed((t) => admin.me(t))
@@ -64,6 +73,7 @@ function Console() {
   const tabs = [
     ...(me.roles.includes('council') ? [['disputes', 'Dispute desk'] as const] : []),
     ['moderation', 'Moderation'] as const,
+    ...(me.roles.includes('reviewer') ? [['reports', 'Reports'] as const] : []),
     ...(me.roles.includes('reviewer') ? [['compliance', 'Compliance'] as const] : []),
   ];
   return (
@@ -93,6 +103,7 @@ function Console() {
       <div role="tabpanel">
         {tab === 'disputes' && <Disputes dao={me.arbiterDao} />}
         {tab === 'moderation' && <Moderation />}
+        {tab === 'reports' && <Reports />}
         {tab === 'compliance' && <Compliance />}
       </div>
     </div>
@@ -129,8 +140,19 @@ function useSendBuilt(dao: string | null) {
   );
 }
 
+const STATUS_WORDS: Record<string, string> = {
+  InProgress: 'open for votes',
+  Approved: 'approved',
+  Rejected: 'rejected',
+  Expired: 'expired',
+  Failed: 'failed',
+  Removed: 'removed',
+};
+const statusWords = (s: string) => STATUS_WORDS[s] ?? s;
+
 function Disputes({dao}: {dao: string | null}) {
   const {authed} = useSession();
+  const token = useNetwork();
   const [list, setList] = useState<{jobId: string; chainJobId: string | null; amount: string}[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
@@ -151,7 +173,10 @@ function Disputes({dao}: {dao: string | null}) {
               onClick={() => setOpen(d.jobId)}
             >
               Job {d.chainJobId ?? d.jobId.slice(0, 8)}
-            </Button>
+            </Button>{' '}
+            <span className="text-xs text-muted">
+              {token ? amountDisplay(d.amount, token.decimals, token.symbol) : `${d.amount} base units`}
+            </span>
           </li>
         ))}
       </ul>
@@ -162,6 +187,7 @@ function Disputes({dao}: {dao: string | null}) {
 
 function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
   const {authed} = useSession();
+  const token = useNetwork();
   const send = useSendBuilt(dao);
   const [d, setD] = useState<Dispute | null>(null);
   const [proposals, setProposals] = useState<{council: string[]; proposals: Proposal[]} | null>(null);
@@ -221,8 +247,22 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
           </span>
         </p>
         <p>
-          Client: {d.client.name ?? d.client.agentId} · Worker: {d.worker.name ?? d.worker.agentId} · Amount{' '}
-          {d.amount} base units
+          Client:{' '}
+          <Link href={`/agents/${d.client.agentId}`} className="text-accent underline">
+            {d.client.name ?? `agent #${d.client.agentId}`}
+          </Link>{' '}
+          · Worker:{' '}
+          <Link href={`/agents/${d.worker.agentId}`} className="text-accent underline">
+            {d.worker.name ?? `agent #${d.worker.agentId}`}
+          </Link>{' '}
+          · Amount{' '}
+          <span className="tabular" data-testid="dispute-amount">
+            {token ? amountDisplay(d.amount, token.decimals, token.symbol) : `${d.amount} base units`}
+          </span>{' '}
+          ·{' '}
+          <Link href={`/jobs/${d.jobId}`} className="text-accent underline">
+            the job
+          </Link>
         </p>
         {d.resultMismatch && <Notice>The result on chain differs from the delivered one.</Notice>}
         {d.drafts.length > 0 && (
@@ -231,7 +271,8 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
             <ol className="space-y-1">
               {d.drafts.map((x) => (
                 <li key={x.round}>
-                  Round {x.round}: <span className="whitespace-pre-wrap break-words">{x.snapshot.text}</span>{' '}
+                  <span className="text-muted">Round {x.round}:</span>{' '}
+                  <span className="whitespace-pre-wrap break-words">{x.snapshot.text}</span>{' '}
                   <code className="text-xs text-muted">{x.snapshotHash.slice(0, 12)}…</code>
                 </li>
               ))}
@@ -239,8 +280,49 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
           </div>
         )}
         <p>
-          {d.files.length} photo(s) · {d.messages.length} message(s) · {d.timeline.length} event(s)
+          {d.files.length} evidence photo{d.files.length === 1 ? '' : 's'} · {d.messages.length} message
+          {d.messages.length === 1 ? '' : 's'} · {d.timeline.length} event{d.timeline.length === 1 ? '' : 's'}
         </p>
+        {d.files.length > 0 && (
+          <ul aria-label="Evidence photos" className="grid gap-2 sm:grid-cols-3">
+            {d.files.map((f) => (
+              <AdminPhoto
+                key={f.fileId}
+                url={f.url}
+                sha256={f.sha256}
+                label={`evidence ${f.fileId.slice(0, 8)}`}
+              />
+            ))}
+          </ul>
+        )}
+        {(d.disputeNotes?.length ?? 0) > 0 && (
+          <div data-testid="desk-dispute-notes">
+            <h3 className="font-medium">The client&apos;s dispute notes</h3>
+            <ol className="space-y-1">
+              {d.disputeNotes!.map((n) => (
+                <li key={n.noteId} className="whitespace-pre-wrap break-words">
+                  {n.text}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {(d.disputeFiles?.length ?? 0) > 0 && (
+          <ul
+            aria-label="Dispute photos"
+            className="grid gap-2 sm:grid-cols-3"
+            data-testid="desk-dispute-photos"
+          >
+            {d.disputeFiles!.map((f) => (
+              <AdminPhoto
+                key={f.fileId}
+                url={f.url}
+                sha256={f.sha256}
+                label={`dispute photo ${f.fileId.slice(0, 8)}`}
+              />
+            ))}
+          </ul>
+        )}
         {d.messages.length > 0 && (
           <ol aria-label="Conversation" className="max-h-60 space-y-1 overflow-auto">
             {d.messages.map((m) => (
@@ -265,7 +347,7 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
           <ul aria-label="Proposals" className="space-y-2">
             {proposals.proposals.map((p) => (
               <li key={p.id} className="rounded-lg border border-edge p-2" data-testid={`proposal-${p.id}`}>
-                Proposal {p.id}: {rulingWords(p.forWorker)} — {p.status} —{' '}
+                Proposal {p.id}: {rulingWords(p.forWorker)} — {statusWords(p.status)} —{' '}
                 {tally(p, proposals.council.length || 3)}
                 {p.status === 'InProgress' && !p.youVoted && confirmReject !== p.id && (
                   <span className="ml-2 inline-flex gap-2">
@@ -305,6 +387,193 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
         )}
       </div>
     </Card>
+  );
+}
+
+/** An evidence photo on the desk, fetched with the session (GET /v1/admin/files/:id, falling back to the party route). */
+function AdminPhoto({url, sha256, label}: {url: string; sha256: string; label: string}) {
+  const {authed} = useSession();
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let blobUrl: string | null = null;
+    const adminUrl = url.replace(/^\/v1\/files\//, '/v1/admin/files/');
+    authed((t) => admin.file(t, adminUrl).catch(() => admin.file(t, url)))
+      .then((blob) => {
+        blobUrl = URL.createObjectURL(blob);
+        setSrc(blobUrl);
+      })
+      .catch(() => setFailed(true));
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [authed, url]);
+  return (
+    <li className="rounded-lg border border-edge p-1">
+      {src ? (
+        // A blob URL fetched with the session: next/image cannot load it.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={label} className="h-28 w-full rounded object-contain" />
+      ) : failed ? (
+        <p className="p-2 text-xs text-broken">Could not load {label}.</p>
+      ) : (
+        <Skeleton className="h-28 w-full" />
+      )}
+      <p className="truncate px-1 text-[10px] text-muted" title={sha256}>
+        sha256 {sha256.slice(0, 12)}…
+      </p>
+    </li>
+  );
+}
+
+/** Reports from people (2026-11-09 §9): compliance reviewers resolve each with one of four actions. */
+function Reports() {
+  const {authed} = useSession();
+  const [status, setStatus] = useState<Report['status']>('open');
+  const [rows, setRows] = useState<Report[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [resolving, setResolving] = useState<{id: string; action: ReportAction} | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setRows(null);
+    authed((t) => reportsApi.list(t, status))
+      .then((r) => setRows(r.reports))
+      .catch((err: unknown) => setProblem(errorText(err)));
+  }, [authed, status, attempt]);
+
+  async function resolve() {
+    if (!resolving) return;
+    if (note.trim().length < 3) {
+      setProblem('A note of 3-500 characters is needed.');
+      return;
+    }
+    setBusy(true);
+    setProblem(null);
+    try {
+      await authed((t) => reportsApi.resolve(t, resolving.id, resolving.action, note.trim()));
+      setResolving(null);
+      setNote('');
+      setAttempt((n) => n + 1);
+    } catch (err) {
+      setProblem(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div role="group" aria-label="Report status" className="flex gap-2">
+        {(['open', 'resolved', 'dismissed'] as const).map((s) => (
+          <Button
+            key={s}
+            size="sm"
+            variant={status === s ? 'primary' : 'secondary'}
+            onClick={() => setStatus(s)}
+          >
+            {s[0]!.toUpperCase() + s.slice(1)}
+          </Button>
+        ))}
+      </div>
+      {!rows && !problem && <Skeleton className="h-24 w-full" />}
+      {rows && rows.length === 0 && (
+        <p className="text-sm text-muted" data-testid="no-reports">
+          No {status} reports.
+        </p>
+      )}
+      {rows && rows.length > 0 && (
+        <ul aria-label="Reports" className="space-y-2 text-sm">
+          {rows.map((r) => {
+            const href = targetHref(r);
+            return (
+              <li
+                key={r.reportId}
+                className="rounded-lg border border-edge p-3"
+                data-testid={`report-${r.reportId}`}
+              >
+                <p>
+                  <Badge tone="refused">{r.reason}</Badge> {r.targetType}{' '}
+                  {href ? (
+                    <Link href={href} className="text-accent underline">
+                      {r.targetId}
+                    </Link>
+                  ) : (
+                    <code className="text-xs">{r.targetId}</code>
+                  )}{' '}
+                  <span className="text-muted">· reported by a {r.reporter.kind}</span>
+                </p>
+                {r.details && <p className="mt-1 whitespace-pre-wrap break-words text-muted">{r.details}</p>}
+                {r.status !== 'open' ? (
+                  <p className="mt-1 text-xs text-muted">
+                    {r.status === 'dismissed' ? 'Dismissed' : `Resolved: ${r.action}`} — {r.note}
+                  </p>
+                ) : resolving?.id === r.reportId ? (
+                  <form
+                    className="mt-2 space-y-2"
+                    aria-label="Resolve this report"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void resolve();
+                    }}
+                  >
+                    <p className="text-xs text-muted">
+                      {REPORT_ACTIONS.find((a) => a.value === resolving.action)?.label}:{' '}
+                      {REPORT_ACTIONS.find((a) => a.value === resolving.action)?.what}.
+                    </p>
+                    <Field label="Note (3-500 characters)" htmlFor={`note-${r.reportId}`}>
+                      <TextInput
+                        id={`note-${r.reportId}`}
+                        value={note}
+                        maxLength={500}
+                        onChange={(e) => setNote(e.target.value)}
+                      />
+                    </Field>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant={resolving.action === 'block' ? 'danger' : 'primary'}
+                        loading={busy}
+                      >
+                        Confirm: {REPORT_ACTIONS.find((a) => a.value === resolving.action)?.label}
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setResolving(null)}>
+                        Not now
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {REPORT_ACTIONS.map((a) => (
+                      <Button
+                        key={a.value}
+                        size="sm"
+                        variant={a.value === 'block' ? 'danger' : 'secondary'}
+                        onClick={() => {
+                          setResolving({id: r.reportId, action: a.value});
+                          setNote('');
+                          setProblem(null);
+                        }}
+                      >
+                        {a.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {problem && (
+        <p role="alert" className="text-broken">
+          {problem}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -14,6 +14,8 @@ export interface AdminMe {
   chainId: string;
   roles: AdminRole[];
   arbiterDao: string | null;
+  /** The arbiter account: the DAO, or a plain account on a chain without one (2026-11-09). */
+  arbiter?: string | null;
 }
 
 export interface BuiltCall {
@@ -46,6 +48,9 @@ export interface Dispute {
   }[];
   messages: {messageId: string; from: 'client' | 'worker'; body: string; at: string}[];
   timeline: {kind: string; txHash: string | null; at: string}[];
+  /** The client's dispute notes and photos (2026-11-09 §8); absent on an older API. */
+  disputeNotes?: {noteId: string; text: string; at: string}[];
+  disputeFiles?: {fileId: string; sha256: string; mime: string; size: number; url: string}[];
   evidenceHash: string;
 }
 

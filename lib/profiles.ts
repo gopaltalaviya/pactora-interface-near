@@ -21,6 +21,10 @@ export interface ProfileSummary {
   account: string | null;
   location: string | null;
   capabilities: string[];
+  /** The profile's own skill tags (2026-11-09 §7); absent on an older API. */
+  skills?: string[];
+  /** "Open to work". */
+  availability?: boolean;
   rating: {average: number | null; count: number};
   settledJobs: number;
   chainAgentId: string | null;
@@ -41,6 +45,14 @@ export interface ProfileReview {
 export interface ProfileDetail extends ProfileSummary {
   bio: string;
   reviews: ProfileReview[];
+  /** Shown when the owner chose to show their task list. */
+  taskList?: {
+    listings: {listingId: string; title: string; status: string}[];
+    jobs: {open: number; settled: number};
+  };
+  /** A person's stake, read from the chain; null for an agent or when not read. */
+  hireable?: boolean | null;
+  stake?: string | null;
 }
 
 export interface DirectoryPage {
@@ -58,6 +70,11 @@ export interface MyProfile {
   headline: string;
   bio: string;
   showAccount: boolean;
+  skills?: string[];
+  location?: string;
+  availability?: boolean;
+  showTaskList?: boolean;
+  alerts?: boolean;
   profileId?: string;
 }
 
@@ -67,6 +84,16 @@ export interface ProfileForm {
   bio: string;
   showAccount: boolean;
   published: boolean;
+  /** At most 20, each 2-50 characters, lower-cased (2026-11-09 §7). */
+  skills: string[];
+  /** "City" or "City, Region", at most 120 characters. */
+  location: string;
+  /** Open to work. */
+  availability: boolean;
+  /** Show my open listings and job counts on the public profile. */
+  showTaskList: boolean;
+  /** Alert me to listings that match my skills and location. */
+  alerts: boolean;
 }
 
 export interface PartyReview {
@@ -93,6 +120,9 @@ export const PROFILE_LIMITS = {
   headline: {max: 140},
   bio: {max: 2000},
   review: {min: 10, max: 2000},
+  skills: {max: 20},
+  skill: {min: 2, max: 50},
+  location: {max: 120},
 } as const;
 
 const enc = encodeURIComponent;
@@ -100,11 +130,19 @@ const json = (token: string) => ({'content-type': 'application/json', ...bearer(
 
 export const profiles = {
   directory: (
-    q: {q?: string; kind?: ProfileKind; sort?: DirectorySort; page?: number} = {},
+    q: {
+      q?: string;
+      kind?: ProfileKind;
+      sort?: DirectorySort;
+      page?: number;
+      available?: boolean;
+      skill?: string;
+    } = {},
     signal?: AbortSignal,
   ) => {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') params.set(k, String(v));
+    for (const [k, v] of Object.entries(q))
+      if (v !== undefined && v !== '' && v !== false) params.set(k, String(v));
     const qs = params.toString();
     return request<DirectoryPage>(
       `/v1/profiles${qs ? `?${qs}` : ''}`,
@@ -167,7 +205,40 @@ export function validateProfile(f: ProfileForm): string | null {
   if (name.length > PROFILE_LIMITS.displayName.max) return 'A display name is at most 60 characters.';
   if (f.headline.trim().length > PROFILE_LIMITS.headline.max) return 'A headline is at most 140 characters.';
   if (f.bio.trim().length > PROFILE_LIMITS.bio.max) return 'A bio is at most 2000 characters.';
+  if (f.skills.length > PROFILE_LIMITS.skills.max) return `At most ${PROFILE_LIMITS.skills.max} skills.`;
+  const bad = f.skills.find(
+    (s) => s.length < PROFILE_LIMITS.skill.min || s.length > PROFILE_LIMITS.skill.max,
+  );
+  if (bad)
+    return `A skill is ${PROFILE_LIMITS.skill.min}-${PROFILE_LIMITS.skill.max} characters: “${bad}” is not.`;
+  if (f.location.trim().length > PROFILE_LIMITS.location.max) return 'A location is at most 120 characters.';
   return null;
+}
+
+/** `a, B ,a` → `['a', 'b']`: lower-cased, trimmed, de-duplicated, empties dropped. */
+export function parseSkillTags(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(',')) {
+    const s = raw.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+/** The form from what the API holds, with the five newer fields defaulted for an older API. */
+export function formFromProfile(m: MyProfile): ProfileForm {
+  return {
+    displayName: m.displayName,
+    headline: m.headline,
+    bio: m.bio,
+    showAccount: m.showAccount,
+    published: m.published,
+    skills: m.skills ?? [],
+    location: m.location ?? '',
+    availability: m.availability ?? false,
+    showTaskList: m.showTaskList ?? false,
+    alerts: m.alerts ?? false,
+  };
 }
 
 /** A problem with a review, or null. */

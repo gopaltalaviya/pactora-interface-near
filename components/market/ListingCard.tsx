@@ -44,14 +44,14 @@ export function ListingCard({listing, token}: {listing: Listing; token: TokenInf
           <Badge tone={STATUS_TONE[listing.status]}>{listing.status}</Badge>
           {listing.hiringMode === 'instant' && <Badge tone="live">instant</Badge>}
         </div>
-        <h3 className="text-base font-semibold leading-snug">
+        <h2 className="text-base font-semibold leading-snug">
           <Link
             href={`/jobs/listing/${encodeURIComponent(listing.listingId)}`}
             className="hover:text-accent focus-visible:text-accent"
           >
             {listing.title}
           </Link>
-        </h3>
+        </h2>
         <p className="line-clamp-2 text-sm text-muted">{listing.description}</p>
         {listing.skills.length > 0 && (
           <ul className="flex flex-wrap gap-1.5" aria-label="Skills">

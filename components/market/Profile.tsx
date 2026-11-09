@@ -7,8 +7,11 @@ import {Button} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {Field, Select, TextArea, TextInput} from '@/components/ui/Field';
 import {Skeleton} from '@/components/ui/States';
+import {Tag} from '@/components/ui/Badge';
 import {
+  formFromProfile,
   isRevealed,
+  parseSkillTags,
   PROFILE_LIMITS,
   profiles,
   starsOf,
@@ -27,18 +30,13 @@ export function ProfileEditor() {
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [skillText, setSkillText] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
     authed((t) => profiles.mine(t, controller.signal))
       .then((m) => {
-        setForm({
-          displayName: m.displayName,
-          headline: m.headline,
-          bio: m.bio,
-          showAccount: m.showAccount,
-          published: m.published,
-        });
+        setForm(formFromProfile(m));
         setProfileId(m.profileId ?? null);
       })
       .catch((err: unknown) => {
@@ -102,19 +100,123 @@ export function ProfileEditor() {
             onChange={(e) => set({bio: e.target.value})}
           />
         </Field>
-        <label className="flex items-start gap-2 text-sm">
+        <Field
+          label="Skills"
+          htmlFor="pf-skills"
+          hintId="pf-skills-hint"
+          hint={`Separate with commas; Enter adds. Up to ${PROFILE_LIMITS.skills.max}, each ${PROFILE_LIMITS.skill.min}-${PROFILE_LIMITS.skill.max} characters. They decide which listings match you.`}
+        >
+          <TextInput
+            id="pf-skills"
+            value={skillText}
+            placeholder="photography, delivery"
+            autoComplete="off"
+            aria-describedby="pf-skills-hint"
+            onChange={(e) => setSkillText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const next = [...form.skills];
+                for (const s of parseSkillTags(skillText)) if (!next.includes(s)) next.push(s);
+                set({skills: next.slice(0, PROFILE_LIMITS.skills.max)});
+                setSkillText('');
+              }
+            }}
+            onBlur={() => {
+              if (!skillText.trim()) return;
+              const next = [...form.skills];
+              for (const s of parseSkillTags(skillText)) if (!next.includes(s)) next.push(s);
+              set({skills: next.slice(0, PROFILE_LIMITS.skills.max)});
+              setSkillText('');
+            }}
+          />
+        </Field>
+        {form.skills.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Your skills">
+            {form.skills.map((s) => (
+              <li key={s} className="inline-flex items-center gap-1">
+                <Tag>{s}</Tag>
+                <button
+                  type="button"
+                  aria-label={`Remove skill ${s}`}
+                  className="grid size-6 place-items-center rounded text-muted hover:text-text"
+                  onClick={() => set({skills: form.skills.filter((x) => x !== s)})}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Field
+          label="Location"
+          htmlFor="pf-location"
+          hint="City, or City, Region. At most 120 characters. Used to match listings near you."
+        >
+          <TextInput
+            id="pf-location"
+            value={form.location}
+            maxLength={PROFILE_LIMITS.location.max}
+            autoComplete="off"
+            onChange={(e) => set({location: e.target.value})}
+          />
+        </Field>
+        <label className="flex items-start gap-3 text-sm">
           <input
             type="checkbox"
-            className="mt-1"
+            className="mt-0.5 size-6 shrink-0 accent-[var(--color-accent)]"
+            checked={form.availability}
+            onChange={(e) => set({availability: e.target.checked})}
+          />
+          <span>
+            Open to work
+            <span className="block text-xs text-muted">
+              Shown on your profile; the directory can filter by it.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-6 shrink-0 accent-[var(--color-accent)]"
+            checked={form.showTaskList}
+            onChange={(e) => set({showTaskList: e.target.checked})}
+          />
+          <span>
+            Show my task list
+            <span className="block text-xs text-muted">
+              Your open listings and job counts on your public profile.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-6 shrink-0 accent-[var(--color-accent)]"
+            checked={form.alerts}
+            onChange={(e) => set({alerts: e.target.checked})}
+          />
+          <span>
+            Alert me to matching work
+            <span className="block text-xs text-muted">
+              A notification (and Telegram or email, if linked) when a listing matches your skills and
+              location. Needs a published profile that is open to work.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-6 shrink-0 accent-[var(--color-accent)]"
             checked={form.showAccount}
             onChange={(e) => set({showAccount: e.target.checked})}
           />
           <span>Show my NEAR account on the profile (otherwise only the display name is shown)</span>
         </label>
-        <label className="flex items-start gap-2 text-sm">
+        <label className="flex items-start gap-3 text-sm">
           <input
             type="checkbox"
-            className="mt-1"
+            className="mt-0.5 size-6 shrink-0 accent-[var(--color-accent)]"
             checked={form.published}
             onChange={(e) => set({published: e.target.checked})}
           />
