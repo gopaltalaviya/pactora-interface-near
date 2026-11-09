@@ -1465,6 +1465,36 @@ function historyOf(subject, active = {}) {
   };
 }
 
+// GET /v1/admin/audit-log.csv (Round 3): reviewers only; `to` exclusive;
+// default the last 30 days; 366 days at most. The file name is in a
+// Content-Disposition header that is NOT exposed to the page — as on the real
+// API, whose CORS exposes only x-trace-id and retry-after — so the page must
+// name the file itself.
+function auditLog(res, url) {
+  const day = (v) => (/^\d{4}-\d{2}-\d{2}(T[\d:.]+Z)?$/.test(v) ? new Date(v) : null);
+  const to = url.searchParams.get('to') ? day(url.searchParams.get('to')) : new Date();
+  const from = url.searchParams.get('from')
+    ? day(url.searchParams.get('from'))
+    : new Date(to.getTime() - 30 * 86_400_000);
+  if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()))
+    return problem(res, 422, 'SCHEMA_MISMATCH', 'from and to must be ISO dates');
+  if (from >= to) return problem(res, 422, 'SCHEMA_MISMATCH', 'from must be before to');
+  if (to - from > 366 * 86_400_000) return problem(res, 422, 'SCHEMA_MISMATCH', 'at most 366 days');
+  const d = (x) => x.toISOString().slice(0, 10);
+  const rows = [
+    'at,kind,action,case_id,reviewer,subject_account,outcome,note',
+    `${from.toISOString()},screening,opened,case-1,system,suspect.testnet,hold,`,
+    `${from.toISOString()},standing,hold,case-1,system,suspect.testnet,hold,`,
+    `${from.toISOString()},report,resolve,rep-1,rhea.testnet,olive.testnet,hide,scam`,
+  ];
+  res.writeHead(200, {
+    'content-type': 'text/csv; charset=utf-8',
+    'content-disposition': `attachment; filename="pactora-audit-${d(from)}-${d(to)}.csv"`,
+    'access-control-allow-origin': '*',
+  });
+  return res.end(`${rows.join('\n')}\n`);
+}
+
 async function adminRoutes(req, res, path, account, url) {
   const isAdmin = path.startsWith('/v1/admin') || path.startsWith('/v1/compliance');
   if (!isAdmin) return null;
@@ -1479,6 +1509,10 @@ async function adminRoutes(req, res, path, account, url) {
     roles.includes('council') ? null : problem(res, 403, 'FORBIDDEN', 'only the arbiter council may do this');
   if (path === '/v1/admin/me')
     return send(res, 200, {account, chainId: 'near:testnet', roles, arbiterDao: DAO_ID, arbiter: DAO_ID});
+  if (path === '/v1/admin/audit-log.csv' && req.method === 'GET') {
+    if (!roles.includes('reviewer')) return problem(res, 403, 'FORBIDDEN', 'only compliance reviewers');
+    return auditLog(res, url);
+  }
   if (path === '/v1/admin/reports' && req.method === 'GET') {
     if (!roles.includes('reviewer')) return problem(res, 403, 'FORBIDDEN', 'only compliance reviewers');
     const status = url.searchParams.get('status') ?? 'open';

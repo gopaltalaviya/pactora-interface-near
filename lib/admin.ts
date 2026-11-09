@@ -142,6 +142,31 @@ export const admin = {
       {decision, reason, caseVersion},
       'could not record the decision',
     ),
+  /**
+   * The compliance audit log as CSV (reviewers; Round 3), `to` exclusive.
+   * The API's own refusal (422 range, 429 six a minute, 401 a sign-in over
+   * an hour old, 403 not a reviewer) comes back as its detail.
+   */
+  auditLog: async (token: string, from: string, to: string): Promise<Blob> => {
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/v1/admin/audit-log.csv?from=${enc(from)}&to=${enc(to)}`, {
+        headers: bearer(token),
+        cache: 'no-store',
+      });
+    } catch {
+      throw new ApiError('UNREACHABLE', UNREACHABLE);
+    }
+    if (!res.ok) {
+      const problem = (await res.json().catch(() => ({}))) as {code?: string; detail?: string};
+      const detail =
+        res.status === 429
+          ? 'Six exports a minute at most: wait a minute and try again.'
+          : (problem.detail ?? `could not export the audit log (${res.status})`);
+      throw new ApiError(problem.code ?? 'UNKNOWN', detail, res.status);
+    }
+    return res.blob();
+  },
   /** An evidence photo's bytes (council only), for a blob URL. */
   file: async (token: string, url: string): Promise<Blob> => {
     let res: Response;

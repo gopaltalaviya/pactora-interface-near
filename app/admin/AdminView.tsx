@@ -30,6 +30,7 @@ import {
   type Proposal,
 } from '@/lib/admin';
 import {useSession} from '@/lib/session';
+import {auditFilename, auditRange, defaultAuditDates} from '@/lib/audit-export';
 import {functionCall} from '@/lib/wallet';
 import {checkDaoCall, type DaoExpectation} from '@/lib/wallet-guard';
 
@@ -640,7 +641,6 @@ function Moderation() {
 function Compliance() {
   const {authed} = useSession();
   const [cases, setCases] = useState<ComplianceCase[] | null>(null);
-  const [reason, setReason] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -648,16 +648,45 @@ function Compliance() {
       .then((c) => setCases(c.cases))
       .catch((err: unknown) => setProblem(errorText(err)));
   }, [authed, attempt]);
-  if (!cases)
-    return problem ? (
-      <ErrorState title="No access to the compliance queue">{problem}</ErrorState>
-    ) : (
-      <Skeleton className="h-24 w-full" />
-    );
-  if (cases.length === 0) return <p className="text-sm text-muted">No open cases.</p>;
+  return (
+    <div className="space-y-6">
+      <AuditExport />
+      {!cases ? (
+        problem ? (
+          <ErrorState title="No access to the compliance queue">{problem}</ErrorState>
+        ) : (
+          <Skeleton className="h-24 w-full" />
+        )
+      ) : cases.length === 0 ? (
+        <p className="text-sm text-muted">No open cases.</p>
+      ) : (
+        <CaseList
+          cases={cases}
+          problem={problem}
+          setProblem={setProblem}
+          onDecided={() => setAttempt((n) => n + 1)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CaseList({
+  cases,
+  problem,
+  setProblem,
+  onDecided,
+}: {
+  cases: ComplianceCase[];
+  problem: string | null;
+  setProblem: (p: string | null) => void;
+  onDecided: () => void;
+}) {
+  const {authed} = useSession();
+  const [reason, setReason] = useState<Record<string, string>>({});
   const decide = (c: ComplianceCase, decision: 'clear' | 'confirm') =>
     void authed((t) => admin.decide(t, c.caseId, decision, reason[c.caseId] ?? '', c.version))
-      .then(() => setAttempt((n) => n + 1))
+      .then(onDecided)
       .catch((err: unknown) => setProblem(errorText(err)));
   return (
     <ul aria-label="Compliance cases" className="space-y-2 text-sm">
@@ -694,5 +723,98 @@ function Compliance() {
         </li>
       )}
     </ul>
+  );
+}
+
+/**
+ * The compliance audit log as a CSV file (Round 3): every screening, identity
+ * check, standing change and report resolution in the dates chosen, the last
+ * day included. Accounts and outcomes only: the API leaves out names,
+ * documents, report details and free-text notes.
+ */
+function AuditExport() {
+  const {authed} = useSession();
+  const [dates, setDates] = useState(() => defaultAuditDates(new Date()));
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  async function onExport(e: React.FormEvent) {
+    e.preventDefault();
+    setProblem(null);
+    setDone(null);
+    const range = auditRange(dates.from, dates.to);
+    if (!range.ok) {
+      setProblem(range.problem);
+      return;
+    }
+    setBusy(true);
+    try {
+      const blob = await authed((t) => admin.auditLog(t, range.from, range.to));
+      const filename = auditFilename(range.from, range.to);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setDone(`Downloaded ${filename}.`);
+    } catch (err) {
+      setProblem(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      aria-label="Export audit log"
+      onSubmit={(e) => void onExport(e)}
+      className="space-y-3 rounded-lg border border-edge p-3 text-sm"
+    >
+      <div>
+        <h3 className="font-medium">Audit log</h3>
+        <p className="text-xs text-muted">
+          Screenings, identity checks, standing changes and report resolutions, oldest first: when, who
+          decided (or the system), about which account, and the outcome. No legal or matched names, documents,
+          report details or reviewers&apos; notes. Up to 366 days in one file; six exports a minute.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="From" htmlFor="audit-from">
+          <TextInput
+            id="audit-from"
+            type="date"
+            value={dates.from}
+            onChange={(e) => setDates((d) => ({...d, from: e.target.value}))}
+            disabled={busy}
+          />
+        </Field>
+        <Field label="To (included)" htmlFor="audit-to">
+          <TextInput
+            id="audit-to"
+            type="date"
+            value={dates.to}
+            onChange={(e) => setDates((d) => ({...d, to: e.target.value}))}
+            disabled={busy}
+          />
+        </Field>
+        <Button type="submit" size="sm" variant="secondary" loading={busy} disabled={busy}>
+          Export audit log (CSV)
+        </Button>
+      </div>
+      {problem && (
+        <p role="alert" className="text-xs text-broken">
+          {problem}
+        </p>
+      )}
+      {done && (
+        <p role="status" className="text-xs text-muted">
+          {done}
+        </p>
+      )}
+    </form>
   );
 }
