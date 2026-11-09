@@ -4,4 +4,5 @@ export declare function contentSecurityPolicy(
   api: string,
   dev: boolean,
   env: Record<string, string | undefined>,
+  nonce: string,
 ): string;

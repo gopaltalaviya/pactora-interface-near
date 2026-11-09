@@ -1,5 +1,6 @@
 import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
+import {headers} from 'next/headers';
 import Link from 'next/link';
 import {Logo} from '@/components/brand/Logo';
 import {RouteFocus} from '@/components/RouteFocus';
@@ -94,7 +95,11 @@ const FOOTER: {title: string; links: [string, string][]}[] = [
 
 export const viewport: Viewport = {themeColor: '#07090d', colorScheme: 'dark'};
 
-export default function RootLayout({children}: {children: React.ReactNode}) {
+export default async function RootLayout({children}: {children: React.ReactNode}) {
+  // The request's CSP nonce (middleware.ts): the one inline script below must
+  // carry it, or the browser refuses to run it. Reading a header makes every
+  // page render per request, which the nonce needs anyway.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="flex min-h-screen flex-col bg-ink text-text">
@@ -104,7 +109,9 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
             fields read this back on mount (components/ui/Field.tsx), which
             then removes the listener and the record: nothing typed after
             hydration is kept, and a password field is never recorded at all. */}
+        <meta name="csp-nonce" nonce={nonce} />
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){var e=window.__pactoraEarly={};function f(v){var t=v.target;if(t&&t.id&&t.type!=='password'&&typeof t.value==='string')e[t.id]=t.value}document.addEventListener('input',f,true);window.__pactoraEarlyStop=function(){document.removeEventListener('input',f,true);delete window.__pactoraEarly;delete window.__pactoraEarlyStop}})();`,
           }}

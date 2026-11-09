@@ -258,11 +258,26 @@ let connector: Promise<NearConnector> | null = null;
  * One connector per page, created on first use: NEAR Connect touches
  * `window` and IndexedDB, which do not exist during the server render.
  */
+/**
+ * The page's CSP nonce (middleware.ts), for the wallet iframe's inline code:
+ * NEAR Connect puts it on the scripts it writes into the sandboxed iframe,
+ * which inherits the page's policy. Browsers hide a nonce attribute from
+ * `getAttribute`; the `nonce` property still reads it.
+ */
+function cspNonce(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]');
+  const nonce = meta?.nonce || meta?.getAttribute('nonce') || '';
+  return nonce ? nonce : undefined;
+}
+
 function getConnector(): Promise<NearConnector> {
+  const nonce = cspNonce();
   connector ??= import('@hot-labs/near-connect').then(
     ({NearConnector}) =>
       new NearConnector({
         network: 'testnet',
+        ...(nonce ? {cspNonce: nonce} : {}),
         providers: {testnet: ['https://rpc.testnet.near.org']},
         // Only wallets that can do everything registration needs, on testnet.
         features: {signMessage: true, signAndSendTransactions: true, testnet: true},

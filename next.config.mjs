@@ -1,5 +1,4 @@
 import {PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD} from 'next/constants.js';
-import {contentSecurityPolicy} from './lib/csp.mjs';
 
 /**
  * The API lives in pactora-backend-near and is deployed separately, so the browser
@@ -42,12 +41,12 @@ export default function config(phase) {
     reactStrictMode: true,
     poweredByHeader: false,
     env: {NEXT_PUBLIC_API_URL: api},
+    // The Content-Security-Policy is set per request in middleware.ts (a nonce); these do not change.
     async headers() {
       return [
         {
           source: '/:path*',
           headers: [
-            {key: 'Content-Security-Policy', value: contentSecurityPolicy(api, dev, process.env)},
             {key: 'X-Content-Type-Options', value: 'nosniff'},
             {key: 'X-Frame-Options', value: 'DENY'},
             {key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin'},

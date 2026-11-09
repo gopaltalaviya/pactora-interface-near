@@ -9,7 +9,8 @@ const directive = (csp: string, name: string) =>
     .slice(1) ?? [];
 
 describe('the Content Security Policy', () => {
-  const csp = contentSecurityPolicy('https://api.example.invalid/', false, {});
+  const NONCE = 'dGVzdC1ub25jZS0xMjM0NTY3OA==';
+  const csp = contentSecurityPolicy('https://api.example.invalid/', false, {}, NONCE);
 
   it('lets the page reach the API and the NEAR testnet RPC, and no Monad RPC', () => {
     const connect = directive(csp, 'connect-src');
@@ -25,10 +26,15 @@ describe('the Content Security Policy', () => {
   });
 
   it('takes the RPC and wallet origins from the environment when set', () => {
-    const custom = contentSecurityPolicy('https://api.example.invalid', false, {
-      NEXT_PUBLIC_RPC_ORIGINS: 'https://rpc.example',
-      NEXT_PUBLIC_WALLET_ORIGINS: 'https://wallet.example, https://cdn.example',
-    });
+    const custom = contentSecurityPolicy(
+      'https://api.example.invalid',
+      false,
+      {
+        NEXT_PUBLIC_RPC_ORIGINS: 'https://rpc.example',
+        NEXT_PUBLIC_WALLET_ORIGINS: 'https://wallet.example, https://cdn.example',
+      },
+      NONCE,
+    );
     const connect = directive(custom, 'connect-src');
     expect(connect).toEqual([
       "'self'",
@@ -42,5 +48,16 @@ describe('the Content Security Policy', () => {
   it('keeps eval out of production and the page out of frames', () => {
     expect(directive(csp, 'script-src')).not.toContain("'unsafe-eval'");
     expect(directive(csp, 'frame-ancestors')).toEqual(["'none'"]);
+  });
+
+  it('allows scripts by nonce only: no unsafe-inline, strict-dynamic for the chunks a nonced script loads', () => {
+    const script = directive(csp, 'script-src');
+    expect(script).toContain(`'nonce-${NONCE}'`);
+    expect(script).toContain("'strict-dynamic'");
+    expect(script).not.toContain("'unsafe-inline'");
+    expect(() => contentSecurityPolicy('https://api.example.invalid', false, {}, '')).toThrow(/nonce/);
+    expect(() =>
+      contentSecurityPolicy('https://api.example.invalid', false, {}, "x' 'unsafe-inline"),
+    ).toThrow(/nonce/);
   });
 });
