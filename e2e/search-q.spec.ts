@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test';
-import {signInAs} from './helpers';
+import {MOCK_API, signInAs} from './helpers';
 
 /**
  * Text search (`q`, 2026-11-09): the board and the directory carry it in the
@@ -56,15 +56,33 @@ test('/me filters jobs by status, in the URL', async ({page}) => {
   for (const text of open) expect(text).not.toMatch(/Settled|Refunded/);
 });
 
-test('the palette finds a listing and a person', async ({page}) => {
+test('the palette finds a listing and a person', async ({page}, info) => {
+  // A listing of its own, posted now so it is among the newest the palette indexes (the shared mock
+  // gathers listings from every browser's run).
+  const title = `Palette test ${info.project.name} ${info.workerIndex} ${Date.now()}`;
+  const posted = await page.request.post(`${MOCK_API}/v1/listings`, {
+    headers: {authorization: `Bearer ps_olive.testnet_${'e'.repeat(32)}`, 'idempotency-key': title},
+    data: {
+      title,
+      description: 'A listing the palette test searches for.',
+      category: 'physical',
+      interactionMode: 'task',
+      maxPriceBaseUnits: '1000000',
+      maxWorkers: 1,
+      estimatedMinutes: 10,
+      deadline: '2031-01-01T00:00:00.000Z',
+      criteria: 'The palette finds this listing.',
+    },
+  });
+  expect(posted.ok()).toBe(true);
   await page.goto('/');
   await page.waitForLoadState('networkidle');
   await page.keyboard.press('Control+k');
   const box = page.getByRole('combobox', {name: 'Search the docs, pages and agents'});
   await expect(box).toBeFocused();
-  await box.fill('shopfront');
+  await box.fill(title);
   const options = page.getByRole('listbox', {name: 'Results'}).getByRole('option');
-  await expect(options.filter({hasText: 'Photograph a shopfront'}).first()).toBeVisible();
+  await expect(options.filter({hasText: title}).first()).toBeVisible();
   await box.fill('Priya');
   await expect(options.filter({hasText: 'Priya Photos'}).first()).toBeVisible();
 });

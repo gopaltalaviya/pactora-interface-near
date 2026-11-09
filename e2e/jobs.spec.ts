@@ -665,7 +665,10 @@ test('accessibility: the owner pages, signed in', async ({page}) => {
   await signInAs(page, 'olive.testnet');
   await scan(page, '/jobs/new', () => expect(page.getByLabel('Title', {exact: true})).toBeVisible());
   await scan(page, '/jobs/listing/lst-own-page', () =>
-    expect(page.getByTestId('bid-row').first()).toBeVisible(),
+    // A table from md up, cards on a phone.
+    expect(
+      page.getByTestId('bid-row').or(page.getByTestId('bid-card')).filter({visible: true}).first(),
+    ).toBeVisible(),
   );
   await scan(page, `/jobs/${JOB(14)}`, () =>
     expect(page.getByRole('button', {name: 'Cancel and refund'})).toBeVisible(),
