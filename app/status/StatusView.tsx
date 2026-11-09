@@ -9,6 +9,7 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Loading, Skeleton} from '@/components/ui/States';
 import {ApiError, api, type ComponentStatus, type GasStatus, type StatusReport} from '@/lib/api';
 import {relativeTime} from '@/lib/format';
+import {stalledIndexers, type StalledIndexer} from '@/lib/status';
 import {displayAccount, formatYocto} from '@/lib/near';
 
 /**
@@ -144,12 +145,14 @@ const TONE: Record<ComponentStatus, Tone> = {
   up: 'settled',
   degraded: 'refused',
   down: 'broken',
+  stalled: 'broken',
   unknown: 'neutral',
 };
 const WORD: Record<ComponentStatus, string> = {
   up: 'Operational',
   degraded: 'Degraded',
   down: 'Down',
+  stalled: 'Stalled',
   unknown: 'Not reported',
 };
 
@@ -179,6 +182,10 @@ const OVERALL: Record<StatusReport['status'], {tone: Tone; title: string; body: 
 function why(key: keyof StatusReport['components'], state: ComponentStatus, report: StatusReport) {
   if (state === 'up' || state === 'unknown') return null;
   if (key === 'indexer') {
+    if (state === 'stalled' || stalledIndexers(report).length > 0)
+      return stalledIndexers(report).some((s) => s.pruned)
+        ? 'Stalled — the block it starts from is gone from the RPC, so it cannot move forward. See above.'
+        : 'Stalled — it cannot move forward on its own. See above.';
     const worst = report.chains.find((c) => c.indexer.status === state)?.indexer;
     if (!worst) return null;
     if (state === 'down') {
@@ -346,6 +353,10 @@ export function StatusView() {
             </div>
           </section>
 
+          {stalledIndexers(report).map((s) => (
+            <StalledNotice key={s.chain} stalled={s} />
+          ))}
+
           <section aria-label="Components">
             <ul className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {COMPONENTS.map((c, i) => {
@@ -436,6 +447,42 @@ export function StatusView() {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A stalled indexer, said plainly: it will not catch up by waiting. New
+ * settlements stay safe on chain but stop reaching this site, and the fix is
+ * the operator's (the API names it).
+ */
+function StalledNotice({stalled}: {stalled: StalledIndexer}) {
+  return (
+    <section
+      role="alert"
+      aria-label={`Indexer stalled on ${stalled.chain}`}
+      className="space-y-1.5 rounded-xl border border-broken/40 bg-broken/[0.06] p-4 text-sm"
+    >
+      <p className="font-semibold">
+        The indexer has stopped on {stalled.chain}
+        {stalled.pruned ? ': the block it starts from has been pruned.' : '.'}
+      </p>
+      <p className="text-muted">
+        {stalled.pruned
+          ? 'The RPC it reads keeps only recent blocks, and the one the indexer needs next is gone, so it cannot move forward — waiting will not fix it. '
+          : 'It is not catching up, and waiting will not fix it. '}
+        Jobs and payments still settle on chain, safely, but new settlements, scores and reviews do not reach
+        this site until it is restarted.
+      </p>
+      <p className="text-xs text-muted">
+        Reported state: <code className="tabular">{stalled.state}</code>
+        {stalled.fix && (
+          <>
+            {' '}
+            · Operator fix: <code className="tabular">{stalled.fix}</code>
+          </>
+        )}
+      </p>
+    </section>
   );
 }
 

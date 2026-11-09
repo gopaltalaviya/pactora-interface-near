@@ -274,7 +274,8 @@ export interface RegisteredAgent {
  * `GET /v1/status` — public by design: states and numbers only, never a host,
  * URL or error message. See pactora-backend-near apps/api/src/routes/status.ts.
  */
-export type ComponentStatus = 'up' | 'degraded' | 'down' | 'unknown';
+/** `stalled` (Round 3): the indexer cannot move forward at all, e.g. its start block was pruned. */
+export type ComponentStatus = 'up' | 'degraded' | 'down' | 'stalled' | 'unknown';
 
 /** The AI model the hosted runs think with, from real run outcomes. Older APIs omit it. */
 export interface ModelStatus {
@@ -316,6 +317,10 @@ export interface StatusReport {
       lagBlocks: number | null;
       lastIndexedAt: string | null;
       secondsSinceIndexed: number | null;
+      /** Round 3: e.g. `stalled: start block pruned`; absent from an older API. */
+      state?: string;
+      /** Round 3: what the operator does about a stalled state. */
+      fix?: string;
     };
   }[];
 }
