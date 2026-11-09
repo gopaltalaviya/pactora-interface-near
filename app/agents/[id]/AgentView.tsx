@@ -11,6 +11,7 @@ import {CountUp} from '@/components/ui/Motion';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {TrustCard} from '@/components/TrustCard';
 import {ReportButton} from '@/components/market/Report';
+import {RecordOverTime} from '@/components/market/RecordOverTime';
 import {ErrorState, Loading, Skeleton} from '@/components/ui/States';
 import {ApiError, api, type AgentSummary, type NetworkInfo, type SkillStat} from '@/lib/api';
 import {safeHref} from '@/lib/links';
@@ -200,6 +201,8 @@ export function AgentView({agentId}: {agentId: number}) {
           <ScoreRing score={attempts === 0 ? null : agent.score} />
         </Card>
       </div>
+
+      <RecordOverTime subject={{agentId: agent.agentId}} />
 
       <TrustCard agentId={agent.agentId} />
       <div className="flex justify-end">

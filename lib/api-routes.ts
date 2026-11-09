@@ -32,6 +32,11 @@ export const ROUTES: [string, string, string][] = [
   ['GET /v1/agents/:id', 'public', "One agent's profile and reputation"],
   ['GET /v1/agents/:id/trust', 'public', 'Whether that reputation deserves belief: who paid for it'],
   [
+    'GET /v1/agents/:id/history',
+    'public',
+    '52 weeks of settled and refunded jobs, size buckets and shown ratings (a person: published only)',
+  ],
+  [
     'POST /v1/agents/wallet-key',
     'public',
     'The function-call key a new agent wallet is created with (the signer holds its private half)',
@@ -274,6 +279,11 @@ export const ROUTES: [string, string, string][] = [
     'session (reviewer)',
     'hide, warn, none or block, with a note; a block writes the standing',
   ],
+  [
+    'GET /v1/admin/audit-log.csv',
+    'session (reviewer)',
+    'The compliance audit log as CSV: cases, decisions, standing, report resolutions; 6 a minute',
+  ],
   ['GET /v1/kyc', 'session', 'Your identity check, your standing, and what screening covers'],
   [
     'POST /v1/kyc/start',
@@ -290,6 +300,7 @@ export const ROUTES: [string, string, string][] = [
   ],
   ['GET /v1/profiles', 'public', 'The directory of published profiles: search, kind, sort, 20 a page'],
   ['GET /v1/profiles/:id', 'public', 'One published profile, its rating and recent reviews'],
+  ['GET /v1/profiles/:id/history', 'public', 'The same weekly history for a published profile'],
   ['GET /v1/profiles/:id/reviews', 'public', 'The reviews shown on a profile, newest first'],
   ['GET /v1/me/profile', 'key or session', 'Your profile, published or not'],
   ['PUT /v1/me/profile', 'key or session', 'Write your profile; nothing is public until published'],

@@ -9,7 +9,7 @@ import {Card} from '@/components/ui/Card';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Skeleton} from '@/components/ui/States';
 import {ReportButton} from '@/components/market/Report';
-import {ScoreChart} from '@/components/market/ScoreChart';
+import {RecordOverTime} from '@/components/market/RecordOverTime';
 import {displayAccount} from '@/lib/near';
 import {authorText, profiles, ratingText, starsOf, type ProfileDetail} from '@/lib/profiles';
 
@@ -135,25 +135,12 @@ export function ProfileView({profileId}: {profileId: string}) {
           )}
         </div>
       </Card>
+      <RecordOverTime subject={{profileId: p.profileId}} />
       <Card
         title="Reviews"
         labelledBy="reviews"
         description="From the other side of settled jobs. Each is shown once both sides have reviewed, or 14 days after the job settled."
       >
-        {p.reviews.length > 1 && (
-          <div className="mb-4">
-            <ScoreChart
-              title="Rating over time"
-              unit="out of 5"
-              max={5}
-              points={p.reviews.map((r) => ({
-                at: r.at,
-                value: r.rating,
-                label: `${r.rating} from ${authorText(r)}`,
-              }))}
-            />
-          </div>
-        )}
         {p.reviews.length === 0 ? (
           <p className="text-sm text-muted">No reviews shown yet.</p>
         ) : (

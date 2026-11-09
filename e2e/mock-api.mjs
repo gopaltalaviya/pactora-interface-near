@@ -1416,6 +1416,55 @@ const ruling = (jobId, forWorker) => ({
   },
 });
 
+// ── per-participant weekly history (GET /v1/agents/:id/history and
+// /v1/profiles/:id/history, Round 3): always 52 weeks, oldest first,
+// zero-filled, weeks starting Monday 00:00 UTC, the last one the current week.
+// `active` maps "weeks ago" to what happened in that week.
+function historyOf(subject, active = {}) {
+  const now = new Date();
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  const DAY = 86_400_000;
+  const series = Array.from({length: 52}, (_, i) => {
+    const ago = 51 - i;
+    const start = new Date(monday.getTime() - ago * 7 * DAY);
+    const a = active[ago] ?? {};
+    return {
+      week: start.toISOString().slice(0, 10),
+      settled: a.settled ?? 0,
+      refunded: a.refunded ?? 0,
+      asWorker: a.asWorker ?? 0,
+      asClient: a.asClient ?? 0,
+      amounts: {lt1: 0, '1to10': 0, '10to100': 0, gte100: 0, ...(a.amounts ?? {})},
+      rating: a.rating ?? null,
+    };
+  });
+  const settled = series.reduce((n, w) => n + w.settled, 0);
+  const refunded = series.reduce((n, w) => n + w.refunded, 0);
+  const rated = series.filter((w) => w.rating);
+  const count = rated.reduce((n, w) => n + w.rating.count, 0);
+  return {
+    subject,
+    weeks: 52,
+    from: `${series[0].week}T00:00:00.000Z`,
+    to: new Date(monday.getTime() + 7 * DAY).toISOString(),
+    amountBuckets: ['lt1', '1to10', '10to100', 'gte100'],
+    series,
+    totals: {
+      settled,
+      refunded,
+      rating: count
+        ? {
+            average:
+              Math.round((rated.reduce((n, w) => n + w.rating.average * w.rating.count, 0) / count) * 100) /
+              100,
+            count,
+          }
+        : null,
+    },
+  };
+}
+
 async function adminRoutes(req, res, path, account, url) {
   const isAdmin = path.startsWith('/v1/admin') || path.startsWith('/v1/compliance');
   if (!isAdmin) return null;
@@ -1743,6 +1792,32 @@ async function profileRoutes(req, res, path, account, me, url) {
       sort,
       profiles: rows.slice((page - 1) * 20, page * 20).map(view),
     });
+  }
+  const hist = /^\/v1\/profiles\/([^/]+)\/history$/.exec(path);
+  if (hist && req.method === 'GET') {
+    const i = DIR.findIndex((x) => x.profileId === hist[1]);
+    if (i < 0) return problem(res, 404, 'NOT_FOUND', 'no published profile');
+    const p = DIR[i];
+    // Priya (the first) has two weeks of work and a review in each: 5, then 4.
+    return send(
+      res,
+      200,
+      historyOf(
+        {kind: p.kind, agentId: p.chainAgentId, profileId: p.profileId},
+        i === 0
+          ? {
+              3: {settled: 2, asWorker: 2, amounts: {lt1: 2}, rating: {average: 5, count: 1}},
+              1: {
+                settled: 1,
+                refunded: 1,
+                asWorker: 2,
+                amounts: {lt1: 1, '1to10': 1},
+                rating: {average: 4, count: 1},
+              },
+            }
+          : {},
+      ),
+    );
   }
   const one = /^\/v1\/profiles\/([^/]+)$/.exec(path);
   if (one && req.method === 'GET') {
@@ -2871,6 +2946,33 @@ createServer(async (req, res) => {
       fundingWindowBlocks: 9000,
       indexedToBlock: '66970100',
     });
+  }
+  // ResearchBot (1) closed jobs in three weeks, reviewed in two; Unproven (2)
+  // has 52 empty weeks.
+  const historyMatch = /^\/v1\/agents\/(\d+)\/history$/.exec(url.pathname);
+  if (historyMatch) {
+    const id = Number(historyMatch[1]);
+    if (!agents.find((a) => a.agentId === id)) return problem(res, 404, 'NOT_FOUND', 'no such agent');
+    return send(
+      res,
+      200,
+      historyOf(
+        {kind: 'agent', agentId: String(id), profileId: null},
+        id === 1
+          ? {
+              10: {settled: 1, asWorker: 1, amounts: {lt1: 1}},
+              4: {
+                settled: 2,
+                refunded: 1,
+                asWorker: 3,
+                amounts: {lt1: 2, '1to10': 1},
+                rating: {average: 4, count: 2},
+              },
+              0: {settled: 0, refunded: 0, rating: {average: 5, count: 1}},
+            }
+          : {},
+      ),
+    );
   }
   const agentMatch = /^\/v1\/agents\/(\d+)$/.exec(url.pathname);
   if (agentMatch) {

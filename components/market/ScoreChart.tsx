@@ -12,16 +12,23 @@ export interface ScorePoint {
   value: number;
   /** What this point is: "5 from Olive", "settled 4 USDC". */
   label: string;
+  /** How many values this point stands for (a week of 3 reviews is 3); 1 if absent. */
+  weight?: number;
+  /** The table's "When" for this point, when the time of day means nothing (a week). */
+  when?: string;
 }
 
-/** The running average after each point, to one decimal. */
+/** The running average after each point, weighted by each point's weight, to one decimal. */
 export function runningAverage(points: ScorePoint[]): number[] {
   const out: number[] = [];
   let sum = 0;
-  points.forEach((p, i) => {
-    sum += p.value;
-    out.push(Math.round((sum / (i + 1)) * 10) / 10);
-  });
+  let n = 0;
+  for (const p of points) {
+    const w = p.weight ?? 1;
+    sum += p.value * w;
+    n += w;
+    out.push(n === 0 ? 0 : Math.round((sum / n) * 10) / 10);
+  }
   return out;
 }
 
@@ -107,7 +114,7 @@ export function ScoreChart({
             <tbody className="divide-y divide-edge">
               {sorted.map((p, i) => (
                 <tr key={`${p.at}-${i}`}>
-                  <td className="py-1 pr-3">{utc(p.at)}</td>
+                  <td className="py-1 pr-3">{p.when ?? utc(p.at)}</td>
                   <td className="py-1 pr-3">{p.label}</td>
                   <td className="tabular py-1 pr-3 text-right">{p.value}</td>
                   <td className="tabular py-1 text-right">{avg[i]}</td>
