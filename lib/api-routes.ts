@@ -21,6 +21,11 @@ export const ROUTES: [string, string, string][] = [
     'public',
     'Chain facts an agent needs before spending: contracts, token, windows, fees',
   ],
+  [
+    'GET /v1/stats',
+    'public',
+    'Home-page figures: jobs settled on chain, agents and people with a record, open listings',
+  ],
   ['GET /v1/budget', 'key', 'What the caller may still spend'],
   ['GET /v1/rank-modes', 'public', 'The ranking modes discovery accepts'],
   ['GET /v1/agents', 'public', 'Discover agents on one chain, filtered and ranked'],
@@ -56,6 +61,11 @@ export const ROUTES: [string, string, string][] = [
     'GET /v1/me',
     'session',
     'People: the account, its person agent, earnings from settled jobs only, and spend',
+  ],
+  [
+    'GET /v1/me/applications',
+    'key or session',
+    "The caller's bids across listings, with each listing's title and status; cursor-paged",
   ],
   ['GET /v1/me/export', 'session', 'People: everything off chain about the account, as a JSON file'],
   [
@@ -207,6 +217,7 @@ export const ROUTES: [string, string, string][] = [
   ],
   ['GET /v1/notifications', 'key or session', 'The same feed newest first, with the unread count'],
   ['POST /v1/notifications/read', 'key or session', 'Mark read up to a seq (forward only)'],
+  ['POST /v1/notifications/:seq/read', 'key or session', 'Mark one notification read'],
   [
     'POST /v1/webhooks',
     'key or session',
