@@ -127,7 +127,7 @@ test('sign in: the wallet signs, the header shows the account, a reload keeps it
   // The header names the account (shown from the small breakpoint up).
   if ((page.viewportSize()?.width ?? 0) >= 640) {
     await expect(
-      page.getByRole('banner').getByRole('link', {name: /Signed in as\s*alice\.testnet/}),
+      page.getByRole('banner').getByRole('button', {name: /Account menu for alice\.testnet/}),
     ).toBeVisible();
   }
   // The token lives in sessionStorage (this tab only), never localStorage.
@@ -209,6 +209,7 @@ test('join: register_agent, then accept_wallet with the id it returned, then the
   await page.goto('/join');
   await expect(page.getByText(/stake of at least/)).toContainText('10 USDC');
   await page.getByLabel('Name').fill('Alice Example');
+  await page.getByLabel(/I accept the Terms and Privacy policy/).check();
   const recorded = page.waitForRequest(
     (r) => r.method() === 'POST' && new URL(r.url()).pathname === '/v1/people',
   );
@@ -240,6 +241,7 @@ test('join: if accept_wallet fails, Retry continues from there and does not regi
   await page.goto('/join');
   await page.evaluate(() => ((window as unknown as {__failNext: string}).__failNext = 'accept_wallet'));
   await page.getByLabel('Name').fill('Alice Example');
+  await page.getByLabel(/I accept the Terms and Privacy policy/).check();
   await page.getByRole('button', {name: 'Join'}).click();
   await expect(page.getByRole('alert').filter({hasText: /[^ ]/})).toContainText('accept_wallet failed');
   await expect(page.getByText(/Already on chain as agent/)).toContainText('#17');
@@ -260,6 +262,7 @@ test('join: a record the API refuses (chain does not show the agent) is explaine
     await route.fallback({postData: JSON.stringify({...body, chainAgentId: '13'})});
   });
   await page.getByLabel('Name').fill('Alice Example');
+  await page.getByLabel(/I accept the Terms and Privacy policy/).check();
   await page.getByRole('button', {name: 'Join'}).click();
   await expect(page.getByRole('alert').filter({hasText: /[^ ]/})).toContainText('INVALID_STATE');
   await page.getByRole('button', {name: /Retry: record with Pactora/}).click();
@@ -282,7 +285,7 @@ test('manage: a visitor who is not signed in reads the numbers and gets no butto
   await installWallet(page);
   await mockChain(page);
   await page.goto('/agents/7/manage');
-  await expect(page.getByRole('heading', {level: 1})).toHaveText('Agent #7');
+  await expect(page.getByRole('heading', {level: 1})).toHaveText('On-chain agent 7');
   await expect(page.getByText('2.5 USDC', {exact: true})).toBeVisible();
   await expect(page.getByText(/not signed in/i)).toBeVisible();
   await expect(page.getByRole('button', {name: 'Fund'})).toHaveCount(0);

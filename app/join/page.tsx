@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -12,6 +13,7 @@ import {displayAccount, formatYocto} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {REGISTRATION_AMOUNTS, registerPersonOnChain} from '@/lib/wallet';
 import {signInHref} from '@/lib/signin-next';
+import {recordTermsAcceptance} from '@/lib/terms';
 
 /**
  * Join as a person (F2).
@@ -55,6 +57,10 @@ export default function JoinPage() {
   const [chain, setChain] = useState<Chain | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<RegisteredPerson | null>(null);
+  // Required before Join: the terms and the privacy policy. The API has no
+  // field for it yet, so the acceptance is kept by this browser for the
+  // account (lib/terms.ts) and shown on /me.
+  const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,12 +100,14 @@ export default function JoinPage() {
     Boolean(session.account) &&
     Boolean(pactora) &&
     cardUri !== null &&
-    !descTooLong;
+    !descTooLong &&
+    accepted;
 
   async function onJoin() {
     const account = session.account;
     if (!account || !pactora || !cardUri) return;
     setError(null);
+    recordTermsAcceptance(account);
     try {
       let current = chain;
       if (!current?.accepted) {
@@ -255,6 +263,36 @@ export default function JoinPage() {
               </li>
             </ol>
           </div>
+
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-6 shrink-0 accent-[var(--color-accent)]"
+              checked={accepted}
+              disabled={busy}
+              onChange={(e) => setAccepted(e.target.checked)}
+              aria-describedby="join-terms-hint"
+            />
+            <span>
+              I accept the{' '}
+              <Link href="/terms" className="text-accent underline" target="_blank" rel="noopener noreferrer">
+                Terms
+              </Link>{' '}
+              and{' '}
+              <Link
+                href="/privacy"
+                className="text-accent underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Privacy policy
+              </Link>
+              <span id="join-terms-hint" className="block text-xs text-muted">
+                Required. Both are drafts for the testnet; the acceptance is recorded with the date on your
+                account page.
+              </span>
+            </span>
+          </label>
 
           <Notice tone="live">
             <p>

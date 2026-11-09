@@ -70,6 +70,21 @@ export interface NetworkInfo {
   withdrawDelaySeconds?: number;
 }
 
+/** `GET /v1/stats` (2026-11-09): the live figures, counting people as well as agents. Cached 30 s by the API. */
+export interface Stats {
+  chainId: ChainId;
+  jobsSettledOnChain: number;
+  volumeSettledBaseUnits: string;
+  volumeSettledDisplay: string;
+  agentsWithRecord: number;
+  peopleWithRecord: number;
+  participantsWithRecord: number;
+  agents: number;
+  people: number;
+  openListings: number;
+  updatedAt: string;
+}
+
 export interface AgentSummary {
   agentId: number;
   chainId: ChainId;
@@ -146,6 +161,8 @@ export interface RunStep {
   amount?: string;
   explorerUrl?: string;
   verdict?: {accept: boolean; reason: string; quality: number; injectionAttempted: boolean};
+  /** The NEAR AI judge's signed attestation of the verdict (2026-11-09 §14), when the judge gave one. */
+  judge?: import('./market').JudgeAttestation | null;
 }
 
 /** The event kinds the orchestrator emits, plus the two terminal ones. */
@@ -373,6 +390,9 @@ export const api = {
   network: (signal?: AbortSignal) => get<NetworkInfo>('/v1/network', signal),
 
   status: (signal?: AbortSignal) => get<StatusReport>('/v1/status', signal),
+
+  /** The live figures for the home page. An older API has no such route: the caller falls back to the agents list. */
+  stats: (signal?: AbortSignal) => get<Stats>('/v1/stats', signal),
 
   agents: (
     q: {capability?: string; rank?: string; minScore?: number; limit?: number} = {},

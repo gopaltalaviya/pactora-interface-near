@@ -31,13 +31,30 @@ const PAGE_SENTENCES: Record<string, string> = {
   FORBIDDEN: 'You do not have access to this page.',
   NOT_FOUND: 'This was not found. It may have been removed, or the link may be wrong.',
   UNAUTHORIZED: 'Sign in to see this.',
+  RATE_LIMITED: 'Too many requests from your connection just now. Wait a moment and try again.',
+};
+
+/**
+ * Codes whose detail is written for a developer, said in plain words for an
+ * action too (the live audit of 2026-11-09 saw "RATE_LIMITED: Rate limit
+ * exceeded, retry in 2 seconds" on /register). `retryAfter` is appended in
+ * words when the API gave one.
+ */
+const ACTION_SENTENCES: Record<string, (err: ApiError) => string> = {
+  RATE_LIMITED: (err) =>
+    `Too many requests from your connection just now.${
+      err.retryAfter ? ` Pactora asks for a wait of ${err.retryAfter} s.` : ' Wait a moment and try again.'
+    }`,
 };
 
 export function describeError(err: unknown, scope: 'page' | 'action' = 'page'): ErrorView {
   if (err instanceof ApiError) {
     return {
-      text: (scope === 'page' ? PAGE_SENTENCES[err.code] : undefined) ?? err.message,
-      retryable: err.status === undefined || err.status >= 500,
+      text:
+        (scope === 'page' ? PAGE_SENTENCES[err.code] : undefined) ??
+        ACTION_SENTENCES[err.code]?.(err) ??
+        err.message,
+      retryable: err.status === undefined || err.status >= 500 || err.status === 429,
       notFound: err.code === 'NOT_FOUND',
     };
   }

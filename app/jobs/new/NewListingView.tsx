@@ -21,8 +21,10 @@ import {
   type KeyState,
   type ListingDraft,
 } from '@/lib/listing-form';
+import {applyTemplate, LISTING_TEMPLATES} from '@/lib/listing-templates';
 import {CATEGORIES, market, MODES, type Category, type HiringMode, type InteractionMode} from '@/lib/market';
 import {useSession} from '@/lib/session';
+import {StandingBanner} from '@/components/market/Standing';
 
 /**
  * Post a listing. The form checks what the API checks, beside each field; the
@@ -45,6 +47,16 @@ export function NewListingView() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{message: string; uncertain: boolean} | null>(null);
   const key = useRef<KeyState | null>(null);
+  const [template, setTemplate] = useState<string>('blank');
+
+  /** A template fills the form (F31); "blank" empties it. Errors are cleared: the fields changed. */
+  function pick(id: string) {
+    setTemplate(id);
+    setErrors({});
+    setFailure(null);
+    const t = LISTING_TEMPLATES.find((x) => x.id === id);
+    setDraft(t ? applyTemplate(t) : EMPTY_DRAFT);
+  }
 
   const set = <K extends keyof ListingDraft>(field: K, value: ListingDraft[K]) => {
     setDraft((d) => ({...d, [field]: value}));
@@ -107,6 +119,47 @@ export function NewListingView() {
             first.
           </Notice>
         )}
+
+        <StandingBanner />
+
+        <fieldset className="rounded-xl border border-edge bg-surface/80 p-5 backdrop-blur-sm">
+          <legend className="px-1 text-sm font-semibold tracking-tight">Start from a template</legend>
+          <p className="mb-3 text-xs text-muted">
+            Three worked examples to change as you like, or an empty form. The deadline is always yours to
+            set.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {LISTING_TEMPLATES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={template === t.id}
+                onClick={() => pick(t.id)}
+                className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  template === t.id
+                    ? 'border-accent bg-accent/10 text-text'
+                    : 'border-edge text-muted hover:border-edge-strong hover:text-text'
+                }`}
+              >
+                <span className="block font-medium text-text">{t.label}</span>
+                <span className="mt-0.5 block text-xs">{t.blurb}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-pressed={template === 'blank'}
+              onClick={() => pick('blank')}
+              className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                template === 'blank'
+                  ? 'border-accent bg-accent/10 text-text'
+                  : 'border-edge text-muted hover:border-edge-strong hover:text-text'
+              }`}
+            >
+              <span className="block font-medium text-text">Start from blank</span>
+              <span className="mt-0.5 block text-xs">An empty form.</span>
+            </button>
+          </div>
+        </fieldset>
 
         <form onSubmit={(e) => void submit(e)} noValidate className="space-y-6">
           <Card title="The work" labelledBy="work">

@@ -46,6 +46,16 @@ describe('describeError', () => {
     expect(describeError('odd').text).toBe('something went wrong');
   });
 
+  it('says a rate limit in plain words, with the wait the API asked for, and calls it worth a retry', () => {
+    const limited = new ApiError('RATE_LIMITED', 'Rate limit exceeded, retry in 2 seconds', 429, 2);
+    expect(errorText(limited)).toBe(
+      'Too many requests from your connection just now. Pactora asks for a wait of 2 s.',
+    );
+    expect(errorText(limited)).not.toMatch(/RATE_LIMITED/);
+    expect(describeError(limited, 'action').retryable).toBe(true);
+    expect(describeError(limited).text).toMatch(/^Too many requests/);
+  });
+
   it('errorText is the sentence alone, for an action, and never carries the code', () => {
     expect(errorText(new ApiError('INSUFFICIENT_FUNDS', 'the daily allowance cannot reserve it', 402))).toBe(
       'the daily allowance cannot reserve it',

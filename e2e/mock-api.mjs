@@ -107,6 +107,24 @@ const run = {
       jobId: JOB_ID,
       agentId: 1,
       explorerUrl: `${EXPLORER}/txns/6zgh2u9DqHHiXzdy9ouTP7oGky2T4nugqzqt9wJZwNFm`,
+      verdict: {
+        accept: true,
+        reason: 'Sources named; numbers add up.',
+        quality: 0.9,
+        injectionAttempted: false,
+      },
+      judge: {
+        provider: 'near-ai',
+        model: 'deepseek-v3',
+        responseId: 'resp_7f3a9c',
+        signature: 'MEUCIQDexample',
+        signingAddress: '0x1234567890abcdef1234567890abcdef12345678',
+        signingAlgo: 'ecdsa',
+        signedText: 'sha256(request):sha256(response)',
+        verifiedAt: '2026-09-30T08:00:50.000Z',
+        verdictHash: 'ab'.repeat(32),
+        verified: true,
+      },
     },
   ],
   events: [
@@ -195,8 +213,9 @@ async function readBody(req) {
 // `ps_expired` is always refused, to test the 401 path.
 const sessionToken = (account) => `ps_${account}_${'e'.repeat(32)}`;
 function sessionAccount(req) {
-  const m = /^Bearer ps_([a-z0-9._-]+)_[a-z]{32}$/.exec(req.headers.authorization ?? '');
-  return m && !m[1].startsWith('expired') ? m[1] : null;
+  const m = /^Bearer ps_([a-z0-9._-]+)_[a-z]{32}$/i.exec(req.headers.authorization ?? '');
+  if (!m || m[1].startsWith('expired')) return null;
+  return typeof deletedAccounts !== 'undefined' && deletedAccounts.has(m[1]) ? null : m[1];
 }
 const NONCE = 'ab'.repeat(32);
 
@@ -420,6 +439,7 @@ const listingView = (l) => {
     reservedBaseUnits: l.reservedBaseUnits,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
+    hidden: Boolean(l.hidden),
   };
 };
 
@@ -535,6 +555,7 @@ const METHOD = {
   cancel: 'cancel_job',
 };
 const RULES = {
+  decline: {party: 'worker', from: ['created'], to: 'created'},
   create: {party: 'client', from: ['created'], to: 'created'},
   accept: {party: 'worker', from: ['created'], to: 'accepted'},
   submit: {party: 'worker', from: ['accepted'], to: 'submitted'},
@@ -588,8 +609,37 @@ addJob(JOB(1), {
     },
   ],
 });
+jobs.get(JOB(1)).judge = {
+  provider: 'near-ai',
+  model: 'deepseek-v3',
+  responseId: 'resp_7f3a9c',
+  signature: 'MEUCIQDexample',
+  signingAddress: '0x1234567890abcdef1234567890abcdef12345678',
+  signingAlgo: 'ecdsa',
+  signedText: 'sha256(request):sha256(response)',
+  verifiedAt: '2026-11-02T10:00:00.000Z',
+  verdictHash: 'ab'.repeat(32),
+  verified: true,
+};
 addJob(JOB(2));
 addJob(JOB(3), {chainJobId: '5003'});
+// A dispute the client won: refunded after the arbiter ruled.
+addJob(JOB(60), {
+  state: 'refunded',
+  chainJobId: '5060',
+  result: {answer: 'Wrong street.'},
+  dispute: {
+    reason: 'The photos are of the wrong street.',
+    reasonHash: '0x' + 'ef'.repeat(32),
+    at: '2026-11-02T10:00:00.000Z',
+  },
+  events: [
+    {kind: 'job.created', txHash: 'T60a', occurredAt: '2026-11-02T09:00:00.000Z'},
+    {kind: 'job.disputed', txHash: 'T60b', occurredAt: '2026-11-02T10:00:00.000Z'},
+    {kind: 'dispute_resolved', txHash: 'T60c', occurredAt: '2026-11-03T10:00:00.000Z'},
+    {kind: 'job.refunded', txHash: 'T60c', occurredAt: '2026-11-03T10:00:00.000Z'},
+  ],
+});
 addJob(JOB(4), {state: 'accepted', chainJobId: '5004'});
 addJob(JOB(5), {
   state: 'submitted',
@@ -669,12 +719,24 @@ listingJob(42); // filled below: a round awaiting review, with a photo and a mes
 listingJob(43); // filled below: an accepted draft, ready to submit
 addJob(JOB(50), {state: 'disputed', chainJobId: '7050'}); // the admin desk's dispute
 
+const titleOf = (j) => {
+  const listing = j.spec?.input?.listing;
+  if (listing?.title) return listing.title;
+  const cap = (j.spec ?? {capability: 'photo-capture'}).capability;
+  return cap ? cap.replace(/[-_]+/g, ' ') : 'Job';
+};
+const listingOf = (j) => j.spec?.input?.listing ?? null;
+
 const jobView = (j) => ({
   jobId: j.jobId,
   chainJobId: j.chainJobId,
   chainId: 'near:testnet',
   network: 'NEAR Testnet',
   state: j.state,
+  title: titleOf(j),
+  listingId: listingOf(j)?.listingId ?? null,
+  listingTitle: listingOf(j)?.title ?? null,
+  judge: j.judge ?? null,
   path: 'escrow',
   amount: j.amount,
   amountDisplay: display(j.amount),
@@ -702,6 +764,9 @@ const jobRow = (j, agentId) => ({
   chainJobId: j.chainJobId,
   chainId: 'near:testnet',
   state: j.state,
+  title: titleOf(j),
+  listingId: listingOf(j)?.listingId ?? null,
+  listingTitle: listingOf(j)?.title ?? null,
   path: 'escrow',
   amount: j.amount,
   amountDisplay: display(j.amount),
@@ -764,6 +829,32 @@ async function personActions(req, res, url, account) {
   if (!rule) return problem(res, 400, 'VALIDATION', 'unknown action');
   const partyAgent = rule.party === 'client' ? j.client : j.worker;
   if (me !== partyAgent) return problem(res, 403, 'FORBIDDEN', `only the ${rule.party} may ${body.action}`);
+
+  if (m[2] === 'prepare' && body.action === 'decline') {
+    if (j.state !== 'created') return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+    if (typeof body.reason !== 'string' || body.reason.trim().length < 1 || body.reason.length > 500)
+      return problem(res, 400, 'VALIDATION', 'reason is 1-500 characters');
+    if (!j.declined) {
+      j.declined = {reason: body.reason.trim(), at: new Date().toISOString()};
+      pushEvent(j, 'job.declined', null);
+      // A listing job: the slot is released and the bid rejected.
+      for (const l of listings.values()) {
+        const slot = l.slots.find((x) => x.jobId === j.jobId);
+        if (!slot) continue;
+        l.slots = l.slots.filter((x) => x.jobId !== j.jobId);
+        const a = l.applications.find((x) => x.jobId === j.jobId);
+        if (a) {
+          a.status = 'rejected';
+          a.reason = 'The worker declined the job.';
+        }
+        if (l.status === 'filled') l.status = 'open';
+      }
+    }
+    j.prepared = [...(j.prepared ?? []), 'decline'];
+    return send(res, 200, {jobId: j.jobId, action: 'decline', offChain: true, declined: j.declined});
+  }
+  if (m[2] === 'confirm' && body.action === 'decline')
+    return problem(res, 409, 'INVALID_STATE', 'nothing to confirm: a decline is off chain');
 
   if (m[2] === 'prepare') {
     if (!rule.from.includes(j.state)) return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
@@ -883,7 +974,7 @@ async function market(req, res, url) {
   const me = account ? agentOfAccount(account) : null;
   const path = url.pathname;
 
-  if (path === '/v1/me') {
+  if (path === '/v1/me' && req.method === 'GET') {
     if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
     const p = PEOPLE[account];
     if (!p)
@@ -915,8 +1006,24 @@ async function market(req, res, url) {
     if (!account || !me) return problem(res, 401, 'UNAUTHORIZED', 'no session');
     const limit = Number(url.searchParams.get('limit') ?? 20);
     const after = url.searchParams.get('cursor');
+    const status = url.searchParams.get('status');
+    const state = url.searchParams.get('state');
+    if (status && state) return problem(res, 422, 'SCHEMA_MISMATCH', 'status and state together');
+    const OPEN = ['created', 'accepted', 'submitted', 'disputed'];
+    const CLOSED = ['settled', 'refunded'];
+    const wanted = (j) =>
+      !status && !state
+        ? true
+        : status === 'open'
+          ? OPEN.includes(j.state)
+          : status === 'closed'
+            ? CLOSED.includes(j.state)
+            : j.state === (status ?? state);
+    const text = (url.searchParams.get('q') ?? '').toLowerCase().trim();
     const mine = [...jobs.values()]
       .filter((j) => j.client === me || j.worker === me)
+      .filter(wanted)
+      .filter((j) => !text || `${titleOf(j)} ${(j.spec ?? {}).capability ?? ''}`.toLowerCase().includes(text))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const start = after ? mine.findIndex((j) => j.jobId === after) + 1 : 0;
     const rows = mine.slice(start, start + limit);
@@ -928,8 +1035,9 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await roundRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await channelRoutes(req, res, path, account, me)) !== null) return;
-  if ((await adminRoutes(req, res, path, account)) !== null) return;
+  if ((await adminRoutes(req, res, path, account, url)) !== null) return;
   if ((await kycRoutes(req, res, path, account, me)) !== null) return;
   if ((await profileRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await feedRoutes(req, res, path, account, me, url)) !== null) return;
@@ -952,6 +1060,17 @@ async function market(req, res, url) {
     const limit = Number(q.get('limit') ?? 20);
     const status = q.get('status') ?? 'open';
     let rows = [...listings.values()].filter((l) => l.status === status);
+    // Hidden by moderation: out of the public list; the owner still sees theirs with mine=true.
+    rows = rows.filter((l) => !l.hidden || (q.get('mine') === 'true' && me && l.client.agentId === me));
+    if (q.get('q')) {
+      const text = q.get('q');
+      if (text.length > 100) return problem(res, 422, 'SCHEMA_MISMATCH', 'q is 1-100 characters');
+      const words = text.toLowerCase().replace(/["-]/g, ' ').split(/\s+/).filter(Boolean);
+      rows = rows.filter((l) => {
+        const hay = `${l.title} ${l.description} ${l.skills.join(' ')}`.toLowerCase();
+        return words.every((w) => hay.includes(w));
+      });
+    }
     if (q.get('category')) rows = rows.filter((l) => l.category === q.get('category'));
     if (q.get('interactionMode')) rows = rows.filter((l) => l.interactionMode === q.get('interactionMode'));
     if (q.get('hiringMode')) rows = rows.filter((l) => l.hiringMode === q.get('hiringMode'));
@@ -1297,7 +1416,7 @@ const ruling = (jobId, forWorker) => ({
   },
 });
 
-async function adminRoutes(req, res, path, account) {
+async function adminRoutes(req, res, path, account, url) {
   const isAdmin = path.startsWith('/v1/admin') || path.startsWith('/v1/compliance');
   if (!isAdmin) return null;
   if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
@@ -1310,7 +1429,38 @@ async function adminRoutes(req, res, path, account) {
   const council = () =>
     roles.includes('council') ? null : problem(res, 403, 'FORBIDDEN', 'only the arbiter council may do this');
   if (path === '/v1/admin/me')
-    return send(res, 200, {account, chainId: 'near:testnet', roles, arbiterDao: DAO_ID});
+    return send(res, 200, {account, chainId: 'near:testnet', roles, arbiterDao: DAO_ID, arbiter: DAO_ID});
+  if (path === '/v1/admin/reports' && req.method === 'GET') {
+    if (!roles.includes('reviewer')) return problem(res, 403, 'FORBIDDEN', 'only compliance reviewers');
+    const status = url.searchParams.get('status') ?? 'open';
+    const rows = [...reports.values()]
+      .filter((r) => r.status === status)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(({reporter, ...r}) => ({...r, reporter: {publicId: reporter.publicId, kind: reporter.kind}}));
+    return send(res, 200, {reports: rows});
+  }
+  const resolve = /^\/v1\/admin\/reports\/([^/]+)\/resolve$/.exec(path);
+  if (resolve && req.method === 'POST') {
+    if (!roles.includes('reviewer')) return problem(res, 403, 'FORBIDDEN', 'only compliance reviewers');
+    const r = reports.get(resolve[1]);
+    if (!r) return problem(res, 404, 'NOT_FOUND', 'no such report');
+    if (r.status !== 'open') return problem(res, 409, 'INVALID_STATE', 'already resolved');
+    const b = await readBody(req);
+    if (!['hide', 'warn', 'none', 'block'].includes(b.action))
+      return problem(res, 422, 'SCHEMA_MISMATCH', 'action');
+    if (String(b.note ?? '').trim().length < 3)
+      return problem(res, 422, 'SCHEMA_MISMATCH', 'note is 3-500 characters');
+    r.action = b.action;
+    r.note = b.note;
+    r.status = b.action === 'none' ? 'dismissed' : 'resolved';
+    r.resolvedAt = new Date().toISOString();
+    r.resolvedBy = account;
+    if (b.action === 'hide' && r.targetType === 'listing') {
+      const l = listings.get(r.targetId);
+      if (l) l.hidden = true;
+    }
+    return send(res, 200, {reportId: r.reportId, status: r.status, action: r.action});
+  }
   if (path === '/v1/admin/disputes') {
     if (council() !== null) return;
     return send(res, 200, {
@@ -1346,6 +1496,8 @@ async function adminRoutes(req, res, path, account) {
           },
         ],
         timeline: [{kind: 'job.disputed', txHash: 'T9', at: '2026-11-02T10:00:00.000Z'}],
+        disputeNotes: disputeNotes.get(JOB(50)) ?? [],
+        disputeFiles: (disputeFiles.get(JOB(50)) ?? []).map(fileView),
         evidenceHash,
       });
     }
@@ -1446,7 +1598,11 @@ async function kycRoutes(req, res, path, account, me) {
   if (!path.startsWith('/v1/kyc')) return null;
   if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
   if (!me) return problem(res, 403, 'FORBIDDEN', 'identity checks are for people');
-  const s = kycOf.get(account) ?? {standing: 'clear', verification: null, session: null};
+  const s = kycOf.get(account) ?? {
+    standing: standingOf.get(account) ?? 'clear',
+    verification: null,
+    session: null,
+  };
   kycOf.set(account, s);
   if (path === '/v1/kyc' && req.method === 'GET') {
     return send(res, 200, {
@@ -1510,6 +1666,17 @@ const DIR = Array.from({length: 23}, (_, i) => ({
   account: i === 0 ? 'priya.testnet' : null,
   location: i === 0 ? 'Pune' : null,
   capabilities: i === 0 ? ['photography'] : i > 1 ? ['market-research'] : [],
+  skills: i === 0 ? ['photography', 'shopfronts'] : i === 1 ? ['writing'] : [],
+  availability: i === 0,
+  hireable: i === 0 ? true : i === 1 ? false : null,
+  stake: i === 0 ? '12000000' : i === 1 ? '0' : null,
+  taskList:
+    i === 0
+      ? {
+          listings: [{listingId: 'lst-view', title: 'Photograph a shopfront', status: 'open'}],
+          jobs: {open: 1, settled: 3},
+        }
+      : undefined,
   rating: i === 0 ? {average: 4.5, count: 2} : i === 2 ? {average: 3, count: 1} : {average: null, count: 0},
   settledJobs: i === 0 ? 3 : 0,
   chainAgentId: i > 1 ? String(i) : null,
@@ -1547,9 +1714,13 @@ async function profileRoutes(req, res, path, account, me, url) {
     const kind = url.searchParams.get('kind');
     const sort = url.searchParams.get('sort') ?? 'rating';
     const page = Number(url.searchParams.get('page') ?? 1);
+    const available = url.searchParams.get('available') === 'true';
+    const skillQ = (url.searchParams.get('skill') ?? '').toLowerCase();
     let rows = DIR.filter(
       (p) =>
         (!kind || p.kind === kind) &&
+        (!available || p.availability === true) &&
+        (!skillQ || (p.skills ?? p.capabilities).includes(skillQ)) &&
         (!q || p.displayName.toLowerCase().includes(q) || p.headline.toLowerCase().includes(q)),
     );
     rows = [...rows].sort((a, b) =>
@@ -1595,6 +1766,11 @@ async function profileRoutes(req, res, path, account, me, url) {
               headline: '',
               bio: '',
               showAccount: false,
+              skills: PEOPLE[account]?.capabilities ?? [],
+              location: PEOPLE[account]?.location ?? '',
+              availability: false,
+              showTaskList: false,
+              alerts: false,
             },
       );
     }
@@ -1603,12 +1779,25 @@ async function profileRoutes(req, res, path, account, me, url) {
       const name = String(b.displayName ?? '').trim();
       if (name.length < 1 || name.length > 60)
         return problem(res, 422, 'SCHEMA_MISMATCH', 'displayName is 1-60 characters');
+      const skills = Array.isArray(b.skills)
+        ? b.skills.map((x) => String(x).trim().toLowerCase()).filter(Boolean)
+        : [];
+      if (skills.length > 20) return problem(res, 422, 'SCHEMA_MISMATCH', 'skills: at most 20');
+      if (skills.some((x) => x.length < 2 || x.length > 50))
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'skills: each 2-50 characters');
+      if (String(b.location ?? '').length > 120)
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'location: at most 120');
       myProfiles.set(account, {
         displayName: name,
         headline: b.headline ?? '',
         bio: b.bio ?? '',
         showAccount: Boolean(b.showAccount),
         published: Boolean(b.published),
+        skills: [...new Set(skills)],
+        location: String(b.location ?? '').trim(),
+        availability: Boolean(b.availability),
+        showTaskList: Boolean(b.showTaskList),
+        alerts: Boolean(b.alerts),
       });
       return send(res, 200, {
         profileId: 'dddddddd-0000-4000-8000-000000000001',
@@ -1689,22 +1878,108 @@ const faucetClaimed = new Set();
 const FEED_KINDS = ['job.created', 'job.accepted', 'job.draft.submitted', 'job.message', 'settled'];
 function feedOf(account) {
   if (!feeds.has(account)) {
+    // 25 job items on JOB(1) as before, then the listing events of the 2026-11-09 round: a new bid on a
+    // listing the person posted (seq 26), their own bid selected (27), a match (28); the API's own
+    // action of mine (29) and a confirmation echo (30) are folded away by default.
     const items = Array.from({length: 25}, (_, i) => ({
       seq: i + 1,
       kind: FEED_KINDS[i % FEED_KINDS.length],
       role: i % 2 ? 'worker' : 'client',
       jobId: JOB(1),
+      listingId: null,
+      jobTitle: 'Photograph two shop fronts',
+      listingTitle: null,
+      actor: i % 2 ? 'counterparty' : 'system',
+      confirmation: false,
       payload: {},
       at: new Date(Date.UTC(2026, 10, 2, 9, i)).toISOString(),
     }));
-    feeds.set(account, {items, readSeq: 22});
+    items.push(
+      {
+        seq: 26,
+        kind: 'listing.bid',
+        role: 'client',
+        jobId: null,
+        listingId: 'lst-view',
+        jobTitle: null,
+        listingTitle: 'Photograph a shopfront',
+        actor: 'counterparty',
+        confirmation: false,
+        payload: {
+          listingId: 'lst-view',
+          applicationId: 'app-x',
+          priceBaseUnits: '3000000',
+          applicant: {agentId: '22', publicId: 'p-22', kind: 'person', name: 'Wade'},
+        },
+        at: '2026-11-03T09:00:00.000Z',
+      },
+      {
+        seq: 27,
+        kind: 'application.selected',
+        role: 'applicant',
+        jobId: JOB(4),
+        listingId: 'lst-apply',
+        jobTitle: 'Bid on me',
+        listingTitle: 'Bid on me',
+        actor: 'counterparty',
+        confirmation: false,
+        payload: {listingId: 'lst-apply', applicationId: 'app-y', jobId: JOB(4), reason: 'Best price.'},
+        at: '2026-11-03T10:00:00.000Z',
+      },
+      {
+        seq: 28,
+        kind: 'listing.match',
+        role: 'match',
+        jobId: null,
+        listingId: 'lst-match',
+        jobTitle: null,
+        listingTitle: 'Fits a photographer',
+        actor: 'system',
+        confirmation: false,
+        payload: {
+          listingId: 'lst-match',
+          title: 'Fits a photographer',
+          skills: ['photography'],
+          location: 'Pune',
+          maxPriceBaseUnits: '5000000',
+        },
+        at: '2026-11-03T11:00:00.000Z',
+      },
+      {
+        seq: 29,
+        kind: 'job.draft.submitted',
+        role: 'worker',
+        jobId: JOB(1),
+        listingId: null,
+        jobTitle: 'Photograph two shop fronts',
+        listingTitle: null,
+        actor: 'me',
+        confirmation: false,
+        payload: {},
+        at: '2026-11-03T12:00:00.000Z',
+      },
+      {
+        seq: 30,
+        kind: 'accepted',
+        role: 'worker',
+        jobId: JOB(1),
+        listingId: null,
+        jobTitle: 'Photograph two shop fronts',
+        listingTitle: null,
+        actor: 'counterparty',
+        confirmation: true,
+        payload: {},
+        at: '2026-11-03T12:01:00.000Z',
+      },
+    );
+    feeds.set(account, {items, readSeq: 22, readSet: new Set()});
   }
   return feeds.get(account);
 }
 const isFeedPerson = (account) => /^(nell|fay)-[a-z0-9-]+\.testnet$/.test(account ?? '');
 
 async function feedRoutes(req, res, path, account, me, url) {
-  if (path !== '/v1/notifications' && path !== '/v1/notifications/read' && path !== '/v1/faucet') return null;
+  if (!path.startsWith('/v1/notifications') && path !== '/v1/faucet') return null;
   if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
   if (path === '/v1/faucet') {
     const known = isFeedPerson(account) || Boolean(me);
@@ -1713,6 +1988,7 @@ async function feedRoutes(req, res, path, account, me, url) {
       return send(res, 200, {
         available: true,
         testnet: true,
+        standing: standingOf.get(account) ?? 'clear',
         amount: '5000000',
         claimedToday: faucetClaimed.has(account),
         day: new Date().toISOString().slice(0, 10),
@@ -1732,27 +2008,39 @@ async function feedRoutes(req, res, path, account, me, url) {
     });
   }
   if (!isFeedPerson(account) && !me) return problem(res, 403, 'FORBIDDEN', 'no person agent');
-  const f = isFeedPerson(account) ? feedOf(account) : {items: [], readSeq: 0};
+  const f = isFeedPerson(account) ? feedOf(account) : {items: [], readSeq: 0, readSet: new Set()};
   const latest = f.items.length;
+  const isRead = (x) => x.seq <= f.readSeq || f.readSet.has(x.seq);
+  // fold=true (the default) drops my own actions and the chain echo of an event already in the feed.
+  const fold = url.searchParams.get('fold') !== 'false';
+  const shown = f.items.filter((x) => !fold || (x.actor !== 'me' && !x.confirmation));
+  const unread = shown.filter((x) => !isRead(x)).length;
   if (path === '/v1/notifications/read') {
     const body = await readBody(req);
     const upTo = Math.min(Number(body.upTo ?? 0), latest);
     f.readSeq = Math.max(f.readSeq, upTo);
-    return send(res, 200, {readSeq: f.readSeq, latest, unread: latest - f.readSeq});
+    return send(res, 200, {readSeq: f.readSeq, latest, unread: shown.filter((x) => !isRead(x)).length});
+  }
+  const one = /^\/v1\/notifications\/(\d+)\/read$/.exec(path);
+  if (one && req.method === 'POST') {
+    const seq = Number(one[1]);
+    if (!f.items.some((x) => x.seq === seq)) return problem(res, 404, 'NOT_FOUND', 'no such notification');
+    f.readSet.add(seq);
+    return send(res, 200, {seq, read: true});
   }
   const limit = Number(url.searchParams.get('limit') ?? 20);
   const before = url.searchParams.get('before');
-  const rows = f.items
+  const rows = shown
     .filter((x) => !before || x.seq < Number(before))
     .sort((a, b) => b.seq - a.seq)
     .slice(0, limit);
   const oldest = rows.at(-1)?.seq;
   return send(res, 200, {
-    unread: latest - f.readSeq,
+    unread,
     readSeq: f.readSeq,
     latest,
     before: oldest !== undefined && oldest > 1 ? oldest : null,
-    notifications: rows.map((x) => ({...x, read: x.seq <= f.readSeq})),
+    notifications: rows.map((x) => ({...x, read: isRead(x)})),
   });
 }
 
@@ -1862,6 +2150,10 @@ async function delivery(req, res, path, me) {
     const j = f && jobs.get(f.jobId);
     if (!f || !j || (j.client !== me && j.worker !== me))
       return problem(res, 404, 'NOT_FOUND', 'no such file');
+    if (req.method === 'HEAD') {
+      res.writeHead(200, {'content-type': f.mime, 'access-control-allow-origin': '*'});
+      return res.end();
+    }
     res.writeHead(200, {
       'content-type': f.mime,
       'x-content-type-options': 'nosniff',
@@ -2013,6 +2305,225 @@ async function delivery(req, res, path, me) {
   return problem(res, 405, 'METHOD_NOT_ALLOWED', 'not allowed');
 }
 
+// ── the 2026-11-09 round: my bids, dispute evidence, reports, GDPR, standing, keys, webhooks ──
+const applicationRow = (l, a) => ({
+  ...application(a),
+  listing: {
+    listingId: l.listingId,
+    title: l.title,
+    status: l.status,
+    maxPriceBaseUnits: l.maxPriceBaseUnits,
+    deadline: l.deadline,
+    client: {publicId: l.client.publicId, name: l.client.name, kind: l.client.kind},
+  },
+});
+
+const disputeNotes = new Map(); // jobId -> [{noteId, text, at}]
+const disputeFiles = new Map(); // jobId -> [file]
+const reports = new Map(); // reportId -> report
+const deletedAccounts = new Set();
+const noOpenJobs = new Set();
+const standingOf = new Map(); // account -> 'hold' | 'blocked'
+const myKeys = new Map(); // keyId -> {agentId, revoked}
+const webhooks = new Map(); // account -> [{webhookId, url, events, createdAt}]
+const agentPatches = new Map(); // chainAgentId -> patch
+
+async function roundRoutes(req, res, path, account, me, url) {
+  // My bids.
+  if (path === '/v1/me/applications' && req.method === 'GET') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    if (!me) return problem(res, 403, 'FORBIDDEN', 'no person agent');
+    const status = url.searchParams.get('status');
+    const limit = Math.min(100, Number(url.searchParams.get('limit') ?? 20));
+    const rows = [];
+    for (const l of listings.values())
+      for (const a of l.applications)
+        if (a.applicantAgentId === me && (!status || a.status === status)) rows.push(applicationRow(l, a));
+    rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const after = url.searchParams.get('cursor');
+    const start = after ? rows.findIndex((r) => r.applicationId === after) + 1 : 0;
+    const page = rows.slice(start, start + limit);
+    return send(res, 200, {
+      count: page.length,
+      nextCursor: start + limit < rows.length ? page.at(-1).applicationId : null,
+      applications: page,
+    });
+  }
+
+  // Dispute evidence (client notes and photos; both parties read).
+  const dm = /^\/v1\/jobs\/([^/]+)\/dispute(?:\/(notes|files))?$/.exec(path);
+  if (dm) {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    const j = jobs.get(dm[1]);
+    if (!j) return problem(res, 404, 'NOT_FOUND', 'no such job');
+    const role = j.worker === me ? 'worker' : j.client === me ? 'client' : null;
+    if (!role) return problem(res, 403, 'FORBIDDEN', 'only the two parties');
+    const notes = disputeNotes.get(j.jobId) ?? [];
+    const files = disputeFiles.get(j.jobId) ?? [];
+    const canAttach = role === 'client' && (j.state === 'submitted' || j.state === 'disputed');
+    if (!dm[2] && req.method === 'GET') {
+      if (!j.dispute && j.state !== 'submitted') return problem(res, 404, 'NOT_FOUND', 'never disputed');
+      return send(res, 200, {
+        jobId: j.jobId,
+        state: j.state,
+        reason: j.dispute?.reason ?? null,
+        reasonHash: j.dispute?.reasonHash ?? null,
+        raisedAt: j.dispute?.at ?? null,
+        notes,
+        files: files.map(fileView),
+        canAttach,
+      });
+    }
+    if (req.method !== 'POST') return problem(res, 405, 'METHOD_NOT_ALLOWED', 'not allowed');
+    if (role !== 'client') return problem(res, 403, 'FORBIDDEN', 'only the client adds dispute evidence');
+    if (!canAttach) return problem(res, 409, 'INVALID_STATE', `job is ${j.state}`);
+    if (dm[2] === 'notes') {
+      const b = await readBody(req);
+      const text = String(b.text ?? '').trim();
+      if (text.length < 1 || text.length > 2000)
+        return problem(res, 400, 'VALIDATION', 'text is 1-2000 characters');
+      if (notes.length >= 10) return problem(res, 409, 'LIMIT_REACHED', 'at most 10 notes per job');
+      const note = {noteId: randomUUID(), jobId: j.jobId, text, at: new Date().toISOString()};
+      notes.push(note);
+      disputeNotes.set(j.jobId, notes);
+      return send(res, 201, note);
+    }
+    const bytes = filePart(req, await rawBody(req));
+    if (!bytes) return problem(res, 400, 'VALIDATION', 'a multipart field `file` is needed');
+    const mime = mimeOf(bytes);
+    if (!mime) return problem(res, 415, 'UNSUPPORTED_MEDIA', 'only PNG, JPEG or WebP');
+    if (files.length >= 10) return problem(res, 409, 'LIMIT_REACHED', 'at most 10 dispute photos per job');
+    const f = {
+      fileId: randomUUID(),
+      jobId: j.jobId,
+      bytes,
+      mime,
+      sha256: sha256(bytes),
+      createdAt: new Date().toISOString(),
+      withdrawnAt: null,
+      purpose: 'dispute',
+    };
+    files.push(f);
+    disputeFiles.set(j.jobId, files);
+    filesById.set(f.fileId, f);
+    return send(res, 201, {...fileView(f), metadataRemoved: []});
+  }
+
+  // Reports.
+  if (path === '/v1/reports' && req.method === 'POST') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    const b = await readBody(req);
+    if (!['listing', 'person', 'agent', 'message'].includes(b.targetType))
+      return problem(res, 422, 'SCHEMA_MISMATCH', 'targetType');
+    if (!['spam', 'scam', 'abuse', 'illegal', 'impersonation', 'other'].includes(b.reason))
+      return problem(res, 422, 'SCHEMA_MISMATCH', 'reason');
+    if (b.details && String(b.details).length > 1000) return problem(res, 422, 'SCHEMA_MISMATCH', 'details');
+    if (b.targetType === 'listing' && !listings.has(b.targetId))
+      return problem(res, 404, 'NOT_FOUND', 'no such listing');
+    const dup = [...reports.values()].find(
+      (r) => r.reporter.account === account && r.targetId === b.targetId && r.status === 'open',
+    );
+    if (dup) return problem(res, 409, 'IDEMPOTENCY_CONFLICT', 'you already reported this; it is open');
+    const r = {
+      reportId: randomUUID(),
+      targetType: b.targetType,
+      targetId: String(b.targetId),
+      reason: b.reason,
+      details: b.details ?? '',
+      status: 'open',
+      action: null,
+      note: null,
+      reporter: {account, publicId: `p-${me ?? account}`, kind: 'person'},
+      createdAt: new Date().toISOString(),
+      resolvedAt: null,
+      resolvedBy: null,
+    };
+    reports.set(r.reportId, r);
+    return send(res, 201, {reportId: r.reportId, status: 'open', createdAt: r.createdAt});
+  }
+
+  // GDPR.
+  if (path === '/v1/me/export' && req.method === 'GET') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    if (!me) return problem(res, 403, 'FORBIDDEN', 'no person agent');
+    res.writeHead(200, {
+      'content-type': 'application/json',
+      'content-disposition': `attachment; filename="pactora-export-${account}.json"`,
+      'access-control-allow-origin': '*',
+      'access-control-expose-headers': 'content-disposition',
+    });
+    return res.end(
+      JSON.stringify({
+        exportedAt: new Date().toISOString(),
+        account,
+        chainId: 'near:testnet',
+        person: {name: PEOPLE[account]?.name ?? account},
+        onChain: 'chain data cannot be deleted',
+      }),
+    );
+  }
+  if (path === '/v1/me/delete/challenge' && req.method === 'POST') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    return send(res, 201, {nonce: `del_${account}`, expiresAt: new Date(Date.now() + 300_000).toISOString()});
+  }
+  if (path === '/v1/me' && req.method === 'DELETE') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    const b = await readBody(req);
+    if (b.nonce !== `del_${account}`) return problem(res, 401, 'UNAUTHORIZED', 'bad or expired nonce');
+    const open = noOpenJobs.has(account)
+      ? []
+      : [...jobs.values()]
+          .filter(
+            (j) =>
+              (j.client === me || j.worker === me) &&
+              ['created', 'accepted', 'submitted', 'disputed'].includes(j.state),
+          )
+          .map((j) => j.jobId)
+          .slice(0, 3);
+    // A test person (agent 77) has no jobs of its own: give it one open job to refuse on, unless told otherwise.
+    if (open.length === 0 && !noOpenJobs.has(account)) open.push(JOB(4));
+    if (open.length > 0)
+      return send(res, 409, {
+        code: 'INVALID_STATE',
+        detail: `open jobs: ${open.join(', ')}`,
+        openJobs: open,
+      });
+    deletedAccounts.add(account);
+    delete PEOPLE[account];
+    return send(res, 200, {
+      deleted: true,
+      account,
+      scrubbed: {
+        profile: true,
+        messages: 2,
+        drafts: 1,
+        files: 0,
+        channels: 1,
+        sessions: 1,
+        apiKeys: 0,
+        webhooks: 0,
+        listingsCancelled: 0,
+      },
+    });
+  }
+  return null;
+}
+
+/** Stats for the home page (GET /v1/stats): people count too. */
+const stats = () => ({
+  chainId: 'near:testnet',
+  jobsSettledOnChain: 12,
+  volumeSettledBaseUnits: '48000000',
+  volumeSettledDisplay: '48 USDC',
+  agentsWithRecord: 1,
+  peopleWithRecord: 4,
+  participantsWithRecord: 5,
+  agents: 2,
+  people: 5,
+  openListings: listings.size,
+  updatedAt: new Date().toISOString(),
+});
+
 // Fixtures that need the helpers above.
 {
   const PNG_1x1 = Buffer.from(
@@ -2121,6 +2632,18 @@ async function hooks(req, res, url) {
     kycOf.delete(newPerson[1]);
     return send(res, 200, {account: newPerson[1]});
   }
+  const noOpen = /^\/__test\/person\/([a-z0-9-]+\.testnet)\/no-open-jobs$/.exec(url.pathname);
+  if (noOpen) {
+    noOpenJobs.add(noOpen[1]);
+    return send(res, 200, {account: noOpen[1]});
+  }
+  const hold = /^\/__test\/standing\/([a-z0-9-]+\.testnet)\/(hold|blocked|clear)$/.exec(url.pathname);
+  if (hold) {
+    if (hold[2] === 'clear') standingOf.delete(hold[1]);
+    else standingOf.set(hold[1], hold[2]);
+    kycOf.delete(hold[1]);
+    return send(res, 200, {account: hold[1], standing: hold[2]});
+  }
   const theirs = /^\/__test\/job\/([^/]+)\/their-review\/(client|worker)$/.exec(url.pathname);
   if (theirs) {
     otherPartyReviews(theirs[1], theirs[2]);
@@ -2158,6 +2681,7 @@ createServer(async (req, res) => {
   if (
     url.pathname === '/v1/me' ||
     url.pathname.startsWith('/v1/me/') ||
+    url.pathname === '/v1/reports' ||
     url.pathname.startsWith('/v1/listings') ||
     url.pathname.startsWith('/v1/files/') ||
     url.pathname.startsWith('/v1/notifications') ||
@@ -2172,6 +2696,112 @@ createServer(async (req, res) => {
     return send(res, 404, {code: 'NOT_FOUND', detail: 'not found'});
   }
   if (url.pathname === '/v1/network') return send(res, 200, network);
+  if (url.pathname === '/v1/stats') return send(res, 200, stats());
+  // API keys (routes/keys.ts): a re-issue by the owner's signature; rotate and revoke by the key itself.
+  const keyChallenge = /^\/v1\/agents\/(\d+)\/keys\/challenge$/.exec(url.pathname);
+  if (keyChallenge && req.method === 'POST')
+    return send(res, 201, {
+      nonce: 'ee'.repeat(32),
+      message: `Pactora: re-issue the key of agent ${keyChallenge[1]}.`,
+      recipient: 'pactora',
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    });
+  const keyIssue = /^\/v1\/agents\/(\d+)\/keys$/.exec(url.pathname);
+  if (keyIssue && req.method === 'POST') {
+    const b = await readBody(req);
+    if (b.nonce !== 'ee'.repeat(32) || !b.signature || !b.publicKey)
+      return problem(res, 401, 'UNAUTHORIZED', 'bad signature or nonce');
+    const keyId = `k${++counter}`;
+    myKeys.set(keyId, {agentId: keyIssue[1], revoked: false});
+    return send(res, 201, {
+      agentId: keyIssue[1],
+      apiKey: `ax_${keyId.padEnd(16, '0')}_${'3'.repeat(32)}`,
+      keyId,
+      revokedKeys: 1,
+      warning: 'Store the API key now: it is shown once.',
+    });
+  }
+  if (url.pathname === '/v1/keys/rotate' || url.pathname === '/v1/keys/revoke') {
+    const m = /^Bearer ax_([a-z0-9]+)_[0-9a-z]+$/i.exec(req.headers.authorization ?? '');
+    if (!m) return problem(res, 401, 'UNAUTHORIZED', 'an agent key is needed');
+    const keyId = m[1].replace(/0+$/, '');
+    const k = myKeys.get(keyId);
+    if (k?.revoked || keyId === 'revoked') return problem(res, 401, 'UNAUTHORIZED', 'this key was revoked');
+    if (k) k.revoked = true;
+    if (url.pathname === '/v1/keys/revoke')
+      return send(res, 200, {agentId: k?.agentId ?? '7', revokedKeyId: keyId});
+    const b = await readBody(req);
+    const next = `k${++counter}`;
+    myKeys.set(next, {agentId: k?.agentId ?? '7', revoked: false});
+    return send(res, 200, {
+      agentId: k?.agentId ?? '7',
+      apiKey: `ax_${next.padEnd(16, '0')}_${'4'.repeat(32)}`,
+      keyId: next,
+      revokedKeyId: keyId,
+      scopes: Array.isArray(b.scopes) ? b.scopes : [],
+    });
+  }
+  // The agent's own record (PATCH /v1/agents/:id) and webhooks, by the agent's key.
+  const agentPatch = /^\/v1\/agents\/(\d+)$/.exec(url.pathname);
+  if (agentPatch && req.method === 'PATCH') {
+    if (!/^Bearer ax_/i.test(req.headers.authorization ?? ''))
+      return problem(res, 401, 'UNAUTHORIZED', 'an agent key is needed');
+    const b = await readBody(req);
+    if (Object.keys(b).length === 0) return problem(res, 422, 'SCHEMA_MISMATCH', 'nothing to change');
+    agentPatches.set(agentPatch[1], {...(agentPatches.get(agentPatch[1]) ?? {}), ...b});
+    const found =
+      agents.find((a) => a.agentId === Number(agentPatch[1])) ?? agent(Number(agentPatch[1]), 'Patched');
+    return send(res, 200, {...found, ...agentPatches.get(agentPatch[1])});
+  }
+  if (url.pathname.startsWith('/v1/webhooks')) {
+    const auth = req.headers.authorization ?? '';
+    if (!/^Bearer (ax_|ps_)/i.test(auth))
+      return problem(res, 401, 'UNAUTHORIZED', 'a key or session is needed');
+    const list = webhooks.get(auth) ?? [];
+    webhooks.set(auth, list);
+    if (url.pathname === '/v1/webhooks' && req.method === 'GET') return send(res, 200, {webhooks: list});
+    if (url.pathname === '/v1/webhooks' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (!/^https:\/\//.test(String(b.url ?? '')))
+        return problem(res, 422, 'SCHEMA_MISMATCH', 'url must be https');
+      const w = {
+        webhookId: randomUUID(),
+        url: b.url,
+        events: b.events ?? ['*'],
+        createdAt: new Date().toISOString(),
+      };
+      list.push(w);
+      return send(res, 201, {...w, secret: `whsec_${'5'.repeat(32)}`});
+    }
+    const wm = /^\/v1\/webhooks\/([^/]+)(\/deliveries|\/rotate)?$/.exec(url.pathname);
+    if (wm) {
+      const w = list.find((x) => x.webhookId === wm[1]);
+      if (!w) return problem(res, 404, 'NOT_FOUND', 'no such webhook');
+      if (!wm[2] && req.method === 'DELETE') {
+        webhooks.set(
+          auth,
+          list.filter((x) => x !== w),
+        );
+        return send(res, 204, null);
+      }
+      if (wm[2] === '/deliveries')
+        return send(res, 200, {
+          deliveries: [
+            {
+              deliveryId: 'd1',
+              event: 'job.settled',
+              status: 200,
+              at: new Date().toISOString(),
+              attempts: 1,
+              error: null,
+            },
+          ],
+        });
+      if (wm[2] === '/rotate' && req.method === 'POST')
+        return send(res, 200, {webhookId: w.webhookId, secret: `whsec_${'6'.repeat(32)}`});
+    }
+    return problem(res, 404, 'NOT_FOUND', 'not found');
+  }
   if (url.pathname === '/v1/status') return send(res, 200, status());
   // Registering an agent (/register): the signer's key for the new account,
   // the owner's challenge, then the record (the API's routes/agents.ts).

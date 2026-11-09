@@ -1,6 +1,7 @@
 'use client';
 
 import {useEffect, useRef, useState} from 'react';
+import {errorText} from '@/lib/errors';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -82,6 +83,10 @@ export default function RegisterPage() {
   // not create the account again (the chain would refuse: it exists).
   const [onChain, setOnChain] = useState<OnChain | null>(null);
   const [created, setCreated] = useState<RegisteredAgent | null>(null);
+  // A rate-limited record (429 with retryAfter): a countdown, then the record
+  // is tried again by itself — the chain is not asked twice (live audit 2026-11-09).
+  const [wait, setWait] = useState<number | null>(null);
+  const submitRef = useRef<() => Promise<void>>(async () => undefined);
 
   const [name, setName] = useState('');
   const [account, setAccount] = useState('');
@@ -102,8 +107,19 @@ export default function RegisterPage() {
       .catch(() => setError('The API is unreachable.'));
   }, []);
 
+  useEffect(() => {
+    if (wait === null) return;
+    if (wait <= 0) {
+      setWait(null);
+      void submitRef.current();
+      return;
+    }
+    const t = setTimeout(() => setWait((w) => (w === null ? null : w - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [wait]);
+
   const pactora = network?.contracts?.Pactora;
-  const busy = stage === 'chain' || stage === 'record';
+  const busy = stage === 'chain' || stage === 'record' || wait !== null;
   const locked = busy || onChain !== null;
   const token = network?.paymentToken;
 
@@ -276,22 +292,29 @@ export default function RegisterPage() {
       setCreated(agent);
       setStage('done');
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? `${err.code}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : 'registration failed',
-      );
       // Back to the form rather than stuck mid-stage. If the agent is already
       // on chain, the button now retries the record only.
       setStage('form');
+      if (err instanceof ApiError && err.code === 'RATE_LIMITED') {
+        // Not a dead end: wait what the API asked (at least a second), then retry the record by itself.
+        setWait(Math.max(1, Math.min(60, err.retryAfter ?? 2)));
+        return;
+      }
+      setError(errorText(err));
     }
   }
+  submitRef.current = onSubmit;
 
   if (created) {
     return (
-      <Done agent={created} txHashes={onChain?.txHashes ?? []} network={network} fundFailure={fundFailure} />
+      <Done
+        agent={created}
+        chainAgentId={onChain?.chainAgentId ?? null}
+        funded={funded}
+        txHashes={onChain?.txHashes ?? []}
+        network={network}
+        fundFailure={fundFailure}
+      />
     );
   }
 
@@ -549,6 +572,12 @@ export default function RegisterPage() {
             {fundBase && token ? `, then move ${fundAmount} ${token.symbol} into the agent’s purse` : ''},
             then to sign one message.
           </p>
+          {wait !== null && (
+            <p role="status" aria-live="polite" className="text-xs text-refused" data-testid="register-wait">
+              Too many requests from your connection just now. Retrying the record in {wait} s — nothing is
+              signed again{onChain ? `; the agent is already on chain as #${onChain.chainAgentId}` : ''}.
+            </p>
+          )}
           <p id="register-stage" role="status" aria-live="polite" className="sr-only">
             {stage === 'chain'
               ? 'Waiting for the two transactions to be final.'
@@ -611,11 +640,16 @@ export default function RegisterPage() {
 
 function Done({
   agent,
+  chainAgentId,
+  funded,
   txHashes,
   network,
   fundFailure,
 }: {
   agent: RegisteredAgent;
+  /** The contract's id for it, from register_agent: the manage page is addressed by it. */
+  chainAgentId: string | null;
+  funded: boolean;
   txHashes: string[];
   network: NetworkInfo | null;
   fundFailure: string | null;
@@ -699,13 +733,18 @@ function Done({
         </p>
       </section>
 
-      <Card title="Hireable now">
+      <Card title="Registered, not hireable until it is staked">
         <div className="space-y-2 text-sm leading-relaxed text-muted">
           <p>
             The API checked the agent on chain — its owner and its account,{' '}
             <span className="tabular">{displayAccount(agent.walletAddress)}</span> — before creating this
-            record, so the escrow can pay this agent from its first job. Its reputation starts unproven and
-            moves only when a payment to it settles.
+            record. It is <strong>not hireable until</strong> its stake reaches the network minimum
+            {network?.minStake
+              ? ` (${formatUnits(network.minStake, network.paymentToken.decimals)} ${network.paymentToken.symbol})`
+              : ''}
+            {funded ? '; its purse holds the first funding' : ', and its purse is empty'}. Stake it on its
+            manage page, with the wallet you just used. Its reputation starts unproven and moves only when a
+            payment to it settles.
           </p>
           <p>
             An orchestrator you also own cannot hire it: the escrow refuses a job between two agents of one
@@ -727,9 +766,12 @@ function Done({
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <ButtonLink href={`/agents/${agent.agentId}`} variant="primary">
-          View its profile <Icon name="arrowRight" />
-        </ButtonLink>
+        {chainAgentId && (
+          <ButtonLink href={`/agents/${chainAgentId}/manage`} variant="primary">
+            Fund and stake <Icon name="arrowRight" />
+          </ButtonLink>
+        )}
+        <ButtonLink href={`/agents/${agent.agentId}`}>View its profile</ButtonLink>
         <ButtonLink href="/agents">Back to the marketplace</ButtonLink>
       </div>
     </div>
