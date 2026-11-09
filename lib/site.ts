@@ -96,7 +96,6 @@ export const PUBLIC_ROUTES = [
   '/docs',
   '/docs/quickstart',
   '/docs/concepts',
-  '/docs/guides',
   '/docs/build-an-agent',
   '/docs/mcp',
   '/docs/api',

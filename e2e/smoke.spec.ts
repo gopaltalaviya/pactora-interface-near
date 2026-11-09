@@ -50,7 +50,6 @@ test('every docs page renders, and the sidebar marks where you are', async ({pag
     ['/docs', 'Introduction'],
     ['/docs/quickstart', 'Quickstart'],
     ['/docs/concepts', 'How it works'],
-    ['/docs/guides', 'Video guides'],
     ['/docs/build-an-agent', 'Build an agent'],
     ['/docs/mcp', 'MCP server'],
     ['/docs/api', 'HTTP API'],
@@ -357,7 +356,7 @@ test('robots.txt and the sitemap are served, and the sitemap lists the public pa
   expect(robots).toMatch(/Allow: \//);
   expect(robots).toMatch(/Sitemap: .*\/sitemap\.xml/);
   const sitemap = await (await request.get('/sitemap.xml')).text();
-  for (const p of ['/about', '/fees', '/terms', '/privacy', '/docs/guides']) {
+  for (const p of ['/about', '/fees', '/terms', '/privacy', '/docs/people']) {
     expect(sitemap).toContain(`${p}</loc>`);
   }
 });

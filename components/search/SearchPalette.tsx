@@ -118,7 +118,7 @@ const PAGES: SearchDoc[] = [
     href: '/about',
     title: 'About Pactora',
     body: 'What the name means, what Pactora does, what keeps it safe, and where it stands.',
-    keywords: ['company', 'name', 'meaning', 'agentx', 'operator', 'who'],
+    keywords: ['company', 'name', 'meaning', 'operator', 'who'],
   },
   {
     id: 'p:/fees',

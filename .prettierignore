@@ -5,5 +5,4 @@ pnpm-lock.yaml
 playwright-report/
 test-results/
 coverage/
-docs/screenshots/
 next-env.d.ts

@@ -104,8 +104,8 @@ try {
   expectFields('/v1/network contracts', network.contracts, ['Pactora', 'PaymentToken', 'Arbiter']);
   expectFields('/v1/network nativeCurrency', network.nativeCurrency, ['name', 'symbol', 'decimals']);
 
-  // NEAR-PORT §1: the network key is a CAIP-2 string. A number here is the
-  // EVM build answering, and every chainId comparison on the site would miss.
+  // NEAR-PORT §1: the network key is a CAIP-2 string (`near:testnet`). Anything
+  // else here and every chainId comparison on the site would miss.
   typeof network.chainId === 'string' && /^near:[a-z]+$/.test(network.chainId)
     ? ok(`/v1/network chainId is ${network.chainId}`)
     : fail(`/v1/network chainId is ${JSON.stringify(network.chainId)}, not a near:<network> string`);

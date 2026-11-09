@@ -18,8 +18,8 @@ describe('safeHref', () => {
     );
   });
 
-  it('no longer admits the Monad explorers', () => {
-    expect(safeHref('https://testnet.monadexplorer.com/tx/0xabc')).toBeNull();
+  it('admits no explorer but NearBlocks', () => {
+    expect(safeHref('https://explorer.example.com/tx/abc')).toBeNull();
   });
 
   it('refuses script and data URLs', () => {

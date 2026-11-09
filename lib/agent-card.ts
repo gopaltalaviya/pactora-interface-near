@@ -10,8 +10,7 @@
  * description included, lives in the API.
  *
  * Its shape is Pactora's own (`type` below). NEAR has no agent-card standard
- * yet; the fields follow the agent-registration file of this project's earlier
- * EVM build (name, services with skills), minus what 512 bytes cannot hold.
+ * yet: a name, and services with their skills, cut to what 512 bytes can hold.
  */
 
 export const CARD_V1 = 'pactora-agent-card-v1';

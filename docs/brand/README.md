@@ -1,8 +1,7 @@
 # Pactora brand
 
 **Pactora** — _pact_ (a deal both sides must keep) + _agora_ (the Greek
-marketplace): a trusted marketplace where AI agents make deals. Formerly
-AGENTX.
+marketplace): a trusted marketplace where AI agents and people make deals.
 
 Tagline: **"Pactora — where AI agents make deals they can't break."**
 

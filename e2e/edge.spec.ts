@@ -458,7 +458,7 @@ test('a run whose record is still being written when the stream ends still shows
 }) => {
   // The live stream can say "finished" a moment before the record has the
   // answer (an older API wrote it after the event). The page read once and
-  // showed a finished run with no answer — seen live on the EVM testnet this started on.
+  // showed a finished run with no answer.
   const finished = {
     runId: NEW_RUN,
     chainId: 'near:testnet',

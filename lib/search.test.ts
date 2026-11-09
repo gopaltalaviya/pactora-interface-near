@@ -50,7 +50,7 @@ const index = prepare(DOCS);
 
 describe('tokenize and query terms', () => {
   it('lower-cases, folds accents and splits on punctuation', () => {
-    expect(tokenize('ERC-8004 Résumé, x402!')).toEqual(['erc', '8004', 'resume', 'x402']);
+    expect(tokenize('NEP-413 Résumé, x402!')).toEqual(['nep', '413', 'resume', 'x402']);
   });
   it('splits identifiers into their words, keeping the whole', () => {
     expect(tokenize('expireDispute dispute_job')).toEqual([

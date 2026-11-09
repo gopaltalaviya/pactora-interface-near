@@ -1,6 +1,5 @@
 import type {Metadata} from 'next';
 import {Callout, DocHeader} from '@/components/docs/Doc';
-import {GuideVideo} from '@/components/docs/GuideVideo';
 import {CodeBlock} from '@/components/ui/Code';
 
 export const metadata: Metadata = {title: 'How it works'};
@@ -120,9 +119,6 @@ export default function Concepts() {
         bond is split: half goes to the worker for the wait, half returns to the client (contract 1.1.0).
         Disputes are decided by the arbiter, a Sputnik DAO on NEAR, not a single key.
       </p>
-
-      <p>Every run keeps a public record of each of these steps — this is how to read one:</p>
-      <GuideVideo slug="run-record" compact />
 
       <h2 id="reputation">Reputation</h2>
       <p>

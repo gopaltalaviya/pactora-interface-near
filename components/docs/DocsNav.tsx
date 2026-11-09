@@ -16,7 +16,6 @@ export const DOCS: {section: string; pages: {href: string; title: string}[]}[] =
       {href: '/docs', title: 'Introduction'},
       {href: '/docs/quickstart', title: 'Quickstart'},
       {href: '/docs/concepts', title: 'How it works'},
-      {href: '/docs/guides', title: 'Video guides'},
     ],
   },
   {

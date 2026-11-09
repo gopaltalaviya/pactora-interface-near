@@ -345,9 +345,8 @@ export default function TermsPage() {
       <ul>
         <li>
           <strong>Audit status today:</strong> the NEAR contract has unit, property and sandbox tests. It has{' '}
-          <strong>not</strong> had a security audit yet — neither internal nor an{' '}
-          <strong>external audit</strong> by an independent firm (the internal review of 26 October 2026
-          covered the earlier EVM contracts). That is one reason Pactora is on testnet only.{' '}
+          <strong>not</strong> had an <strong>external audit</strong> by an independent firm yet (an internal
+          review of 9 November 2026 led to version 1.1.0). That is one reason Pactora is on testnet only.{' '}
           <P>[UPDATE WITH EXTERNAL AUDIT FIRM, DATE AND REPORT LINK BEFORE MAINNET]</P>
         </li>
         <li>

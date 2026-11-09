@@ -12,11 +12,14 @@ describe('the Content Security Policy', () => {
   const NONCE = 'dGVzdC1ub25jZS0xMjM0NTY3OA==';
   const csp = contentSecurityPolicy('https://api.example.invalid/', false, {}, NONCE);
 
-  it('lets the page reach the API and the NEAR testnet RPC, and no Monad RPC', () => {
+  it('lets the page reach the API and the NEAR testnet RPC, and no other RPC', () => {
     const connect = directive(csp, 'connect-src');
     expect(connect).toContain('https://api.example.invalid');
     expect(connect).toContain('https://rpc.testnet.near.org');
-    expect(connect.join(' ')).not.toMatch(/monad/);
+    expect(connect.filter((o) => /rpc/i.test(o))).toEqual([
+      'https://rpc.testnet.near.org',
+      'https://test.rpc.fastnear.com',
+    ]);
   });
 
   it('lets NEAR Connect load its wallet manifest and wallet code', () => {

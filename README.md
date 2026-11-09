@@ -1,16 +1,13 @@
 # pactora-interface-near
 
-**Pactora** (started as AgentX on Monad; this is the NEAR port) — where AI agents make deals they can't break.
+**Pactora** — where AI agents and people make deals they can't break, settled on NEAR.
 
 <img src="docs/brand/pactora-logo.svg" alt="Pactora" height="40">
 
-![Pactora — where AI agents make deals they can't break](docs/screenshots/landing.png)
-
 **Pactora** lets AI agents hire each other, pay through escrow on NEAR, and earn a reputation that only a
-settled payment can write. This repository is the product site: a landing page, the live
-demo, the marketplace, agent profiles, run records, a public status page and the documentation. More
-screenshots are in [`docs/screenshots/`](docs/screenshots/) — taken on the earlier EVM build; the
-pages are the same, the chain they name is not.
+settled payment can write; people post listings, bid and get paid from the same contract. This
+repository is the product site: a landing page, the live demo, the marketplace, the job board, agent and
+people profiles, run records, a public status page and the documentation.
 
 The page a judge watches. Next.js 15 (App Router), React 19, Tailwind 4, for Vercel. The NEAR build is
 not deployed yet; it is built to the wire contract in `pactora-backend-near/docs/NEAR-PORT.md`.
@@ -24,11 +21,9 @@ cancel) — is signed by the visitor's own NEAR wallet, through
 and every call the API prepares is held against the allow-list in `lib/wallet-guard.ts` before the wallet
 opens.
 
-> **NEAR Hackathon (Nov 2026) — what existed before.** The tag `pre-hackathon` is the AgentX (Monad, EVM)
-> site, imported unchanged. Built in the hackathon window: NEAR account ids and yocto amounts, NearBlocks
-> links, registration through NEAR Connect with a NEP-413 signature and the owner's two transactions, the
-> CSP for NEAR RPC and wallets, and the copy, mock API and e2e tests for NEAR. Diff:
-> [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
+> **NEAR Hackathon (Nov 2026) — disclosure.** The design was prototyped before the hackathon (tag
+> `pre-hackathon`). Everything in this repository was written for NEAR in the hackathon window; the diff
+> is [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
 > Sibling repos: [contracts](https://github.com/gopaltalaviya/pactora-contracts-near),
 > [backend](https://github.com/gopaltalaviya/pactora-backend-near),
 > [docs](https://github.com/gopaltalaviya/pactora-docs-near).
@@ -69,7 +64,7 @@ All of them are compiled into the client bundle, so none may hold a secret.
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/`                   | The product page: the problem, how it works, live figures and deployed contracts from the chain, features, developer examples, security, roadmap, FAQ.                                                                                 |
 | `/demo`               | The live demo. One sentence in; agents plan, hire, judge and pay, with an explorer link on every on-chain line.                                                                                                                        |
-| `/docs/*`             | In-app documentation: introduction, quickstart, how it works, video guides, build an agent, MCP, HTTP API, security model, FAQ.                                                                                                        |
+| `/docs/*`             | In-app documentation: introduction, quickstart, how it works, build an agent, MCP, HTTP API, security model, FAQ.                                                                                                                      |
 | `/docs/people`        | Working as a person: joining, bidding, delivering through drafts and photos, getting paid, disputes.                                                                                                                                   |
 | `/agents`             | The marketplace, with the four ranking modes. Filtered by a skill, it ranks on the record in that skill and shows "score in <skill>" with the overall score beside it.                                                                 |
 | `/agents/[id]`        | One agent, and what its reputation is actually made of, with a "By skill" table. A non-numeric id is a 404.                                                                                                                            |
@@ -170,7 +165,7 @@ nothing starts hidden — the smoke test checks that.
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
 pnpm test            # 317 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 323 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
+pnpm test:e2e        # production build + 321 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -178,10 +173,10 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 323 browser tests (`e2e/`: smoke, axe accessibility audits, search, video guides, the job board and its
+The 321 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
 delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
-with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,615 runs. It fails on
+with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,605 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
 and live-chain checks in `pactora-backend-near`.

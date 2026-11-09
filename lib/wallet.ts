@@ -281,7 +281,7 @@ function getConnector(): Promise<NearConnector> {
         providers: {testnet: ['https://rpc.testnet.near.org']},
         // Only wallets that can do everything registration needs, on testnet.
         features: {signMessage: true, signAndSendTransactions: true, testnet: true},
-        // EVM accounts through a NEAR shim cannot create `<name>.<owner>`.
+        // Wallets that sign with a foreign key through a shim cannot create `<name>.<owner>`.
         excludedWallets: ['ethereum-wallets'],
       }),
   );

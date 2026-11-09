@@ -61,8 +61,8 @@ const STOP = new Set([
 ]);
 
 /**
- * Lower-case words, accents folded, punctuation dropped (`ERC-8004` → `erc`,
- * `8004`). An identifier also yields its parts, after the whole word:
+ * Lower-case words, accents folded, punctuation dropped (`NEP-413` → `nep`,
+ * `413`). An identifier also yields its parts, after the whole word:
  * `expireDispute` → `expiredispute`, `expire`, `dispute`; `dispute_job` →
  * `dispute_job`, `dispute`, `job` — the docs are full of contract and tool
  * names, and a reader searches for the word inside them.

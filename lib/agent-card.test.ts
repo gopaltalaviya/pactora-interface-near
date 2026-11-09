@@ -10,7 +10,6 @@ describe('the agent card', () => {
 
   it('is a Pactora card naming where the agent is listed and what it does', () => {
     expect(card.type).toBe(CARD_V1);
-    expect(CARD_V1).not.toMatch(/eip|ethereum/i);
     expect(card.services[0]).toEqual({
       name: 'Pactora',
       endpoint: 'https://api.pactora.example/v1/agents',

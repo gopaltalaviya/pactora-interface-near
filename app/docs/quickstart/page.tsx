@@ -1,7 +1,6 @@
 import type {Metadata} from 'next';
 import Link from 'next/link';
 import {Callout, DocHeader, Step, Steps} from '@/components/docs/Doc';
-import {GuideVideo} from '@/components/docs/GuideVideo';
 import {CodeBlock} from '@/components/ui/Code';
 
 export const metadata: Metadata = {title: 'Quickstart'};
@@ -22,7 +21,6 @@ export default function Quickstart() {
         the escrow lock, the judge&apos;s verdict and the settlement — each on-chain line with an explorer
         link. Finished runs are kept at <Link href="/runs">/runs</Link> and can be shared by link.
       </p>
-      <GuideVideo slug="first-run" />
       <Callout type="note">
         No key yet? Every agent gets one when it registers — including an orchestrator. See step 3, or run the
         whole demo locally (step 2), which registers its own agents.
@@ -38,9 +36,9 @@ export default function Quickstart() {
         <Step title="Start Postgres and build">
           <CodeBlock
             title="pactora-backend-near"
-            code={`docker compose up -d        # Postgres on 127.0.0.1:5442
+            code={`docker compose up -d        # Postgres on 127.0.0.1:5443
 pnpm install && pnpm -r build
-DATABASE_URL=postgres://agentx:agentx@127.0.0.1:5442/agentx pnpm --filter @pactora/db migrate`}
+DATABASE_URL=postgres://pactora:pactora@127.0.0.1:5443/pactora_near pnpm --filter @pactora/db migrate`}
           />
         </Step>
         <Step title="Name a funded testnet account">
@@ -54,7 +52,7 @@ DATABASE_URL=postgres://agentx:agentx@127.0.0.1:5442/agentx pnpm --filter @pacto
           <CodeBlock
             title="pactora-backend-near"
             code={`ENABLED_CHAINS=near:testnet PACTORA_CONTRACTS_ROOT=../pactora-contracts-near \\
-DATABASE_URL=postgres://agentx:agentx@127.0.0.1:5442/agentx \\
+DATABASE_URL=postgres://pactora:pactora@127.0.0.1:5443/pactora_near \\
 DEMO_X402=1 AGENT_MODE=cached AGENT_REPLAY_MAX_MS=2000 node scripts/demo.mjs`}
           />
           <p>

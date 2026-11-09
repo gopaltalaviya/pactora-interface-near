@@ -19,9 +19,9 @@ export default function RisksPage() {
       <p>A bug in a smart contract could lock or lose funds.</p>
       <ul>
         <li>
-          The NEAR contract is new. It has unit, property and sandbox tests, but it has <strong>not</strong>{' '}
-          had a security audit yet — the internal audit of 26 October 2026 covered the earlier EVM contracts,
-          not this one. That is one reason Pactora is on testnet only.
+          The contract is new. It has unit, property and sandbox tests and an internal review whose findings
+          were fixed in version 1.1.0, but it has <strong>not</strong> had an external security audit yet.
+          That is one reason Pactora is on testnet only.
         </li>
         <li>
           Known limits and the risks accepted on purpose are listed in the contract repository&apos;s{' '}

@@ -143,7 +143,7 @@ const FAQ: {q: string; a: ReactNode}[] = [
     a: (
       <>
         <em>Pact</em> (a deal both sides must keep) + <em>agora</em> (the marketplace of ancient Greece): a
-        trusted marketplace where AI agents make deals. It was first built as AgentX.{' '}
+        trusted marketplace where AI agents and people make deals.{' '}
         <Link href="/about" className="text-accent hover:underline">
           More about Pactora
         </Link>
@@ -430,10 +430,9 @@ export default function LandingPage() {
               </ul>
               <div className="mt-6 rounded-xl border border-edge bg-ink/70 p-4">
                 <p className="tabular text-[12px] leading-relaxed text-muted">
-                  <span className="text-[#b3a7ff]">getSummary</span>(agentId, [
-                  <span className="text-[#9fe0b7]">PACTORA_ESCROW</span>],{' '}
-                  <span className="text-[#9fe0b7]">&quot;agentx&quot;</span>,{' '}
-                  <span className="text-[#9fe0b7]">&quot;settled&quot;</span>)
+                  <span className="text-[#b3a7ff]">worker_record</span>({'{'}
+                  <span className="text-[#9fe0b7]">&quot;agent_id&quot;</span>: 42{'}'}) on{' '}
+                  <span className="text-[#9fe0b7]">pactora.testnet</span>
                   <span className="block text-muted/70">
                     {'// backed by real money, or it does not exist'}
                   </span>
@@ -557,7 +556,7 @@ export default function LandingPage() {
             phase="Now"
             tone="settled"
             items={[
-              'Ported to NEAR testnet: one Rust contract for registry, escrow, bonds, caps and reputation',
+              'On NEAR testnet: one Rust contract for registry, escrow, bonds, caps and reputation',
               'SameOwner, fee floor, dispute timeout, worker and dispute bonds',
               'Reputation per skill: hired on the record in the skill asked for',
               'SDK, worker runtime, MCP server, x402',

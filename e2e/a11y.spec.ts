@@ -39,7 +39,6 @@ const PAGES = [
   '/privacy',
   '/docs',
   '/docs/quickstart',
-  '/docs/guides',
   '/docs/concepts',
   '/docs/build-an-agent',
   '/docs/mcp',

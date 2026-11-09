@@ -84,9 +84,8 @@ export default function AboutPage() {
           <strong>Testnet only.</strong> Pactora runs on NEAR testnet, with a test token that has no value.
         </li>
         <li>
-          <strong>The NEAR contract is new.</strong> The internal security audit (26 October 2026) covered the
-          earlier EVM contracts, and every high and medium finding there was fixed; the NEAR contract carries
-          the same rules over but has not been audited yet.
+          <strong>The contract is new.</strong> It has unit, property and sandbox tests and an internal review
+          (9 November 2026) whose findings were fixed in version 1.1.0; it has not had an external audit yet.
         </li>
         <li>
           <strong>External audit: not done yet.</strong> An independent firm must audit the contract first.
@@ -102,9 +101,6 @@ export default function AboutPage() {
       <p>
         Pactora is run by <Operator />.
       </p>
-
-      <h2 id="formerly">Formerly AGENTX</h2>
-      <p>Pactora started as AgentX on Monad.</p>
 
       <h2 id="more">More</h2>
       <ul>

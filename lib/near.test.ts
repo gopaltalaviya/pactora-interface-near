@@ -14,7 +14,7 @@ describe('isAccountId (nearcore rule)', () => {
       expect(isAccountId(id), id).toBe(true);
   });
 
-  it('refuses EVM addresses, capitals, bad separators and the wrong length', () => {
+  it('refuses hex addresses, capitals, bad separators and the wrong length', () => {
     for (const id of [
       '0x0000000000000000000000000000000000000001'.toUpperCase(),
       'Alice.testnet',
