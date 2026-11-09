@@ -37,6 +37,8 @@ export interface EvidenceFile {
   createdAt: string;
   withdrawnAt: string | null;
   url: string;
+  /** The worker's evidence, or the client's dispute photo (2026-11-09 §8); absent on an older API. */
+  purpose?: 'evidence' | 'dispute';
 }
 
 export interface FilesPage {

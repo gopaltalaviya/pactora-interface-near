@@ -41,6 +41,8 @@ export const PERSON_METHODS: Record<PersonAction, readonly string[]> = {
   approve: ['approve'],
   dispute: ['dispute'],
   cancel: ['cancel', 'cancel_job'],
+  // A decline is recorded off chain (2026-11-09 §3): no call may ever be signed for it.
+  decline: [],
 };
 
 /** The most a DAO call may attach: the proposal bond (0.1 NEAR on the testnet DAO), with room. */

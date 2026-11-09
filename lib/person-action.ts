@@ -28,8 +28,10 @@
 
 import {ApiError} from './api';
 import {
+  isOffChain,
   market,
   type ConfirmedAction,
+  type OffChainAction,
   type PersonAction,
   type PrepareExtra,
   type PreparedAction,
@@ -56,7 +58,7 @@ export interface PersonActionDeps {
       jobId: string,
       action: PersonAction,
       extra: PrepareExtra,
-    ) => Promise<PreparedAction>;
+    ) => Promise<PreparedAction | OffChainAction>;
     confirm: (token: string, jobId: string, action: PersonAction, txHash: string) => Promise<ConfirmedAction>;
   };
   sleep?: (ms: number) => Promise<void>;
@@ -142,6 +144,20 @@ export async function runPersonAction(
     deps.contracts(),
   ]);
 
+  // Off chain (a decline): the API recorded it; there is nothing to sign and nothing to confirm.
+  if (isOffChain(prepared)) {
+    deps.onStatus?.('Done.');
+    return {
+      jobId: prepared.jobId,
+      action: prepared.action,
+      txHash: '',
+      state: 'created',
+      chainJobId: null,
+      resultMismatch: false,
+      explorerUrl: null,
+      replayed: false,
+    };
+  }
   if (prepared.signerId !== deps.account) {
     throw new Error(
       `This action has to be signed by ${prepared.signerId}, but you are signed in as ${deps.account}. Nothing was sent. Sign in with the right account.`,

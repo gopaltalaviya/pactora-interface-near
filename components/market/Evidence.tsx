@@ -29,6 +29,7 @@ import {
   type ReviewDecision,
 } from '@/lib/evidence';
 import {useSession} from '@/lib/session';
+import {ReportButton} from './Report';
 
 /**
  * A listing job's delivery, for its two parties (docs/26 F6–F8): the worker's
@@ -119,6 +120,7 @@ export function DeliveryPanels({
         drafts={drafts}
         criteria={criteria}
         working={working}
+        jobState={jobState}
         onChange={reload}
       />
       <PhotosCard jobId={jobId} party={party} files={files} working={working} onChange={reload} />
@@ -135,6 +137,7 @@ function DraftsCard({
   drafts,
   criteria,
   working,
+  jobState,
   onChange,
 }: {
   jobId: string;
@@ -142,6 +145,7 @@ function DraftsCard({
   drafts: DraftsPage;
   criteria: string;
   working: boolean;
+  jobState: string;
   onChange: () => void;
 }) {
   const latest = drafts.drafts.at(-1) ?? null;
@@ -155,7 +159,11 @@ function DraftsCard({
     >
       <div className="space-y-4">
         <p className="text-sm" data-testid="draft-phase">
-          {PHASE_WORDS[drafts.phase]}
+          {jobState === 'refunded'
+            ? 'The job was refunded, so the drafts are closed; what was posted stays here as the record.'
+            : jobState === 'settled'
+              ? 'The job settled: the accepted draft was delivered and paid.'
+              : PHASE_WORDS[drafts.phase]}
         </p>
         {drafts.acceptedSnapshotHash && (
           <p className="break-all text-xs text-muted">
@@ -551,7 +559,7 @@ function PhotosCard({
               accept="image/png,image/jpeg,image/webp"
               disabled={busy || full}
               aria-describedby="photo-hint"
-              className="block text-sm"
+              className="file-input block text-sm"
               onChange={(e) => void upload(e.target.files)}
             />
           </Field>
@@ -618,6 +626,7 @@ function PhotoItem({
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="text-muted">
           {bytesDisplay(file.size)} · {withdrawn ? 'withdrawn' : 'in use'}
+          {file.purpose === 'dispute' && ' · the client’s dispute photo'}
           {verified === 'yes' && <span data-testid="photo-verified"> · sha256 matches</span>}
           {verified === 'no' && (
             <span role="alert" className="text-broken">
@@ -696,8 +705,13 @@ function ChatCard({
                 key={m.messageId}
                 className={`rounded-lg border border-edge p-2 text-sm ${m.from === party ? 'ml-8' : 'mr-8'}`}
               >
-                <p className="text-xs text-muted">
-                  {m.from === party ? 'You' : `The ${m.from}`} · {utc(m.at)}
+                <p className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                  <span>
+                    {m.from === party ? 'You' : `The ${m.from}`} · {utc(m.at)}
+                  </span>
+                  {m.from !== party && (
+                    <ReportButton targetType="message" targetId={m.messageId} what="this message" />
+                  )}
                 </p>
                 <p className="whitespace-pre-wrap break-words">{m.body}</p>
               </li>

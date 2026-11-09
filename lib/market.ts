@@ -16,7 +16,7 @@ export type InteractionMode = 'task' | 'conversation' | 'capture';
 export type HiringMode = 'applications' | 'instant';
 export type ListingStatus = 'open' | 'closed' | 'filled' | 'cancelled';
 export type JobState = 'created' | 'accepted' | 'submitted' | 'disputed' | 'settled' | 'refunded';
-export type PersonAction = 'create' | 'accept' | 'submit' | 'approve' | 'dispute' | 'cancel';
+export type PersonAction = 'create' | 'accept' | 'submit' | 'approve' | 'dispute' | 'cancel' | 'decline';
 
 export const CATEGORIES: {value: Category; label: string}[] = [
   {value: 'physical', label: 'Physical'},
@@ -55,6 +55,8 @@ export interface Listing {
   reservedBaseUnits: string;
   createdAt: string;
   updatedAt: string;
+  /** Hidden by moderation: out of the public lists; its owner still sees it (2026-11-09). */
+  hidden?: boolean;
 }
 
 export interface Application {
@@ -99,6 +101,8 @@ export interface ListingQuery {
   location?: string;
   match?: 'me';
   mine?: boolean;
+  /** Text search over title, description and skills (1-100 characters; websearch syntax). */
+  q?: string;
   limit?: number;
   cursor?: string;
 }
@@ -185,11 +189,34 @@ export interface Me {
   spentBaseUnits: string;
 }
 
+/**
+ * The NEAR AI judge's attestation of the ruling that settled or disputed a
+ * job (2026-11-09 §14): which model answered, the response it signed, and
+ * whether the API could verify the signature.
+ */
+export interface JudgeAttestation {
+  provider: string;
+  model: string;
+  responseId: string;
+  signature: string;
+  signingAddress: string;
+  signingAlgo: string;
+  signedText: string;
+  verifiedAt: string;
+  verdictHash: string;
+  /** Set by the API when it checked the signature; absent on an older API. */
+  verified?: boolean;
+}
+
 export interface JobRow {
   jobId: string;
   chainJobId: string | null;
   chainId: ChainId;
   state: JobState;
+  /** The listing's title for a listing job, else the spec's capability in words (2026-11-09). */
+  title?: string;
+  listingId?: string | null;
+  listingTitle?: string | null;
   path: string;
   amount: string;
   amountDisplay: string;
@@ -216,6 +243,10 @@ export interface JobDetail {
   chainId: ChainId;
   network: string;
   state: JobState;
+  title?: string;
+  listingId?: string | null;
+  listingTitle?: string | null;
+  judge?: JudgeAttestation | null;
   path: string;
   amount: string;
   amountDisplay: string;
@@ -244,6 +275,14 @@ export interface PreparedAction {
   reasonHash?: string;
 }
 
+/** A `decline` is off chain: the API records it and answers this, with nothing to sign. */
+export interface OffChainAction {
+  jobId: string;
+  action: 'decline';
+  offChain: true;
+  declined: {reason: string; at: string};
+}
+
 export interface ConfirmedAction {
   jobId: string;
   action: PersonAction;
@@ -256,6 +295,9 @@ export interface ConfirmedAction {
 }
 
 export type PrepareExtra = {output?: Record<string, unknown>; producedAt?: string; reason?: string};
+
+export const isOffChain = (p: PreparedAction | OffChainAction): p is OffChainAction =>
+  (p as OffChainAction).offChain === true;
 
 const json = (token: string, extra: Record<string, string> = {}) => ({
   'content-type': 'application/json',
@@ -382,7 +424,11 @@ export const market = {
       'could not claim a slot',
     ),
 
-  jobs: (token: string, q: {limit?: number; cursor?: string} = {}, signal?: AbortSignal) =>
+  jobs: (
+    token: string,
+    q: {limit?: number; cursor?: string; status?: string; q?: string} = {},
+    signal?: AbortSignal,
+  ) =>
     request<{count: number; nextCursor: string | null; jobs: JobRow[]}>(
       `/v1/jobs${query({...q})}`,
       optionalBearer(token, signal),
@@ -393,7 +439,7 @@ export const market = {
     request<JobDetail>(`/v1/jobs/${enc(id)}`, optionalBearer(undefined, signal), 'could not load the job'),
 
   prepare: (token: string, jobId: string, action: PersonAction, extra: PrepareExtra = {}) =>
-    request<PreparedAction>(
+    request<PreparedAction | OffChainAction>(
       `/v1/jobs/${enc(jobId)}/person-actions/prepare`,
       {method: 'POST', headers: json(token), body: JSON.stringify({action, ...extra})},
       'could not prepare the action',
@@ -438,14 +484,52 @@ export const JOB_STATE_WORDS: Record<JobState, {label: string; plain: string}> =
   },
   disputed: {label: 'Disputed', plain: 'The client disputed the result. The arbiter decides who is paid.'},
   settled: {label: 'Settled', plain: 'Done. The worker was paid from the escrow.'},
-  refunded: {label: 'Refunded', plain: 'Cancelled. The escrowed money went back to the client.'},
+  refunded: {label: 'Refunded', plain: 'Over. The escrowed money went back to the client.'},
 };
 
+/** The job's title: the listing's, else the spec's capability in words, else "Job". */
+export function jobTitle(
+  job: Pick<JobRow, 'spec'> & {title?: string | undefined; listingTitle?: string | null | undefined},
+): string {
+  if (job.title?.trim()) return job.title.trim();
+  if (job.listingTitle?.trim()) return job.listingTitle.trim();
+  const cap = job.spec?.capability;
+  return typeof cap === 'string' && cap.trim() ? cap.trim() : 'Job';
+}
+
 /** The sentence for a job's state, with the one case the state alone does not say: not on chain yet. */
-export function jobStateWords(job: Pick<JobDetail, 'state' | 'chainJobId' | 'declined'>): {
+export function jobStateWords(
+  job: Pick<JobDetail, 'state' | 'chainJobId' | 'declined'> & {
+    dispute?: JobDetail['dispute'];
+    events?: JobEventRow[];
+  },
+): {
   label: string;
   plain: string;
 } {
+  // A refund after a dispute is a ruling for the client, not a cancellation (live audit 2026-11-09, M15).
+  const ruled = job.events?.some((e) => e.kind === 'dispute_resolved');
+  if (job.state === 'refunded' && (ruled || job.dispute)) {
+    return {
+      label: 'Refunded after the dispute',
+      plain:
+        'The arbiter ruled for the client: the escrowed money and the dispute bond went back to the client.',
+    };
+  }
+  if (job.state === 'settled' && ruled) {
+    return {
+      label: 'Settled after the dispute',
+      plain:
+        'The arbiter ruled for the worker: the worker was paid from the escrow, and the dispute bond went to the worker.',
+    };
+  }
+  if (job.state === 'settled' && job.events?.some((e) => e.kind === 'dispute_expired')) {
+    return {
+      label: 'Settled, dispute unanswered',
+      plain:
+        'The arbiter never ruled, so after the deadline and the grace the worker was paid; the dispute bond was split, half to the worker, half back to the client.',
+    };
+  }
   if (job.state === 'created' && !job.chainJobId) {
     return {
       label: 'Not funded yet',
@@ -481,6 +565,16 @@ const EVENT_WORDS: Record<string, string> = {
   'job.submitted': 'Result submitted',
   submitted: 'Result submitted on chain',
   'job.declined': 'Declined by the worker',
+  'listing.bid': 'New bid on your listing',
+  'application.selected': 'Your bid was selected',
+  'application.rejected': 'Your bid was not selected',
+  'listing.closed': 'Hiring stopped; your bid is set aside',
+  'listing.reopened': 'Hiring reopened; your bid is live again',
+  'listing.claimed': 'A slot on your listing was claimed',
+  'listing.expired': 'The listing reached its deadline',
+  'listing.cancelled': 'The listing was cancelled',
+  'listing.match': 'A new listing matches your skills',
+  'account.warned': 'A warning from the moderation desk',
   'job.draft.submitted': 'Draft posted by the worker',
   'job.draft.reviewed': 'Draft reviewed by the client',
   'job.file.added': 'Photo added',
@@ -530,8 +624,9 @@ export function availableActions(
   const party = partyOf(job, myAgentId);
   const onChain = Boolean(job.chainJobId);
   if (party === 'worker') {
+    // Declining is off chain and possible before the job is funded; accepting needs it on chain.
+    if (job.state === 'created') return onChain ? ['accept', 'decline'] : ['decline'];
     if (!onChain) return [];
-    if (job.state === 'created') return ['accept'];
     if (job.state === 'accepted') return ['submit'];
     return [];
   }

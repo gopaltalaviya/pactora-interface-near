@@ -1,4 +1,5 @@
 import type {RunStep} from '@/lib/api';
+import {JudgeCard} from '@/components/market/Dispute';
 import {safeHref} from '@/lib/links';
 import {ReviewProof} from './ReviewProof';
 import {Badge, type Tone} from './ui/Badge';
@@ -80,6 +81,11 @@ export function StepList({steps, proof = false}: {steps: RunStep[]; proof?: bool
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{step.detail}</p>
               {proof && step.status === 'settled' && step.jobId && step.agentId !== undefined && (
                 <ReviewProof jobId={step.jobId} agentId={step.agentId} />
+              )}
+              {step.judge && (
+                <div className="mt-2">
+                  <JudgeCard judge={step.judge} compact />
+                </div>
               )}
               {step.retriedAfter && (
                 <p className="mt-1.5 flex items-start gap-1.5 text-xs text-refused">

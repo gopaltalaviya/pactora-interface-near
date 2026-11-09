@@ -5,6 +5,7 @@ import {
   bidStanding,
   eventWords,
   jobStateWords,
+  jobTitle,
   jobTone,
   market,
   partyOf,
@@ -70,8 +71,8 @@ describe('who may do what to a job', () => {
     expect(partyOf(job(), null)).toBeNull();
   });
 
-  it('offers the worker accept, then submit', () => {
-    expect(availableActions(job({state: 'created'}), WORKER)).toEqual(['accept']);
+  it('offers the worker accept or decline, then submit', () => {
+    expect(availableActions(job({state: 'created'}), WORKER)).toEqual(['accept', 'decline']);
     expect(availableActions(job({state: 'accepted'}), WORKER)).toEqual(['submit']);
     expect(availableActions(job({state: 'submitted'}), WORKER)).toEqual([]);
     expect(availableActions(job({state: 'settled'}), WORKER)).toEqual([]);
@@ -88,10 +89,44 @@ describe('who may do what to a job', () => {
     expect(availableActions(job({state: 'submitted', resultMismatch: true}), CLIENT)).toEqual(['dispute']);
   });
 
-  it('offers a stranger, and a signed-out visitor, nothing; and a worker nothing before the job is on chain', () => {
+  it('offers a stranger, and a signed-out visitor, nothing; and a worker only a decline before the job is on chain', () => {
     expect(availableActions(job({state: 'submitted'}), '33')).toEqual([]);
     expect(availableActions(job({state: 'submitted'}), null)).toEqual([]);
-    expect(availableActions(job({chainJobId: null}), WORKER)).toEqual([]);
+    expect(availableActions(job({chainJobId: null}), WORKER)).toEqual(['decline']);
+    expect(availableActions(job({chainJobId: null, state: 'accepted'}), WORKER)).toEqual([]);
+  });
+
+  it('says a refund after a ruling is the arbiter’s doing, not a cancellation (M15)', () => {
+    const ruled = jobStateWords({
+      state: 'refunded',
+      chainJobId: '5',
+      declined: null,
+      events: [{kind: 'dispute_resolved', txHash: 'T', explorerUrl: null, occurredAt: 'x'}],
+    });
+    expect(ruled.label).toBe('Refunded after the dispute');
+    expect(ruled.plain).toMatch(/arbiter ruled for the client/);
+    expect(ruled.plain).not.toMatch(/Cancelled/);
+    expect(jobStateWords({state: 'refunded', chainJobId: '5', declined: null}).plain).not.toMatch(
+      /Cancelled/,
+    );
+    const expired = jobStateWords({
+      state: 'settled',
+      chainJobId: '5',
+      declined: null,
+      events: [{kind: 'dispute_expired', txHash: 'T', explorerUrl: null, occurredAt: 'x'}],
+    });
+    expect(expired.plain).toMatch(/half to the worker, half back to the client/);
+  });
+
+  it('titles a job by its listing, else its skill, else "Job"', () => {
+    expect(jobTitle({spec: {capability: 'shop-photos'}, title: 'Photograph two shop fronts'})).toBe(
+      'Photograph two shop fronts',
+    );
+    expect(jobTitle({spec: {capability: 'shop-photos'}, listingTitle: 'From the listing'})).toBe(
+      'From the listing',
+    );
+    expect(jobTitle({spec: {capability: 'shop-photos'}})).toBe('shop-photos');
+    expect(jobTitle({spec: null})).toBe('Job');
   });
 });
 

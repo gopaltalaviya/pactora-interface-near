@@ -10,6 +10,7 @@ import {
   useSignInHref,
   type TokenInfo,
 } from '@/components/market/hooks';
+import {DisputeEvidenceCard, JudgeCard} from '@/components/market/Dispute';
 import {DeliveryPanels, useDelivery} from '@/components/market/Evidence';
 import {PartyReviewCard} from '@/components/market/Profile';
 import {utc} from '@/components/market/ListingCard';
@@ -30,6 +31,7 @@ import {
   availableActions,
   eventWords,
   jobStateWords,
+  jobTitle,
   jobTone,
   market,
   partyOf,
@@ -53,6 +55,7 @@ const ACTION_LABEL: Record<PersonAction, string> = {
   approve: 'Approve and pay',
   dispute: 'Dispute the result',
   cancel: 'Cancel and refund',
+  decline: 'Decline the job',
 };
 
 export function JobView({jobId}: {jobId: string}) {
@@ -148,16 +151,38 @@ export function JobView({jobId}: {jobId: string}) {
 
   const words = jobStateWords(job);
   const actions = gateForDrafts(availableActions(job, myAgentId), terms ? delivery.drafts : undefined);
+  const title = jobTitle(job);
   const capability = typeof job.spec?.capability === 'string' ? job.spec.capability : null;
 
   return (
     <div className="space-y-6">
       <PageHeader
         back={back}
-        eyebrow="Job"
-        title={capability ? capability : 'Job'}
+        eyebrow={`Job ${job.jobId.slice(0, 8)}`}
+        title={title}
         titleClassName="text-2xl sm:text-3xl"
-        description={<span data-testid="state-plain">{words.plain}</span>}
+        description={
+          <span className="space-y-1">
+            <span className="block" data-testid="state-plain">
+              {words.plain}
+            </span>
+            {(job.listingId || (capability && capability !== title)) && (
+              <span className="block text-xs">
+                {job.listingId && (
+                  <Link
+                    href={`/jobs/listing/${encodeURIComponent(job.listingId)}`}
+                    className="text-accent underline"
+                    data-testid="job-listing-link"
+                  >
+                    From the listing{job.listingTitle ? ` “${job.listingTitle}”` : ''}
+                  </Link>
+                )}
+                {job.listingId && capability && capability !== title ? ' · ' : ''}
+                {capability && capability !== title ? `skill: ${capability}` : ''}
+              </span>
+            )}
+          </span>
+        }
         actions={
           <>
             <Badge tone={jobTone(job.state)} dot>
@@ -211,13 +236,13 @@ export function JobView({jobId}: {jobId: string}) {
           <p className="whitespace-pre-wrap break-words text-sm">{job.dispute.reason}</p>
         </Card>
       )}
-      {job.result !== null && job.result !== undefined && (
-        <Card title="Delivered result" labelledBy="result">
-          <pre className="max-h-80 overflow-auto rounded-lg bg-ink/70 p-3 text-xs">
-            {JSON.stringify(job.result, null, 2)}
-          </pre>
-        </Card>
-      )}
+      {party &&
+        session.status === 'in' &&
+        (job.state === 'submitted' || job.state === 'disputed' || job.dispute) && (
+          <DisputeEvidenceCard jobId={job.jobId} party={party} jobState={job.state} attempt={attempt} />
+        )}
+      {job.judge && <JudgeCard judge={job.judge} />}
+      {job.result !== null && job.result !== undefined && <ResultCard result={job.result} />}
 
       {party && session.status === 'in' && job.state === 'settled' && (
         <PartyReviewCard jobId={job.jobId} attempt={attempt} />
@@ -225,6 +250,46 @@ export function JobView({jobId}: {jobId: string}) {
 
       <Timeline job={job} stream={stream} />
     </div>
+  );
+}
+
+/**
+ * The delivered result: its known fields as text, the raw JSON behind a
+ * toggle (live audit 2026-11-09, L20: raw JSON clipped on a phone). The
+ * scrolling pane is focusable and named, so a keyboard reaches it (axe:
+ * scrollable-region-focusable).
+ */
+function ResultCard({result}: {result: unknown}) {
+  const fields =
+    result && typeof result === 'object' && !Array.isArray(result)
+      ? Object.entries(result as Record<string, unknown>).filter(
+          ([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+        )
+      : [];
+  return (
+    <Card title="Delivered result" labelledBy="result">
+      {fields.length > 0 && (
+        <dl className="mb-3 space-y-2 text-sm">
+          {fields.map(([k, v]) => (
+            <div key={k}>
+              <dt className="text-xs text-muted">{k}</dt>
+              <dd className="whitespace-pre-wrap break-words">{String(v)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <details className="text-sm" open={fields.length === 0}>
+        <summary className="cursor-pointer text-xs text-muted">The result as JSON</summary>
+        <pre
+          tabIndex={0}
+          role="region"
+          aria-label="The delivered result as JSON"
+          className="mt-2 max-h-80 overflow-auto rounded-lg bg-ink/70 p-3 text-xs"
+        >
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      </details>
+    </Card>
   );
 }
 
@@ -343,7 +408,9 @@ function willSign(action: PersonAction, job: JobDetail, token: TokenInfo | null)
     case 'dispute':
       return `You will sign: ${where}: ${price} stays in escrow; your bond is ${money(bondOf(job.amount, n?.disputeBondBps, n?.minDisputeBond))}, returned if the arbiter rules for you.`;
     case 'cancel':
-      return `You will sign: ${where}: ${price} back to you.`;
+      return `You will sign: ${where}: ${price} back to you. Cancelling is possible only until the worker accepts.`;
+    case 'decline':
+      return 'Nothing is signed: declining is recorded by Pactora, the client is told at once, and the job stays theirs to cancel for a refund.';
   }
 }
 
@@ -375,12 +442,15 @@ function Actions({
   const signInHref = useSignInHref();
   const [output, setOutput] = useState('{\n  \n}');
   const [reason, setReason] = useState('');
+  const [declineReason, setDeclineReason] = useState('');
   // One error per form: a problem with the result never shows under the reason.
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [disputeError, setDisputeError] = useState<string | null>(null);
-  const [open, setOpen] = useState<'submit' | 'dispute' | null>(null);
+  const [declineError, setDeclineError] = useState<string | null>(null);
+  const [open, setOpen] = useState<'submit' | 'dispute' | 'decline' | null>(null);
   const outputRef = useRef<HTMLTextAreaElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const declineRef = useRef<HTMLTextAreaElement>(null);
   const {state} = person;
   const explorer = state.done ? safeHref(state.done.explorerUrl) : null;
 
@@ -388,6 +458,7 @@ function Actions({
   useEffect(() => {
     if (open === 'submit') outputRef.current?.focus();
     if (open === 'dispute') reasonRef.current?.focus();
+    if (open === 'decline') declineRef.current?.focus();
   }, [open]);
 
   if (!ready) return <Skeleton className="h-10 w-full" />;
@@ -429,6 +500,18 @@ function Actions({
     );
   }
 
+  function declineJob() {
+    const t = declineReason.trim();
+    const problem =
+      t.length < 1 ? 'Say why, in a sentence.' : t.length > 500 ? 'At most 500 characters.' : null;
+    setDeclineError(problem);
+    if (problem) {
+      declineRef.current?.focus();
+      return;
+    }
+    void person.run(job.jobId, 'decline', {reason: t}, expected);
+  }
+
   function disputeResult() {
     const problem = validateReason(reason);
     setDisputeError(problem);
@@ -458,7 +541,7 @@ function Actions({
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
               {actions
-                .filter((a) => a !== 'submit' && a !== 'dispute')
+                .filter((a) => a !== 'submit' && a !== 'dispute' && a !== 'decline')
                 .map((a) => (
                   <Button
                     key={a}
@@ -502,12 +585,22 @@ function Actions({
                   {ACTION_LABEL.dispute}
                 </Button>
               )}
+              {actions.includes('decline') && (
+                <Button
+                  variant="secondary"
+                  disabled={pending}
+                  aria-expanded={open === 'decline'}
+                  onClick={() => setOpen(open === 'decline' ? null : 'decline')}
+                >
+                  {ACTION_LABEL.decline}
+                </Button>
+              )}
             </div>
 
             {/* Before the wallet opens: the method, the contract, the money. */}
             <ul className="space-y-1 text-xs text-muted" aria-label="What you will sign">
               {actions
-                .filter((a) => a !== 'dispute' && (a !== 'submit' || fromDraft))
+                .filter((a) => a !== 'dispute' && a !== 'decline' && (a !== 'submit' || fromDraft))
                 .map((a) => (
                   <li key={a} data-testid={`will-sign-${a}`}>
                     {willSign(a, job, token)}
@@ -542,6 +635,39 @@ function Actions({
                 <Button disabled={pending} onClick={submitResult}>
                   Sign and submit
                 </Button>
+              </div>
+            )}
+            {open === 'decline' && actions.includes('decline') && (
+              <div className="space-y-3 rounded-lg border border-edge-strong p-4" data-testid="decline-form">
+                <Field
+                  label="Why are you declining?"
+                  htmlFor="job-decline-reason"
+                  error={declineError}
+                  hintId="job-decline-hint"
+                  hint="1-500 characters. The client reads it at once. Nothing is signed; the job goes back to the client, who cancels it for a refund."
+                >
+                  <TextArea
+                    id="job-decline-reason"
+                    ref={declineRef}
+                    rows={3}
+                    value={declineReason}
+                    maxLength={500}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                    aria-describedby="job-decline-hint"
+                    aria-invalid={Boolean(declineError) || undefined}
+                  />
+                </Field>
+                <p className="text-xs text-muted" data-testid="will-sign-decline">
+                  {willSign('decline', job, token)}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="danger" disabled={pending} onClick={declineJob}>
+                    Confirm: decline the job
+                  </Button>
+                  <Button variant="ghost" disabled={pending} onClick={() => setOpen(null)}>
+                    Keep it
+                  </Button>
+                </div>
               </div>
             )}
             {open === 'dispute' && actions.includes('dispute') && (
@@ -589,13 +715,13 @@ function Actions({
       {state.done && (
         <Notice tone="live">
           <p role="status" data-testid="action-done">
-            Done: the job is now{' '}
-            {jobStateWords({
-              state: state.done.state,
-              chainJobId: state.done.chainJobId,
-              declined: null,
-            }).label.toLowerCase()}
-            .
+            {state.done.action === 'decline'
+              ? 'Done: you declined the job. The client has been told.'
+              : `Done: the job is now ${jobStateWords({
+                  state: state.done.state,
+                  chainJobId: state.done.chainJobId,
+                  declined: null,
+                }).label.toLowerCase()}.`}
             {explorer && (
               <>
                 {' '}
@@ -612,6 +738,9 @@ function Actions({
       {actions.length === 0 && party && (
         <p className="text-sm text-muted" data-testid="no-action">
           You are the {party}. {idle}
+          {party === 'client' && job.state === 'accepted'
+            ? ' Cancelling is possible only before the worker accepts; from here the job ends by delivery, a deadline or a dispute.'
+            : ''}
         </p>
       )}
       {!party && (
