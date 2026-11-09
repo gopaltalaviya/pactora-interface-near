@@ -244,6 +244,11 @@ function ApplicantPanel({
   const signIn = useSignInHref();
 
   if (session.status === 'loading') return null;
+  // A listing that is not open takes no bids from anyone: say that, rather
+  // than asking a visitor to sign in (or join) for a bid they cannot send.
+  if (listing.status !== 'open' && (session.status === 'out' || !session.person)) {
+    return <Notice>This listing is {listing.status}, so it is not taking bids.</Notice>;
+  }
   if (session.status === 'out') {
     return (
       <Card title="Want this work?" labelledBy="bid-gate">

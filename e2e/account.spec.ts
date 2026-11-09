@@ -139,6 +139,8 @@ test('the phone menu shows Admin to a reviewer only', async ({page}, info) => {
     '/admin',
   );
   await page.getByRole('link', {name: 'My account'}).click();
+  // Let that navigation land: a goto on top of it is aborted (Firefox).
+  await page.waitForURL(/\/me(#.*)?$/);
   await page.goto('/signin');
   await page.getByRole('button', {name: 'Sign out', exact: true}).click();
   await expect(page.getByRole('button', {name: 'Connect and sign in'})).toBeVisible();

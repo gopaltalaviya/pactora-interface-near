@@ -109,9 +109,13 @@ export default async function RootLayout({children}: {children: React.ReactNode}
             fields read this back on mount (components/ui/Field.tsx), which
             then removes the listener and the record: nothing typed after
             hydration is kept, and a password field is never recorded at all. */}
-        <meta name="csp-nonce" nonce={nonce} />
+        {/* Browsers hide a nonce from the DOM once parsed (it reads back as ""),
+            so React would report a hydration mismatch; the server-sent value
+            is what CSP checks. */}
+        <meta name="csp-nonce" nonce={nonce} suppressHydrationWarning />
         <script
           nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `(function(){var e=window.__pactoraEarly={};function f(v){var t=v.target;if(t&&t.id&&t.type!=='password'&&typeof t.value==='string')e[t.id]=t.value}document.addEventListener('input',f,true);window.__pactoraEarlyStop=function(){document.removeEventListener('input',f,true);delete window.__pactoraEarly;delete window.__pactoraEarlyStop}})();`,
           }}

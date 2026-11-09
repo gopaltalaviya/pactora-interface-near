@@ -540,6 +540,8 @@ const filled = twoBids('lst-own-filled', {status: 'open'});
 filled.slots.push({slot: 1, jobId: 'bbbbbbbb-0000-4000-8000-00000000f001'});
 filled.applications[0].status = 'selected';
 filled.applications[0].jobId = 'bbbbbbbb-0000-4000-8000-00000000f001';
+// Someone else's listing whose every slot is taken: no longer taking bids.
+own('lst-closed-filled', {client: clientOf('mia.testnet'), title: 'A filled listing', status: 'filled'});
 for (let i = 1; i <= 2; i++) {
   const l = own(`lst-mia-${i}`, {client: clientOf('mia.testnet'), title: `Mia listing ${i}`});
   void l;

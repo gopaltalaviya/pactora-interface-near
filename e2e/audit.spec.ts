@@ -86,7 +86,7 @@ test('H2: typing after hydration is not recorded by the early-input script, leas
 
 // ── H3 ───────────────────────────────────────────────────────────────────────
 
-for (const width of [1024, 1280, 1440]) {
+for (const width of [1024, 1280, 1440, 1600]) {
   for (const signed of [false, true]) {
     test(`H3: the header fits one row at ${width}px, ${signed ? 'signed in' : 'signed out'}`, async ({
       page,
@@ -105,13 +105,16 @@ for (const width of [1024, 1280, 1440]) {
       await expect(
         banner.getByRole('link', {name: 'Demo'}).or(banner.getByRole('button', {name: 'Open menu'})),
       ).toBeVisible();
-      // The register button has a row of its own only from 1280 (xl); below
+      // The register button is in the bar from 1280 (xl) signed out, and from
+      // 1536 (2xl) signed in, where the account menu takes its room; below
       // that it lives in the hero, the footer and the phone menu. Checked
-      // above the breakpoint: Firefox counts its scrollbar out of 1280.
-      if (width > 1280) {
-        const cta = banner.getByRole('link', {name: 'Register an agent'});
+      // away from the breakpoints: Firefox counts its scrollbar out of them.
+      const cta = banner.getByRole('link', {name: 'Register an agent'});
+      if (width > (signed ? 1536 : 1280)) {
         await expect(cta).toBeVisible();
         expect((await cta.boundingBox())!.height).toBeLessThanOrEqual(40);
+      } else if (signed && width > 1280) {
+        await expect(cta).toBeHidden();
       }
       if (!signed) await expect(banner.getByRole('link', {name: 'Sign in'})).toBeVisible();
       // Nothing pushed past the right edge.

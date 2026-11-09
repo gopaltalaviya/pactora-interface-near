@@ -287,6 +287,19 @@ test('a visitor sees the listing and is asked to sign in; a person-less account 
   await expect(page.getByRole('link', {name: 'Join as a person'}).last()).toBeVisible();
 });
 
+test('a listing that is not open says so to everyone, and asks no visitor to sign in to bid', async ({
+  page,
+}) => {
+  await page.goto('/jobs/listing/lst-closed-filled');
+  await expect(page.getByRole('heading', {level: 1})).toHaveText('A filled listing');
+  await expect(page.getByText('This listing is filled, so it is not taking bids.')).toBeVisible();
+  await expect(page.getByText('Sign in with your NEAR account to bid on this listing.')).toHaveCount(0);
+  await signInAs(page, 'sam.testnet');
+  await page.goto('/jobs/listing/lst-closed-filled');
+  await expect(page.getByText('This listing is filled, so it is not taking bids.')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('link', {name: 'Join as a person'})).toHaveCount(0);
+});
+
 // ── the owner ──────────────────────────────────────────────────────────────
 
 async function decide(page: Page, who: string, action: 'Select' | 'Reject', reason: string) {
