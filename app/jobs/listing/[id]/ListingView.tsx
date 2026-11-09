@@ -7,6 +7,7 @@ import {
   errorText,
   useNetwork,
   usePersonAction,
+  useSignInHref,
   type TokenInfo,
 } from '@/components/market/hooks';
 import {PriceLine, STATUS_TONE, utc} from '@/components/market/ListingCard';
@@ -194,7 +195,10 @@ function ApplicantPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [claimed, setClaimed] = useState<Decision | null>(null);
+  // L1: a bid is withdrawn on the second click, not the first.
+  const [confirmWithdraw, setConfirmWithdraw] = useState<string | null>(null);
   const decimals = token?.decimals ?? 6;
+  const signIn = useSignInHref();
 
   if (session.status === 'loading') return null;
   if (session.status === 'out') {
@@ -202,7 +206,7 @@ function ApplicantPanel({
       <Card title="Want this work?" labelledBy="bid-gate">
         <p className="text-sm text-muted">Sign in with your NEAR account to bid on this listing.</p>
         <div className="mt-4">
-          <ButtonLink href="/signin" variant="primary">
+          <ButtonLink href={signIn} variant="primary">
             Sign in
           </ButtonLink>
         </div>
@@ -257,6 +261,7 @@ function ApplicantPanel({
       setError(errorText(err));
     } finally {
       setBusy(null);
+      setConfirmWithdraw(null);
     }
   }
 
@@ -306,16 +311,39 @@ function ApplicantPanel({
                 <p className="mt-2 whitespace-pre-wrap break-words text-muted">{a.proposal}</p>
                 {a.reason && <p className="mt-2 text-xs">The client said: {a.reason}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {a.status === 'pending' && (
+                  {a.status === 'pending' && confirmWithdraw !== a.applicationId && (
                     <Button
                       size="sm"
                       variant="secondary"
-                      loading={busy === `withdraw-${a.applicationId}`}
                       disabled={busy !== null}
-                      onClick={() => void withdraw(a.applicationId)}
+                      onClick={() => setConfirmWithdraw(a.applicationId)}
                     >
                       Withdraw this bid
                     </Button>
+                  )}
+                  {a.status === 'pending' && confirmWithdraw === a.applicationId && (
+                    <>
+                      <span className="self-center text-xs text-muted">
+                        It counts as one of your {MAX_BIDS_PER_LISTING} bids here.
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={busy === `withdraw-${a.applicationId}`}
+                        disabled={busy !== null}
+                        onClick={() => void withdraw(a.applicationId)}
+                      >
+                        Confirm withdrawal
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy !== null}
+                        onClick={() => setConfirmWithdraw(null)}
+                      >
+                        Keep it
+                      </Button>
+                    </>
                   )}
                   {a.jobId && (
                     <ButtonLink href={`/jobs/${a.jobId}`} size="sm">
@@ -430,7 +458,12 @@ function OwnerPanel({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [funding, setFunding] = useState<{jobId: string; signerId: string | undefined} | null>(null);
+  const [funding, setFunding] = useState<{
+    jobId: string;
+    signerId: string | undefined;
+    amount: string;
+    amountDisplay: string;
+  } | null>(null);
   const [signed, setSigned] = useState<{
     jobId: string;
     txHash: string | undefined;
@@ -549,11 +582,18 @@ function OwnerPanel({
             escrow.
             {funding.signerId ? ` Your wallet must sign as ${funding.signerId}.` : ''}
           </p>
+          {/* Before the wallet opens: the method, the contract, the money (held against the prepared call). */}
+          <p className="mt-2 text-xs text-muted" data-testid="will-sign-create">
+            You will sign: create_job on {token?.network.contracts.Pactora ?? 'the Pactora contract'}:{' '}
+            {funding.amountDisplay} into escrow.
+          </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button
               loading={action.state.busy}
               disabled={action.state.busy || action.state.pending !== null}
-              onClick={() => void action.run(funding.jobId, 'create')}
+              onClick={() =>
+                void action.run(funding.jobId, 'create', {}, {chainJobId: null, amount: funding.amount})
+              }
             >
               Sign and fund the job
             </Button>
@@ -637,7 +677,12 @@ function OwnerPanel({
           onSelected={(d) => {
             const f = d.funding;
             if (f?.by === 'person' && !f.done && d.job) {
-              setFunding({jobId: d.job.jobId, signerId: f.signerId});
+              setFunding({
+                jobId: d.job.jobId,
+                signerId: f.signerId,
+                amount: d.job.amount,
+                amountDisplay: d.job.amountDisplay,
+              });
               setSigned(null);
             } else if (f?.by === 'signer' && d.job) {
               setSigned({jobId: d.job.jobId, txHash: f.txHash, explorerUrl: f.explorerUrl});

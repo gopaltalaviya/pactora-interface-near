@@ -11,6 +11,7 @@ import {API_URL, ApiError, api, formatUnits, type NetworkInfo, type RegisteredPe
 import {displayAccount, formatYocto} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {REGISTRATION_AMOUNTS, registerPersonOnChain} from '@/lib/wallet';
+import {signInHref} from '@/lib/signin-next';
 
 /**
  * Join as a person (F2).
@@ -187,7 +188,7 @@ export default function JoinPage() {
             Joining is done by the account that will be the person. Sign in with it, then come back here.
           </p>
           <div className="mt-4">
-            <ButtonLink href="/signin">Sign in</ButtonLink>
+            <ButtonLink href={signInHref('/join')}>Sign in</ButtonLink>
           </div>
         </Card>
       ) : already ? (

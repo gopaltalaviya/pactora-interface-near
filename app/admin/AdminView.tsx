@@ -1,7 +1,8 @@
 'use client';
 
 import {useCallback, useEffect, useState} from 'react';
-import {errorText, SignInGate} from '@/components/market/hooks';
+import {errorText, networkPromise, SignInGate} from '@/components/market/hooks';
+import {describeError} from '@/lib/errors';
 import {Badge} from '@/components/ui/Badge';
 import {Button} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -21,6 +22,7 @@ import {
 } from '@/lib/admin';
 import {useSession} from '@/lib/session';
 import {functionCall} from '@/lib/wallet';
+import {checkDaoCall, type DaoExpectation} from '@/lib/wallet-guard';
 
 /**
  * The admin console (docs/26 F15): the DAO dispute desk for the arbiter's
@@ -54,7 +56,7 @@ function Console() {
         setMe(m);
         setTab(m.roles.includes('council') ? 'disputes' : 'compliance');
       })
-      .catch((err: unknown) => setError(errorText(err)));
+      .catch((err: unknown) => setError(describeError(err).text));
   }, [authed]);
 
   if (error) return <ErrorState title="No admin access">{error}</ErrorState>;
@@ -89,7 +91,7 @@ function Console() {
         ))}
       </div>
       <div role="tabpanel">
-        {tab === 'disputes' && <Disputes />}
+        {tab === 'disputes' && <Disputes dao={me.arbiterDao} />}
         {tab === 'moderation' && <Moderation />}
         {tab === 'compliance' && <Compliance />}
       </div>
@@ -97,11 +99,21 @@ function Console() {
   );
 }
 
-/** Sign a call the API built, with the member's own wallet. */
-function useSendBuilt() {
+type DaoAsk = {kind: 'propose'} | {kind: 'vote'; proposalId: number; action: 'VoteApprove' | 'VoteReject'};
+
+/**
+ * Sign a call the API built, with the member's own wallet — after holding it
+ * against what the member asked for (lib/wallet-guard.ts): the arbiter DAO
+ * named by /v1/admin/me or the network, a proposal or the vote on the
+ * proposal that was clicked, and no deposit beyond the DAO's bond. The API
+ * says what a ruling looks like; it does not get to change what is signed.
+ */
+function useSendBuilt(dao: string | null) {
   const {ensureWallet, account} = useSession();
   return useCallback(
-    async (fc: BuiltCall) => {
+    async (fc: BuiltCall, ask: DaoAsk) => {
+      const {contracts} = await networkPromise();
+      checkDaoCall(fc, {...ask, dao, contracts} as DaoExpectation);
       const wallet = await ensureWallet();
       await wallet.signAndSendTransactions({
         ...(account ? {signerId: account} : {}),
@@ -113,11 +125,11 @@ function useSendBuilt() {
         ],
       });
     },
-    [ensureWallet, account],
+    [ensureWallet, account, dao],
   );
 }
 
-function Disputes() {
+function Disputes({dao}: {dao: string | null}) {
   const {authed} = useSession();
   const [list, setList] = useState<{jobId: string; chainJobId: string | null; amount: string}[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -143,19 +155,21 @@ function Disputes() {
           </li>
         ))}
       </ul>
-      {open && <DisputeDetail key={open} jobId={open} />}
+      {open && <DisputeDetail key={open} jobId={open} dao={dao} />}
     </div>
   );
 }
 
-function DisputeDetail({jobId}: {jobId: string}) {
+function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
   const {authed} = useSession();
-  const send = useSendBuilt();
+  const send = useSendBuilt(dao);
   const [d, setD] = useState<Dispute | null>(null);
   const [proposals, setProposals] = useState<{council: string[]; proposals: Proposal[]} | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // A Reject vote is asked twice: it is a ruling against one party, signed on chain.
+  const [confirmReject, setConfirmReject] = useState<number | null>(null);
 
   useEffect(() => {
     authed((t) => admin.dispute(t, jobId))
@@ -171,7 +185,7 @@ function DisputeDetail({jobId}: {jobId: string}) {
     setProblem(null);
     try {
       const built = await authed((t) => admin.propose(t, jobId, forWorker, d.evidenceHash));
-      await send(built.functionCall);
+      await send(built.functionCall, {kind: 'propose'});
       setNotice(`Proposed to the DAO: ${rulingWords(forWorker)}. Two council votes rule it.`);
       setAttempt((n) => n + 1);
     } catch (err) {
@@ -180,9 +194,10 @@ function DisputeDetail({jobId}: {jobId: string}) {
   }
   async function vote(p: Proposal, action: 'VoteApprove' | 'VoteReject') {
     setProblem(null);
+    setConfirmReject(null);
     try {
       const built = await authed((t) => admin.vote(t, jobId, p.id, action));
-      await send(built.functionCall);
+      await send(built.functionCall, {kind: 'vote', proposalId: p.id, action});
       setNotice(`Vote sent on proposal ${p.id}.`);
       setAttempt((n) => n + 1);
     } catch (err) {
@@ -252,13 +267,24 @@ function DisputeDetail({jobId}: {jobId: string}) {
               <li key={p.id} className="rounded-lg border border-edge p-2" data-testid={`proposal-${p.id}`}>
                 Proposal {p.id}: {rulingWords(p.forWorker)} — {p.status} —{' '}
                 {tally(p, proposals.council.length || 3)}
-                {p.status === 'InProgress' && !p.youVoted && (
+                {p.status === 'InProgress' && !p.youVoted && confirmReject !== p.id && (
                   <span className="ml-2 inline-flex gap-2">
                     <Button size="sm" onClick={() => void vote(p, 'VoteApprove')}>
                       Approve
                     </Button>
-                    <Button size="sm" variant="secondary" onClick={() => void vote(p, 'VoteReject')}>
+                    <Button size="sm" variant="secondary" onClick={() => setConfirmReject(p.id)}>
                       Reject
+                    </Button>
+                  </span>
+                )}
+                {p.status === 'InProgress' && !p.youVoted && confirmReject === p.id && (
+                  <span className="ml-2 inline-flex flex-wrap items-center gap-2">
+                    <span className="text-muted">Your wallet signs a Reject vote on proposal {p.id}.</span>
+                    <Button size="sm" variant="danger" onClick={() => void vote(p, 'VoteReject')}>
+                      Confirm the Reject vote
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmReject(null)}>
+                      Not now
                     </Button>
                   </span>
                 )}

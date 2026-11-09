@@ -51,7 +51,7 @@ export function CopyButton({
       aria-label={showLabel ? undefined : text}
       title={state === 'failed' ? 'The browser refused clipboard access — select and copy by hand' : label}
       className={
-        'inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors duration-200 ' +
+        'inline-flex min-h-6 min-w-6 items-center justify-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors duration-200 ' +
         (state === 'copied'
           ? 'text-settled'
           : state === 'failed'

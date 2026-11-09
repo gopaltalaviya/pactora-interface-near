@@ -489,7 +489,7 @@ export default function DemoPage() {
                 {step.link && (
                   <Link
                     href={step.link.href}
-                    className="inline-flex items-center gap-1 text-sm text-accent hover:underline"
+                    className="inline-flex min-h-6 items-center gap-1 text-sm text-accent hover:underline"
                   >
                     {step.link.label} <Icon name="arrowRight" className="size-3.5" />
                   </Link>

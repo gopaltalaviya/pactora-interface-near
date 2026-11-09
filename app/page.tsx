@@ -693,7 +693,7 @@ function Contracts({network}: {network: NetworkInfo | null}) {
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 hover:text-accent"
+            className="inline-flex min-h-6 items-center gap-1 hover:text-accent"
           >
             {body} ↗<span className="sr-only"> (opens the block explorer in a new tab)</span>
           </a>

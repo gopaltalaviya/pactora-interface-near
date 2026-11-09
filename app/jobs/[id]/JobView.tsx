@@ -4,10 +4,10 @@ import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActionFeedback,
-  errorText,
   useMe,
   useNetwork,
   usePersonAction,
+  useSignInHref,
   type TokenInfo,
 } from '@/components/market/hooks';
 import {DeliveryPanels, useDelivery} from '@/components/market/Evidence';
@@ -20,7 +20,8 @@ import {Field, TextArea} from '@/components/ui/Field';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import type {StreamState} from '@/lib/api';
-import {gateForDrafts, listingTermsOf} from '@/lib/evidence';
+import {describeError, type ErrorView} from '@/lib/errors';
+import {gateForDrafts, listingTermsOf, type DraftPhase} from '@/lib/evidence';
 import {subscribeToJob} from '@/lib/job-stream';
 import {LIMITS, validateReason} from '@/lib/listing-form';
 import {safeHref} from '@/lib/links';
@@ -35,6 +36,7 @@ import {
   type JobDetail,
   type PersonAction,
 } from '@/lib/market';
+import {PERSON_METHODS} from '@/lib/wallet-guard';
 import {useSession} from '@/lib/session';
 
 /**
@@ -58,7 +60,7 @@ export function JobView({jobId}: {jobId: string}) {
   const token = useNetwork();
   const {me, error: meError} = useMe();
   const [job, setJob] = useState<JobDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorView | null>(null);
   const [stream, setStream] = useState<StreamState | 'connecting'>('connecting');
   const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
@@ -72,7 +74,7 @@ export function JobView({jobId}: {jobId: string}) {
         setError(null);
       })
       .catch((err: unknown) => {
-        if (!controller.signal.aborted) setError(errorText(err));
+        if (!controller.signal.aborted) setError(describeError(err));
       });
     return () => controller.abort();
   }, [jobId, attempt]);
@@ -100,18 +102,33 @@ export function JobView({jobId}: {jobId: string}) {
   const terms = job ? listingTermsOf(job) : null;
   const delivery = useDelivery(jobId, terms && session.status === 'in' ? party : null, attempt);
 
-  const back = {href: '/me', label: 'My account'};
+  // Signed in, the way back is the account's jobs; a visitor goes to the public board.
+  const back = session.status === 'in' ? {href: '/me', label: 'My account'} : {href: '/jobs', label: 'Jobs'};
 
   if (error && !job) {
+    if (error.notFound) {
+      return (
+        <div className="space-y-6">
+          <PageHeader
+            back={back}
+            title="This job was not found"
+            description="It may have been removed, or the link may be wrong. Check the address you were given."
+          />
+        </div>
+      );
+    }
     return (
       <div className="space-y-6">
         <PageHeader back={back} title="Could not load this job" />
         <ErrorState
-          title={error}
+          title={error.text}
           action={
-            <Button variant="secondary" size="sm" onClick={reload}>
-              Retry
-            </Button>
+            // Only a failure that can pass (the network, a 5xx) is worth asking again.
+            error.retryable ? (
+              <Button variant="secondary" size="sm" onClick={reload}>
+                Retry
+              </Button>
+            ) : undefined
           }
         />
       </div>
@@ -164,11 +181,13 @@ export function JobView({jobId}: {jobId: string}) {
 
       <Actions
         job={job}
+        token={token}
         actions={actions}
         party={party}
         signedIn={session.status === 'in'}
         ready={session.status !== 'loading' && (session.status !== 'in' || me !== null || meError !== null)}
         fromDraft={terms !== null}
+        draftPhase={terms ? delivery.drafts?.phase : undefined}
         onDone={reload}
       />
 
@@ -291,16 +310,56 @@ function Timeline({job, stream}: {job: JobDetail; stream: StreamState | 'connect
   );
 }
 
+/** A bond as the network sets it: a share of the job, never below the floor. */
+function bondOf(amount: string, bps: number | undefined, floor: string | undefined): bigint | null {
+  if (bps === undefined) return null;
+  const share = (BigInt(amount) * BigInt(bps)) / 10000n;
+  const min = floor ? BigInt(floor) : 0n;
+  return share > min ? share : min;
+}
+
+/**
+ * What the wallet is about to be asked, in one line, before it opens: the
+ * method, the contract and the money. The same facts the allow-list holds the
+ * prepared call against (lib/wallet-guard.ts), so what the person reads here
+ * is what gets signed, or nothing does.
+ */
+function willSign(action: PersonAction, job: JobDetail, token: TokenInfo | null): string {
+  const method = PERSON_METHODS[action][0];
+  const where = `${method} on ${token?.network.contracts.Pactora ?? 'the Pactora contract'}`;
+  const price = job.amountDisplay;
+  const money = (units: bigint | null) =>
+    units !== null && token ? amountDisplay(units.toString(), token.decimals, token.symbol) : 'a bond';
+  const n = token?.network;
+  switch (action) {
+    case 'create':
+      return `You will sign: ${where}: ${price} into escrow.`;
+    case 'accept':
+      return `You will sign: ${where}: no payment; a bond of ${money(bondOf(job.amount, n?.bondBps, n?.minBond))} is locked from your stake until the job settles.`;
+    case 'submit':
+      return `You will sign: ${where}: no payment; the result’s hash goes on chain.`;
+    case 'approve':
+      return `You will sign: ${where}: ${price} to the worker, minus the fee.`;
+    case 'dispute':
+      return `You will sign: ${where}: ${price} stays in escrow; your bond is ${money(bondOf(job.amount, n?.disputeBondBps, n?.minDisputeBond))}, returned if the arbiter rules for you.`;
+    case 'cancel':
+      return `You will sign: ${where}: ${price} back to you.`;
+  }
+}
+
 function Actions({
   job,
+  token,
   actions,
   party,
   signedIn,
   ready,
   fromDraft,
+  draftPhase,
   onDone,
 }: {
   job: JobDetail;
+  token: TokenInfo | null;
   actions: PersonAction[];
   party: 'client' | 'worker' | null;
   signedIn: boolean;
@@ -308,22 +367,35 @@ function Actions({
   ready: boolean;
   /** A listing job: the submission is the accepted draft, so there is nothing to type. */
   fromDraft: boolean;
+  /** A listing job's delivery phase, so "nothing to do" is never said while a draft waits for this party. */
+  draftPhase: DraftPhase | undefined;
   onDone: () => void;
 }) {
   const person = usePersonAction(onDone);
+  const signInHref = useSignInHref();
   const [output, setOutput] = useState('{\n  \n}');
   const [reason, setReason] = useState('');
-  const [fieldError, setFieldError] = useState<string | null>(null);
+  // One error per form: a problem with the result never shows under the reason.
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
   const [open, setOpen] = useState<'submit' | 'dispute' | null>(null);
+  const outputRef = useRef<HTMLTextAreaElement>(null);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
   const {state} = person;
   const explorer = state.done ? safeHref(state.done.explorerUrl) : null;
+
+  // An inline form that opens takes focus, so a keyboard user is in it, not still on the button.
+  useEffect(() => {
+    if (open === 'submit') outputRef.current?.focus();
+    if (open === 'dispute') reasonRef.current?.focus();
+  }, [open]);
 
   if (!ready) return <Skeleton className="h-10 w-full" />;
   if (!signedIn) {
     return (
       <Notice tone="live">
         Are you the client or the worker?{' '}
-        <Link href="/signin" className="underline">
+        <Link href={signInHref} className="underline">
           Sign in
         </Link>{' '}
         to act on this job.
@@ -331,30 +403,49 @@ function Actions({
     );
   }
 
+  // What the page knows about the job, for the allow-list on the prepared call.
+  const expected = {chainJobId: job.chainJobId, amount: job.amount};
+
   function submitResult() {
     let parsed: unknown;
     try {
       parsed = JSON.parse(output);
     } catch {
-      return setFieldError('That is not valid JSON.');
+      setSubmitError('That is not valid JSON.');
+      outputRef.current?.focus();
+      return;
     }
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
-      return setFieldError('The output has to be a JSON object, like {"answer": "…"}.');
-    setFieldError(null);
-    void person.run(job.jobId, 'submit', {
-      output: parsed as Record<string, unknown>,
-      producedAt: new Date().toISOString(),
-    });
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setSubmitError('The output has to be a JSON object, like {"answer": "…"}.');
+      outputRef.current?.focus();
+      return;
+    }
+    setSubmitError(null);
+    void person.run(
+      job.jobId,
+      'submit',
+      {output: parsed as Record<string, unknown>, producedAt: new Date().toISOString()},
+      expected,
+    );
   }
 
   function disputeResult() {
     const problem = validateReason(reason);
-    setFieldError(problem);
-    if (problem) return;
-    void person.run(job.jobId, 'dispute', {reason: reason.trim()});
+    setDisputeError(problem);
+    if (problem) {
+      reasonRef.current?.focus();
+      return;
+    }
+    void person.run(job.jobId, 'dispute', {reason: reason.trim()}, expected);
   }
 
   const pending = state.busy || state.pending !== null;
+  const idle =
+    party === 'client' && draftPhase === 'awaiting_review'
+      ? 'Review the draft below.'
+      : party === 'worker' && draftPhase === 'revise'
+        ? 'The client asked for a revision: post the next draft below.'
+        : 'There is nothing for you to do right now.';
 
   return (
     <>
@@ -375,7 +466,7 @@ function Actions({
                     disabled={pending}
                     onClick={() => {
                       setOpen(null);
-                      void person.run(job.jobId, a);
+                      void person.run(job.jobId, a, {}, expected);
                     }}
                   >
                     {ACTION_LABEL[a]}
@@ -387,7 +478,7 @@ function Actions({
                   disabled={pending}
                   onClick={() => {
                     setOpen(null);
-                    void person.run(job.jobId, 'submit');
+                    void person.run(job.jobId, 'submit', {}, expected);
                   }}
                 >
                   Sign and submit the accepted draft
@@ -413,26 +504,41 @@ function Actions({
               )}
             </div>
 
+            {/* Before the wallet opens: the method, the contract, the money. */}
+            <ul className="space-y-1 text-xs text-muted" aria-label="What you will sign">
+              {actions
+                .filter((a) => a !== 'dispute' && (a !== 'submit' || fromDraft))
+                .map((a) => (
+                  <li key={a} data-testid={`will-sign-${a}`}>
+                    {willSign(a, job, token)}
+                  </li>
+                ))}
+            </ul>
+
             {open === 'submit' && actions.includes('submit') && (
               <div className="space-y-3 rounded-lg border border-edge-strong p-4">
                 <Field
                   label="Result (a JSON object)"
                   htmlFor="job-output"
-                  error={fieldError}
+                  error={submitError}
                   hintId="job-output-hint"
                   hint="It is checked against what the client asked for. Its hash goes on chain; the client can compare."
                 >
                   <TextArea
                     id="job-output"
+                    ref={outputRef}
                     rows={6}
                     value={output}
                     onChange={(e) => setOutput(e.target.value)}
                     spellCheck={false}
                     className="font-mono"
                     aria-describedby="job-output-hint"
-                    aria-invalid={Boolean(fieldError) || undefined}
+                    aria-invalid={Boolean(submitError) || undefined}
                   />
                 </Field>
+                <p className="text-xs text-muted" data-testid="will-sign-submit">
+                  {willSign('submit', job, token)}
+                </p>
                 <Button disabled={pending} onClick={submitResult}>
                   Sign and submit
                 </Button>
@@ -443,19 +549,23 @@ function Actions({
                 <Field
                   label="Why is the result not acceptable?"
                   htmlFor="job-reason"
-                  error={fieldError}
+                  error={disputeError}
                   hintId="job-reason-hint"
                   hint={`${LIMITS.reason.min}-${LIMITS.reason.max} characters. A dispute needs a bond, and the arbiter reads this.`}
                 >
                   <TextArea
                     id="job-reason"
+                    ref={reasonRef}
                     rows={4}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     aria-describedby="job-reason-hint"
-                    aria-invalid={Boolean(fieldError) || undefined}
+                    aria-invalid={Boolean(disputeError) || undefined}
                   />
                 </Field>
+                <p className="text-xs text-muted" data-testid="will-sign-dispute">
+                  {willSign('dispute', job, token)}
+                </p>
                 <Button variant="danger" disabled={pending} onClick={disputeResult}>
                   Sign and dispute
                 </Button>
@@ -501,7 +611,7 @@ function Actions({
 
       {actions.length === 0 && party && (
         <p className="text-sm text-muted" data-testid="no-action">
-          You are the {party}. There is nothing for you to do right now.
+          You are the {party}. {idle}
         </p>
       )}
       {!party && (

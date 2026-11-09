@@ -98,8 +98,8 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 151 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 89 Playwright tests: smoke, axe on all 23 pages, search, guides, edge cases
+pnpm test            # 290 unit tests (Vitest; component tests run in happy-dom)
+pnpm test:e2e        # production build + 265 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -107,9 +107,10 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 89 browser tests (`e2e/`: smoke, 23 axe accessibility audits, search, video guides, and edge and
+The 265 browser tests (`e2e/`: smoke, axe accessibility audits, search, video guides, the job board and its
+delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
-with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 445 runs. It fails on
+with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,325 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
 and live-chain checks in `pactora-backend-near`.
@@ -128,6 +129,12 @@ and live-chain checks in `pactora-backend-near`.
 - **The wallet is validated against before it is asked**: the agent account name, the contract account,
   the signer key and the card size are checked before any signature request, and a price below the escrow
   minimum is refused up front.
+- **The API does not choose what gets signed.** A person's action (`prepare`) and the admin desk's
+  proposals and votes come back from the API as the exact call to sign; `lib/wallet-guard.ts` holds each
+  against an allow-list first — a contract the network publishes, the one method that action means, the
+  job the page is showing, no deposit beyond the one yocto a token call needs — and refuses anything else
+  before the wallet opens. The page also says what it is about to ask for ("You will sign: approve on
+  pactora.testnet: 4 USDC…") before it asks.
 
 ## `pnpm check:contract`
 

@@ -83,7 +83,8 @@ test('worker: withdrawing a photo keeps it listed as withdrawn', async ({page}) 
   await page.goto(`/jobs/${id}`);
   await page.getByLabel('Add a photo').setInputFiles({name: 'a.png', mimeType: 'image/png', buffer: PNG});
   await expect(photos(page)).toHaveCount(1);
-  await photos(page).getByRole('button', {name: 'Withdraw'}).click();
+  await photos(page).getByRole('button', {name: 'Withdraw', exact: true}).click();
+  await photos(page).getByRole('button', {name: 'Confirm withdrawal'}).click();
   await expect(photos(page).first()).toContainText('withdrawn');
   await expect(photos(page).getByRole('button', {name: 'Withdraw'})).toHaveCount(0);
 });
@@ -133,6 +134,7 @@ test('client: a revision opens the next round for the worker', async ({page, bro
   await review.getByLabel('What shows it (check 2)').fill('The second sign is blurred.');
   await review.getByLabel('Your reason').fill('The second sign cannot be read. Please retake it.');
   await review.getByRole('button', {name: 'Ask for a revision (3 left)'}).click();
+  await review.getByRole('button', {name: 'Confirm revision'}).click();
   await expect(page.getByTestId('draft-phase')).toContainText('asked for a revision');
   await expect(page.getByTestId('draft-1')).toContainText('Revision asked');
   await expect(page.getByTestId('draft-1')).toContainText('The second sign is blurred.');

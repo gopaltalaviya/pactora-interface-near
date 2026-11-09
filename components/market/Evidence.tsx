@@ -303,14 +303,21 @@ function ReviewForm({
   const [reason, setReason] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<ReviewDecision | null>(null);
+  // A revision spends one of a few; a dispute ends the drafts. Each is asked twice.
+  const [confirming, setConfirming] = useState<'revise' | 'dispute_intent' | null>(null);
 
   const setCheck = (i: number, patch: Partial<ReviewCheck>) =>
     setChecks((cs) => cs.map((c, j) => (j === i ? {...c, ...patch} : c)));
 
-  async function decide(decision: ReviewDecision) {
+  function decide(decision: ReviewDecision) {
     const p = validateReview(decision, reason, checks, revisionsLeft);
     setProblem(p);
     if (p) return;
+    if (decision === 'accept_draft') void commit(decision);
+    else setConfirming(decision);
+  }
+
+  async function commit(decision: ReviewDecision) {
     setBusy(decision);
     try {
       await authed((t) =>
@@ -326,10 +333,19 @@ function ReviewForm({
       setProblem(errorText(err));
     } finally {
       setBusy(null);
+      setConfirming(null);
     }
   }
 
   const allMet = checks.every((c) => c.met);
+  const {min, max} = EVIDENCE_LIMITS.reviewReason;
+  const hint =
+    `${min}-${max} characters. ` +
+    (confirming === 'dispute_intent'
+      ? 'The worker reads it, and so does the arbiter if you dispute.'
+      : confirming === 'revise'
+        ? 'The worker reads it and posts the next draft.'
+        : 'The worker reads it; its hash goes on chain with your approval.');
   return (
     <form
       className="space-y-4 rounded-lg border border-edge-strong p-4"
@@ -352,7 +368,7 @@ function ReviewForm({
             <Field label={`What shows it (check ${i + 1})`} htmlFor={`check-support-${i}`} srOnlyLabel>
               <TextInput
                 id={`check-support-${i}`}
-                placeholder="What in the draft shows it, or what is missing (optional)"
+                placeholder="Evidence (optional)"
                 value={c.support}
                 maxLength={EVIDENCE_LIMITS.support.max}
                 onChange={(e) => setCheck(i, {support: e.target.value})}
@@ -366,7 +382,7 @@ function ReviewForm({
         htmlFor="review-reason"
         error={problem}
         hintId="review-reason-hint"
-        hint={`${EVIDENCE_LIMITS.reviewReason.min}-${EVIDENCE_LIMITS.reviewReason.max} characters. The worker reads it; its hash goes on chain with your approval.`}
+        hint={hint}
       >
         <TextArea
           id="review-reason"
@@ -377,35 +393,64 @@ function ReviewForm({
           aria-invalid={Boolean(problem) || undefined}
         />
       </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          disabled={busy !== null || !allMet}
-          loading={busy === 'accept_draft'}
-          onClick={() => void decide('accept_draft')}
-        >
-          Accept this draft
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={busy !== null || revisionsLeft <= 0}
-          loading={busy === 'revise'}
-          onClick={() => void decide('revise')}
-        >
-          Ask for a revision ({revisionsLeft} left)
-        </Button>
-        <Button
-          type="button"
-          variant="danger"
-          disabled={busy !== null}
-          loading={busy === 'dispute_intent'}
-          onClick={() => void decide('dispute_intent')}
-        >
-          I will dispute
-        </Button>
-      </div>
-      {!allMet && <p className="text-xs text-muted">Accepting needs every criterion checked.</p>}
+      {confirming === null ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            disabled={busy !== null || !allMet}
+            loading={busy === 'accept_draft'}
+            onClick={() => decide('accept_draft')}
+          >
+            Accept this draft
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy !== null || revisionsLeft <= 0}
+            onClick={() => decide('revise')}
+          >
+            Ask for a revision ({revisionsLeft} left)
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={busy !== null}
+            onClick={() => decide('dispute_intent')}
+          >
+            I will dispute
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-lg border border-edge-strong p-3" data-testid="review-confirm">
+          <p className="text-sm">
+            {confirming === 'revise'
+              ? `This uses 1 of ${EVIDENCE_LIMITS.revisions} revisions (${revisionsLeft - 1} left after it). The worker reads your reason and posts the next draft.`
+              : 'No more drafts are taken after this. Disputing on chain then needs your bond, which the arbiter returns only if it rules for you; your reason is read by both.'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={confirming === 'revise' ? 'secondary' : 'danger'}
+              disabled={busy !== null}
+              loading={busy === confirming}
+              onClick={() => void commit(confirming)}
+            >
+              {confirming === 'revise' ? 'Confirm revision' : 'Confirm dispute'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy !== null}
+              onClick={() => setConfirming(null)}
+            >
+              Keep reviewing
+            </Button>
+          </div>
+        </div>
+      )}
+      {!allMet && confirming === null && (
+        <p className="text-xs text-muted">Accepting needs every criterion checked.</p>
+      )}
     </form>
   );
 }
@@ -534,6 +579,7 @@ function PhotoItem({
   const [src, setSrc] = useState<string | null>(null);
   const [verified, setVerified] = useState<'yes' | 'no' | null>(null);
   const [failed, setFailed] = useState(false);
+  const [confirm, setConfirm] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -580,10 +626,21 @@ function PhotoItem({
             </span>
           )}
         </span>
-        {canWithdraw && (
-          <Button size="sm" variant="ghost" onClick={onWithdraw}>
+        {canWithdraw && !confirm && (
+          <Button size="sm" variant="ghost" onClick={() => setConfirm(true)}>
             Withdraw
           </Button>
+        )}
+        {canWithdraw && confirm && (
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <span className="text-muted">Leaves the evidence; it stays listed as withdrawn.</span>
+            <Button size="sm" variant="danger" onClick={onWithdraw}>
+              Confirm withdrawal
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
+              Keep it
+            </Button>
+          </span>
         )}
       </div>
     </li>

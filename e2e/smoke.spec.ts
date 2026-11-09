@@ -76,7 +76,7 @@ test('the demo page renders with labelled inputs and the network badge', async (
   await expect(page.getByRole('heading', {level: 1})).toContainText('One sentence');
   await expect(page.getByLabel('Goal')).toBeVisible();
   await expect(page.getByLabel('Orchestrator API key')).toBeVisible();
-  await expect(page.getByText('NEAR Testnet', {exact: true})).toBeVisible();
+  await expect(page.getByTestId('network-badge')).toContainText(/Testnet/);
   expect(errors).toEqual([]);
 });
 
@@ -314,7 +314,7 @@ test('the fees page shows the network’s own values, read live', async ({page})
   await expect(row('maxJob')).toContainText('10 USDC');
   await expect(row('withdrawDelay')).toContainText('7 days');
   await expect(row('maxFee')).toContainText('10% of the job');
-  await expect(page.getByText('NEAR Testnet', {exact: true}).first()).toBeVisible();
+  await expect(page.getByTestId('network-badge')).toContainText(/Testnet/);
 });
 
 test('an API that does not publish a limit is said so, never filled in', async ({page}) => {

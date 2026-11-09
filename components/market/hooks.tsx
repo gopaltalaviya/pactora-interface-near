@@ -1,23 +1,21 @@
 'use client';
 
 import Link from 'next/link';
+import {usePathname} from 'next/navigation';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Button} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {Skeleton} from '@/components/ui/States';
-import {ApiError, api, type NetworkInfo} from '@/lib/api';
+import {api, type NetworkInfo} from '@/lib/api';
+import {errorText} from '@/lib/errors';
 import {market, type ConfirmedAction, type Me, type PersonAction, type PrepareExtra} from '@/lib/market';
 import {confirmPersonAction, PersonActionTimeout, runPersonAction} from '@/lib/person-action';
 import {useSession} from '@/lib/session';
+import {signInHref} from '@/lib/signin-next';
+import type {ExpectedJob} from '@/lib/wallet-guard';
 
-/** An error as one sentence: the API's own code and words, or the plain message. */
-export function errorText(err: unknown): string {
-  return err instanceof ApiError
-    ? `${err.code}: ${err.message}`
-    : err instanceof Error
-      ? err.message
-      : 'something went wrong';
-}
+/** An error as one sentence a person can read (lib/errors.ts). */
+export {errorText};
 
 /** What the pages need from GET /v1/network: the token's units, the explorer, the windows. */
 export interface TokenInfo {
@@ -31,16 +29,23 @@ export interface TokenInfo {
 
 let networkOnce: Promise<NetworkInfo> | null = null;
 
+/** GET /v1/network, fetched once per page load and shared; a failure is forgotten so the next ask retries. */
+export function networkPromise(): Promise<NetworkInfo> {
+  networkOnce ??= api.network().catch((err: unknown) => {
+    networkOnce = null;
+    throw err;
+  });
+  return networkOnce;
+}
+
 /** The network facts, fetched once per page load. `null` while loading or if it failed. */
 export function useNetwork(): TokenInfo | null {
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
   useEffect(() => {
     let live = true;
-    networkOnce ??= api.network().catch((err: unknown) => {
-      networkOnce = null;
-      throw err;
-    });
-    networkOnce.then((n) => live && setNetwork(n)).catch(() => undefined);
+    networkPromise()
+      .then((n) => live && setNetwork(n))
+      .catch(() => undefined);
     return () => {
       live = false;
     };
@@ -85,9 +90,16 @@ export function useMe(): {me: Me | null; error: string | null; reload: () => voi
   return {me, error, reload: () => setAttempt((n) => n + 1)};
 }
 
+/** The sign-in link that brings a person back to the page they are on. */
+export function useSignInHref(): string {
+  const pathname = usePathname();
+  return signInHref(pathname);
+}
+
 /** A page that needs a session says so, and where to get one. */
 export function SignInGate({what, children}: {what: string; children: React.ReactNode}) {
   const {status} = useSession();
+  const href = useSignInHref();
   if (status === 'loading') {
     return (
       <div role="status" aria-label="Checking your session" className="space-y-3">
@@ -103,7 +115,7 @@ export function SignInGate({what, children}: {what: string; children: React.Reac
         </p>
         <div className="mt-4">
           <Link
-            href="/signin"
+            href={href}
             className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-ink"
           >
             Sign in
@@ -141,6 +153,8 @@ export function usePersonAction(onDone?: (result: ConfirmedAction) => void) {
       account: s.account,
       authed: s.authed,
       ensureWallet: s.ensureWallet,
+      // The contracts a prepared call may name, from the network the page already shows.
+      contracts: async () => (await networkPromise()).contracts,
       onStatus: (status: string) => setState((prev) => ({...prev, status})),
     };
   }, []);
@@ -159,11 +173,12 @@ export function usePersonAction(onDone?: (result: ConfirmedAction) => void) {
     }));
   }, []);
 
+  /** `expected` is what the page knows about the job, held against the call the API prepares. */
   const run = useCallback(
-    async (jobId: string, action: PersonAction, extra: PrepareExtra = {}) => {
+    async (jobId: string, action: PersonAction, extra: PrepareExtra = {}, expected: ExpectedJob = {}) => {
       setState({...IDLE, busy: true});
       try {
-        finish(await runPersonAction(deps(), jobId, action, extra));
+        finish(await runPersonAction(deps(), jobId, action, extra, expected));
       } catch (err) {
         fail(err, jobId, action);
       }

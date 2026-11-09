@@ -17,6 +17,10 @@
  *   would, for an `approve`, either fail on chain or pay twice.)
  * - The signer the API names must be the signed-in account. A mismatch is
  *   refused before the wallet is asked, not after a signature.
+ * - The call the API names is checked against an allow-list (lib/wallet-guard.ts):
+ *   a Pactora contract, the action's own method, this job, no deposit. The
+ *   API decides WHEN an action may happen; it does not get to decide WHAT the
+ *   wallet signs.
  *
  * Everything outside the module's own logic (the API calls, the wallet, the
  * clock) is injected, so the polling can be tested without waiting.
@@ -31,6 +35,7 @@ import {
   type PreparedAction,
 } from './market';
 import {functionCall, sendTransaction, type NearWallet} from './wallet';
+import {checkPersonCall, type Contracts, type ExpectedJob} from './wallet-guard';
 
 /** How long `confirm` is retried before the page says it is still waiting. */
 export const CONFIRM_MAX_WAIT_MS = 60_000;
@@ -43,6 +48,8 @@ export interface PersonActionDeps {
   /** The session's authenticated-call wrapper (a 401 signs the tab out). */
   authed: <T>(run: (token: string) => Promise<T>) => Promise<T>;
   ensureWallet: () => Promise<NearWallet>;
+  /** The network's contracts, the only receivers a prepared call may name. */
+  contracts: () => Promise<Contracts>;
   api?: {
     prepare: (
       token: string,
@@ -116,26 +123,36 @@ export async function confirmPersonAction(
   }
 }
 
-/** Prepare, sign once, confirm. Throws an error whose message is fit to show. */
+/**
+ * Prepare, sign once, confirm. Throws an error whose message is fit to show.
+ * `expected` is what the page knows about the job (its chain id, its amount),
+ * so the prepared call can be held against it.
+ */
 export async function runPersonAction(
   deps: PersonActionDeps,
   jobId: string,
   action: PersonAction,
   extra: PrepareExtra = {},
+  expected: ExpectedJob = {},
 ): Promise<ConfirmedAction> {
   const api = deps.api ?? market;
   deps.onStatus?.('Checking the action with Pactora…');
-  const prepared = await deps.authed((token) => api.prepare(token, jobId, action, extra));
+  const [prepared, contracts] = await Promise.all([
+    deps.authed((token) => api.prepare(token, jobId, action, extra)),
+    deps.contracts(),
+  ]);
 
   if (prepared.signerId !== deps.account) {
     throw new Error(
       `This action has to be signed by ${prepared.signerId}, but you are signed in as ${deps.account}. Nothing was sent. Sign in with the right account.`,
     );
   }
+  const call = prepared.functionCall;
+  // Throws UnexpectedCall, with the reason, before the wallet is opened.
+  checkPersonCall(call, action, contracts, expected);
 
   deps.onStatus?.('Waiting for your wallet to sign…');
   const wallet = await deps.ensureWallet();
-  const call = prepared.functionCall;
   const sent = await sendTransaction(
     wallet,
     prepared.signerId,

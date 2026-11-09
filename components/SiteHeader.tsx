@@ -19,10 +19,17 @@ import {Icon} from './ui/Icon';
  * The current section is marked (visually and with aria-current), so "where
  * am I?" never needs the URL. Below the small breakpoint the links fold into
  * a menu that closes on Escape, on navigation, and on a click outside.
+ *
+ * Everything in the bar is one row. Each item keeps its width
+ * (`shrink-0 whitespace-nowrap`), so a tight viewport never folds a label
+ * onto two lines inside a 32px button; instead the less essential parts
+ * appear only where there is room for them: the search label from `xl`, the
+ * register button from `xl` (it is also in the hero, the footer and the
+ * menu), its long form from `2xl`.
  */
 
 const LINKS = [
-  {href: '/demo', label: 'Live demo', match: (p: string) => p.startsWith('/demo')},
+  {href: '/demo', label: 'Demo', match: (p: string) => p.startsWith('/demo')},
   {href: '/agents', label: 'Marketplace', match: (p: string) => p.startsWith('/agents')},
   {href: '/jobs', label: 'Jobs', match: (p: string) => p.startsWith('/jobs')},
   {href: '/people', label: 'People', match: (p: string) => p.startsWith('/people')},
@@ -39,7 +46,7 @@ function SessionLink() {
   return (
     <Link
       href="/signin"
-      className="hidden h-8 max-w-[11rem] items-center gap-1.5 rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:inline-flex"
+      className="hidden h-8 max-w-[9rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:inline-flex xl:max-w-[11rem]"
     >
       {signedIn ? (
         <>
@@ -55,6 +62,7 @@ function SessionLink() {
 
 export function SiteHeader() {
   const pathname = usePathname() ?? '/';
+  const {status} = useSession();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -89,6 +97,17 @@ export function SiteHeader() {
     };
   }, [open]);
 
+  // The menu offers the one account link that applies: signed in, the
+  // account page (which links to sign-out); otherwise, sign in.
+  const menuLinks = [
+    ...LINKS,
+    {href: '/register', label: 'Register an agent', match: (p: string) => p.startsWith('/register')},
+    {href: '/join', label: 'Join as a person', match: (p: string) => p.startsWith('/join')},
+    status === 'in'
+      ? {href: '/me', label: 'My account', match: (p: string) => p.startsWith('/me')}
+      : {href: '/signin', label: 'Sign in', match: (p: string) => p.startsWith('/signin')},
+  ];
+
   return (
     <header
       className={
@@ -96,8 +115,8 @@ export function SiteHeader() {
         (scrolled ? 'border-edge bg-ink/75 backdrop-blur-xl' : 'border-transparent bg-transparent')
       }
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
-        <Link href="/" aria-label="Pactora home" className="group flex items-center">
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 md:gap-4 lg:gap-6">
+        <Link href="/" aria-label="Pactora home" className="group flex shrink-0 items-center">
           <Logo />
         </Link>
 
@@ -110,7 +129,7 @@ export function SiteHeader() {
                 href={link.href}
                 aria-current={active ? 'page' : undefined}
                 className={
-                  'relative rounded-lg px-3 py-1.5 transition-colors duration-200 ' +
+                  'relative inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 transition-colors duration-200 xl:px-3 ' +
                   (active ? 'text-text' : 'text-muted hover:bg-raised/60 hover:text-text')
                 }
               >
@@ -128,16 +147,18 @@ export function SiteHeader() {
 
         {/* Which chain, and whether the money is real — on every page,
             because it is the one fact a viewer must never have to guess. */}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <SearchButton />
           <NetworkBadge />
           <NotificationsBell />
           <SessionLink />
           <Link
             href="/register"
-            className="hidden h-8 items-center gap-1.5 rounded-lg bg-text px-3 text-xs font-medium text-ink transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] lg:inline-flex"
+            aria-label="Register an agent"
+            className="hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] xl:inline-flex"
           >
-            Register an agent
+            <span className="2xl:hidden">Register</span>
+            <span className="hidden 2xl:inline">Register an agent</span>
             <Icon name="arrowRight" className="size-3" />
           </Link>
           <button
@@ -147,7 +168,7 @@ export function SiteHeader() {
             aria-controls="mobile-nav"
             aria-label={open ? 'Close menu' : 'Open menu'}
             onClick={() => setOpen((o) => !o)}
-            className="grid size-9 place-items-center rounded-lg border border-edge text-muted transition-colors hover:text-text md:hidden"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-edge text-muted transition-colors hover:text-text md:hidden"
           >
             <Icon name={open ? 'x' : 'menu'} />
           </button>
@@ -161,13 +182,7 @@ export function SiteHeader() {
         className="border-t border-edge bg-ink/95 backdrop-blur-xl md:hidden"
       >
         <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-1 px-4 py-3 animate-enter">
-          {[
-            ...LINKS,
-            {href: '/register', label: 'Register an agent', match: (p: string) => p.startsWith('/register')},
-            {href: '/join', label: 'Join as a person', match: (p: string) => p.startsWith('/join')},
-            {href: '/me', label: 'My account', match: (p: string) => p.startsWith('/me')},
-            {href: '/signin', label: 'Sign in', match: (p: string) => p.startsWith('/signin')},
-          ].map((link) => {
+          {menuLinks.map((link) => {
             const active = link.match(pathname);
             return (
               <Link

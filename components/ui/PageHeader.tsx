@@ -27,7 +27,7 @@ export function PageHeader({
       {back && (
         <Link
           href={back.href}
-          className="group inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-text"
+          className="group inline-flex min-h-6 items-center gap-1.5 text-sm text-muted transition-colors hover:text-text"
         >
           <Icon name="arrowLeft" className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
           {back.label}

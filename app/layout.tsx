@@ -2,6 +2,7 @@ import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import Link from 'next/link';
 import {Logo} from '@/components/brand/Logo';
+import {RouteFocus} from '@/components/RouteFocus';
 import {SiteHeader} from '@/components/SiteHeader';
 import {RevealRoot} from '@/components/ui/Motion';
 import {SessionProvider} from '@/lib/session';
@@ -100,10 +101,12 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         {/* What is typed or pasted before the page hydrates. Hydration resets a
             controlled input to its state, so a key pasted in the first second —
             on a phone, or in Safari — vanished and Run stayed disabled. The
-            fields read this back on mount (components/ui/Field.tsx). */}
+            fields read this back on mount (components/ui/Field.tsx), which
+            then removes the listener and the record: nothing typed after
+            hydration is kept, and a password field is never recorded at all. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var e=window.__pactoraEarly={};document.addEventListener('input',function(v){var t=v.target;if(t&&t.id&&typeof t.value==='string')e[t.id]=t.value},true)})();`,
+            __html: `(function(){var e=window.__pactoraEarly={};function f(v){var t=v.target;if(t&&t.id&&t.type!=='password'&&typeof t.value==='string')e[t.id]=t.value}document.addEventListener('input',f,true);window.__pactoraEarlyStop=function(){document.removeEventListener('input',f,true);delete window.__pactoraEarly;delete window.__pactoraEarlyStop}})();`,
           }}
         />
         <div aria-hidden className="ambient">
@@ -119,8 +122,13 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         </a>
         <SessionProvider>
           <SiteHeader />
+          <RouteFocus />
 
-          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+          <main
+            id="main"
+            tabIndex={-1}
+            className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 outline-none sm:px-6 sm:py-10"
+          >
             {children}
           </main>
         </SessionProvider>

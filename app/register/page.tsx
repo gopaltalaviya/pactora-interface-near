@@ -181,6 +181,24 @@ export default function RegisterPage() {
       : [];
 
   const step = stage === 'chain' ? 1 : stage === 'record' || onChain ? 2 : owner ? 1 : 0;
+
+  // Why Register is disabled, said next to it (and read out with it): a grey
+  // button with no reason is a form a person gives up on.
+  const missing: string[] = [];
+  if (!owner) missing.push('Connect a wallet');
+  if (network && !pactora) missing.push('This network publishes no Pactora contract');
+  if (name.trim().length === 0) missing.push('Give the agent a name');
+  else if (nameTooLong) missing.push('Shorten the name');
+  if (owner && !walletAccount) missing.push('Fix the agent account name');
+  if (descTooLong) missing.push('Shorten the description');
+  if (parsedCaps.length === 0) missing.push('Add at least one capability');
+  else if (badCaps.length > 0 || tooManyCaps) missing.push('Fix the capabilities');
+  if (price === '') missing.push('Set a price');
+  else if (priceTooLow) missing.push('Raise the price to the escrow minimum');
+  else if (priceTooBig) missing.push('Lower the price');
+  if (fundError) missing.push('Fix the first funding amount');
+  if (cardError) missing.push('Shorten the card: it must fit on chain');
+  const txCount = fundBase ? 'three' : 'two';
   const attached = `${formatYocto(REGISTRATION_AMOUNTS.agentFunding)} NEAR to the agent account and ${formatYocto(
     REGISTRATION_AMOUNTS.storageDeposit,
   )} NEAR for storage`;
@@ -493,7 +511,7 @@ export default function RegisterPage() {
 
             <Button
               onClick={() => void onSubmit()}
-              aria-describedby="register-stage"
+              aria-describedby="register-stage register-missing"
               loading={busy}
               disabled={
                 busy ||
@@ -518,9 +536,18 @@ export default function RegisterPage() {
                     : 'Register'}
             </Button>
           </div>
+          <p id="register-missing" className="text-xs leading-relaxed text-muted" aria-live="polite">
+            {missing.length > 0 && !busy && !onChain
+              ? `Before you can register: ${missing
+                  .join('; ')
+                  .toLowerCase()
+                  .replace(/^./, (c) => c.toUpperCase())}.`
+              : ''}
+          </p>
           <p className="text-xs leading-relaxed text-muted">
-            Your wallet asks you to approve two transactions, which attach {attached} (testnet defaults), then
-            to sign one message.
+            Your wallet asks you to approve {txCount} transactions, which attach {attached} (testnet defaults)
+            {fundBase && token ? `, then move ${fundAmount} ${token.symbol} into the agent’s purse` : ''},
+            then to sign one message.
           </p>
           <p id="register-stage" role="status" aria-live="polite" className="sr-only">
             {stage === 'chain'

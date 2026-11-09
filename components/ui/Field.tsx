@@ -2,6 +2,22 @@
 
 import {useEffect, useId, useState, type ChangeEvent, type ComponentProps, type ReactNode} from 'react';
 
+type EarlyWindow = Window & {__pactoraEarly?: Record<string, string>; __pactoraEarlyStop?: () => void};
+
+/**
+ * The inline script's job ends at hydration. The first field to mount
+ * schedules the stop for right after this commit's effects have run (so every
+ * field mounting now still reads its own entry); from then on the listener is
+ * gone and so is the record, and nothing typed later is kept anywhere but in
+ * React's state.
+ */
+let stopScheduled = false;
+function stopEarlyInputSoon() {
+  if (stopScheduled) return;
+  stopScheduled = true;
+  setTimeout(() => (window as EarlyWindow).__pactoraEarlyStop?.(), 0);
+}
+
 /**
  * Adopt what was typed into this field before the page hydrated (recorded by
  * the inline script in app/layout.tsx), then forget it. Only when the field is
@@ -13,10 +29,17 @@ function useEarlyInput<E extends HTMLInputElement | HTMLTextAreaElement>(
   onChange: ((e: ChangeEvent<E>) => void) | undefined,
 ) {
   useEffect(() => {
-    const early = (window as unknown as {__pactoraEarly?: Record<string, string>}).__pactoraEarly;
-    if (!id || !early || !(id in early)) return;
-    const typed = early[id]!;
-    delete early[id];
+    stopEarlyInputSoon();
+    if (!id) return;
+    const early = (window as EarlyWindow).__pactoraEarly;
+    let typed = early?.[id];
+    if (early) delete early[id];
+    // A password field is never recorded. React keeps what was typed in the
+    // DOM through hydration, so the field itself is the record: read it once.
+    if (typed === undefined) {
+      const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+      if (el && typeof el.value === 'string' && el.value !== '') typed = el.value;
+    }
     if (typed && (value === '' || value === undefined) && onChange) {
       onChange({target: {value: typed}, currentTarget: {value: typed}} as unknown as ChangeEvent<E>);
     }

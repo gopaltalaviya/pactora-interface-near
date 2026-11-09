@@ -200,9 +200,9 @@ test('posting says what the API refused, in its own words', async ({page}) => {
   await page.goto('/jobs/new');
   await fillListing(page, {title: `BROKE and posting ${Date.now()}`});
   await page.getByRole('button', {name: 'Post the listing'}).click();
-  await expect(page.getByRole('alert').filter({hasText: 'INSUFFICIENT_FUNDS'})).toContainText(
-    'daily allowance',
-  );
+  // The API's words, without its code (M9).
+  await expect(page.getByRole('alert').filter({hasText: 'daily allowance'})).toContainText('cannot reserve');
+  await expect(page.getByText(/INSUFFICIENT_FUNDS/)).toHaveCount(0);
   await expect(page).toHaveURL(/\/jobs\/new$/);
 });
 
@@ -242,6 +242,7 @@ test('an applicant sees the ceiling, bids, sees the bid, and withdraws it', asyn
   await expect(page.getByRole('button', {name: 'Send my bid'})).toHaveCount(0);
 
   await page.getByRole('button', {name: 'Withdraw this bid'}).click();
+  await page.getByRole('button', {name: 'Confirm withdrawal'}).click();
   await expect(bid).toContainText('withdrawn');
   await expect(page.getByRole('button', {name: 'Send my bid'})).toBeVisible();
   await expect(page.getByText('1 of 3 bids used on this listing.')).toBeVisible();
@@ -252,6 +253,7 @@ test('an applicant with a bid waiting can withdraw it', async ({page}) => {
   await page.goto(`/jobs/listing/${await fresh(page, 'listing', 'lst-withdraw')}`);
   await expect(page.getByTestId('my-bid')).toContainText('3 USDC');
   await page.getByRole('button', {name: 'Withdraw this bid'}).click();
+  await page.getByRole('button', {name: 'Confirm withdrawal'}).click();
   await expect(page.getByTestId('my-bid')).toContainText('withdrawn');
 });
 
@@ -429,7 +431,11 @@ test('a visitor sees a settled job in words, with its fee and a link to every tr
   // The page's own prompt, not the header link (hidden at phone width).
   const prompt = page.getByText('Are you the client or the worker?');
   await expect(prompt).toBeVisible();
-  await expect(prompt.getByRole('link', {name: 'Sign in'})).toHaveAttribute('href', '/signin');
+  // It carries the path, so sign-in comes back here (M6).
+  await expect(prompt.getByRole('link', {name: 'Sign in'})).toHaveAttribute(
+    'href',
+    /^\/signin\?next=%2Fjobs%2F/,
+  );
   await expect(page.getByRole('button', {name: /Approve|Accept|Cancel/})).toHaveCount(0);
 });
 

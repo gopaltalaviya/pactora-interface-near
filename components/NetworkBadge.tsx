@@ -25,11 +25,11 @@ export function NetworkBadge() {
   }, []);
 
   const base =
-    'inline-flex items-center gap-2 rounded-full border px-2.5 py-1 min-[400px]:px-3 text-xs whitespace-nowrap';
+    'inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 min-[400px]:px-3 text-xs whitespace-nowrap';
 
   if (unreachable) {
     return (
-      <span className={`${base} border-broken/40 bg-broken/10 text-broken`}>
+      <span className={`${base} border-broken/40 bg-broken/10 text-broken`} data-testid="network-badge">
         <StatusDot tone="broken" />
         API unreachable
       </span>
@@ -38,28 +38,38 @@ export function NetworkBadge() {
 
   if (!network) {
     return (
-      <span className={`${base} border-edge text-muted`}>
+      <span className={`${base} border-edge text-muted`} data-testid="network-badge">
         <span className="skeleton h-2 w-20" aria-hidden />
         <span className="sr-only">Checking the network</span>
       </span>
     );
   }
 
+  if (!network.testnet) {
+    return (
+      <span
+        className={`${base} border-refused/50 bg-refused/10 font-medium text-refused`}
+        title={network.contracts?.Pactora || undefined}
+        data-testid="network-badge"
+      >
+        <StatusDot tone="refused" />
+        <span>{network.name} · REAL FUNDS</span>
+      </span>
+    );
+  }
+
+  const full = /testnet/i.test(network.name) ? network.name : `${network.name} · testnet`;
   return (
     <span
-      className={
-        network.testnet
-          ? `${base} border-chain/30 bg-chain/10 text-muted`
-          : `${base} border-refused/50 bg-refused/10 font-medium text-refused`
-      }
+      className={`${base} border-chain/30 bg-chain/10 text-muted`}
       title={network.contracts?.Pactora || undefined}
+      data-testid="network-badge"
     >
-      <StatusDot tone={network.testnet ? 'chain' : 'refused'} />
-      {/* On the narrowest phones a testnet badge is just its dot; REAL FUNDS is never hidden. */}
-      <span className={network.testnet ? 'sr-only text-text min-[400px]:not-sr-only' : ''}>
-        {network.name}
-        {network.testnet ? (/testnet/i.test(network.name) ? '' : ' · testnet') : ' · REAL FUNDS'}
-      </span>
+      <StatusDot tone="chain" />
+      {/* On the narrowest phones the network's name gives way to the one word
+          that matters; the badge never shrinks to a bare dot. */}
+      <span className="hidden text-text min-[400px]:inline">{full}</span>
+      <span className="text-text min-[400px]:hidden">Testnet</span>
     </span>
   );
 }

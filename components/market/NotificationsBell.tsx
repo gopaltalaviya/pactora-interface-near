@@ -46,7 +46,7 @@ export function NotificationsBell() {
       href="/notifications"
       aria-label={bellLabel(unread)}
       data-testid="notifications-bell"
-      className="relative inline-flex h-8 items-center rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text"
+      className="relative inline-flex h-8 shrink-0 items-center rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text"
     >
       <svg
         aria-hidden

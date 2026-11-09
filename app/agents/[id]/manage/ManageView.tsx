@@ -13,6 +13,7 @@ import {readAgent, type AgentOnChain} from '@/lib/chain';
 import {safeHref} from '@/lib/links';
 import {displayAccount, formatYocto, parseUnits} from '@/lib/near';
 import {useSession} from '@/lib/session';
+import {signInHref} from '@/lib/signin-next';
 import {
   cancelUnstakeTransaction,
   completeUnstakeTransaction,
@@ -50,6 +51,7 @@ type Done = {label: string; txHash: string | null};
 
 export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const session = useSession();
+  const pathname = `/agents/${chainAgentId}/manage`;
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
   const [data, setData] = useState<AgentOnChain | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -221,7 +223,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
             ? `You are signed in as ${displayAccount(session.account ?? '')}, which does not own this agent. You can read it; only ${displayAccount(agent.owner)} can change it.`
             : 'You are not signed in. Sign in with the owner’s account to fund or change this agent.'}{' '}
           {session.status !== 'in' && (
-            <Link className="underline" href="/signin">
+            <Link className="underline" href={signInHref(pathname)}>
               Sign in
             </Link>
           )}

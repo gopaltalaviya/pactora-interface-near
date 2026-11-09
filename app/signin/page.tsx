@@ -1,13 +1,16 @@
 'use client';
 
-import {useState} from 'react';
+import Link from 'next/link';
+import {useRouter, useSearchParams} from 'next/navigation';
+import {Suspense, useState} from 'react';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
-import {ApiError} from '@/lib/api';
+import {errorText} from '@/lib/errors';
 import {displayAccount} from '@/lib/near';
 import {useSession} from '@/lib/session';
+import {safeNext} from '@/lib/signin-next';
 
 /**
  * Sign in with a NEAR account.
@@ -16,17 +19,24 @@ import {useSession} from '@/lib/session';
  * key of the account. No transaction, no fee, nothing leaves the wallet but a
  * signature. The API answers with a session token that this tab keeps until it
  * is closed or you sign out.
+ *
+ * `?next=/jobs/…` brings the person back to the page that sent them here —
+ * only ever a path on this site (lib/signin-next.ts).
  */
 
-const message = (err: unknown) =>
-  err instanceof ApiError
-    ? `${err.code}: ${err.message}`
-    : err instanceof Error
-      ? err.message
-      : 'something went wrong';
-
 export default function SignInPage() {
+  // useSearchParams needs a Suspense boundary for the static shell.
+  return (
+    <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+      <SignIn />
+    </Suspense>
+  );
+}
+
+function SignIn() {
   const session = useSession();
+  const router = useRouter();
+  const next = safeNext(useSearchParams().get('next'));
   const [busy, setBusy] = useState<null | 'in' | 'out' | 'all'>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,8 +45,9 @@ export default function SignInPage() {
     setError(null);
     try {
       await action();
+      if (kind === 'in' && next) router.replace(next);
     } catch (err) {
-      setError(message(err));
+      setError(errorText(err));
     } finally {
       setBusy(null);
     }
@@ -77,6 +88,11 @@ export default function SignInPage() {
             </div>
           </dl>
           <div className="mt-5 flex flex-wrap gap-2">
+            {next && (
+              <ButtonLink href={next} size="sm" variant="primary">
+                Continue
+              </ButtonLink>
+            )}
             {session.person ? (
               <ButtonLink href={`/agents/${session.person.chainAgentId}/manage`} size="sm">
                 Fund and stake
@@ -117,6 +133,15 @@ export default function SignInPage() {
               Connect opens NEAR Connect, which lists the wallets that work on NEAR testnet. The wallet then
               asks you to sign a short message. This page never sees a key.
             </p>
+            {next && (
+              <p data-testid="signin-next">
+                Afterwards you go back to{' '}
+                <Link href={next} className="tabular underline">
+                  {next}
+                </Link>
+                .
+              </p>
+            )}
             <Button
               loading={busy === 'in'}
               disabled={busy !== null}

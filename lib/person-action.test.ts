@@ -74,6 +74,11 @@ function setup(
     account: opts.account ?? 'alice.testnet',
     authed: async (run) => run('ps_token'),
     ensureWallet,
+    contracts: async () => ({
+      Pactora: 'pactora.testnet',
+      PaymentToken: 'musdc.pactora.testnet',
+      Arbiter: 'arbiter.pactora.testnet',
+    }),
     api: {prepare, confirm},
     sleep,
     now: () => clock,
@@ -109,7 +114,16 @@ describe('runPersonAction', () => {
   });
 
   it('passes a delivery or a dispute reason to prepare', async () => {
-    const t = setup({prepare: prepared({action: 'submit'})});
+    const t = setup({
+      prepare: prepared({
+        action: 'submit',
+        functionCall: {
+          ...prepared().functionCall,
+          methodName: 'submit_result',
+          args: {job_id: 5, result_hash: 'ab'},
+        },
+      }),
+    });
     const extra = {output: {answer: 42}, producedAt: '2026-11-08T10:00:00.000Z'};
     await runPersonAction(t.deps, JOB, 'submit', extra);
     expect(t.prepare).toHaveBeenCalledWith('ps_token', JOB, 'submit', extra);
@@ -121,6 +135,51 @@ describe('runPersonAction', () => {
     expect(t.ensureWallet).not.toHaveBeenCalled();
     expect(t.signAndSendTransactions).not.toHaveBeenCalled();
     expect(t.confirm).not.toHaveBeenCalled();
+  });
+
+  it('refuses a prepared call that is not the expected method on a Pactora contract, before the wallet is asked (H1)', async () => {
+    // A compromised or buggy API answers `prepare` with a token transfer to an outsider.
+    const hostile = prepared({
+      functionCall: {
+        receiverId: 'musdc.pactora.testnet',
+        methodName: 'ft_transfer',
+        args: {receiver_id: 'attacker.testnet', amount: '4000000'},
+        gas: '100000000000000',
+        deposit: '1',
+      },
+    });
+    const t = setup({prepare: hostile});
+    await expect(
+      runPersonAction(t.deps, JOB, 'approve', {}, {chainJobId: '5', amount: '4000000'}),
+    ).rejects.toThrow(/asked the wallet to sign something unexpected.*refused/is);
+    expect(t.ensureWallet).not.toHaveBeenCalled();
+    expect(t.signAndSendTransactions).not.toHaveBeenCalled();
+    expect(t.confirm).not.toHaveBeenCalled();
+
+    // The right method on the right contract, but for another job.
+    const otherJob = setup({
+      prepare: prepared({functionCall: {...prepared().functionCall, args: {job_id: 6}}}),
+    });
+    await expect(runPersonAction(otherJob.deps, JOB, 'approve', {}, {chainJobId: '5'})).rejects.toThrow(
+      /unexpected/i,
+    );
+    expect(otherJob.signAndSendTransactions).not.toHaveBeenCalled();
+
+    // A deposit that is not 0 or 1 yocto on an approve.
+    const deposit = setup({
+      prepare: prepared({functionCall: {...prepared().functionCall, deposit: '1000000000000000000000000'}}),
+    });
+    await expect(runPersonAction(deposit.deps, JOB, 'approve', {}, {chainJobId: '5'})).rejects.toThrow(
+      /unexpected/i,
+    );
+    expect(deposit.signAndSendTransactions).not.toHaveBeenCalled();
+
+    // The expected call still goes through, with the job's chain id checked.
+    const fine = setup();
+    await expect(runPersonAction(fine.deps, JOB, 'approve', {}, {chainJobId: '5'})).resolves.toEqual(
+      confirmed,
+    );
+    expect(fine.signAndSendTransactions).toHaveBeenCalledTimes(1);
   });
 
   it('polls while the API says it is not final, waits what it asks, and signs only once', async () => {

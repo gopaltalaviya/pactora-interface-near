@@ -119,7 +119,7 @@ function Signed() {
         {me.person ? (
           <p className="mt-4 text-sm">
             <Link href={`/agents/${me.person.chainAgentId}/manage`} className="text-accent underline">
-              Fund, stake and set caps
+              Fund and stake
             </Link>
           </p>
         ) : (
