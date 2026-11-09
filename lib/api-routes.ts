@@ -7,7 +7,7 @@
  * nothing but the page and its config.
  */
 export const ROUTES: [string, string, string][] = [
-  ['GET /health', 'public', 'Liveness: process up, chains served, escrow address, build'],
+  ['GET /health', 'public', 'Liveness: process up, chains served, the Pactora contract, build'],
   ['GET /ready', 'public', 'Readiness: database and signer reachable (200 / 503)'],
   ['GET /metrics', 'token (production)', 'Prometheus metrics'],
   [

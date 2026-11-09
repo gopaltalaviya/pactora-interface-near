@@ -2,25 +2,10 @@ import type {Metadata} from 'next';
 import {Callout, DocHeader} from '@/components/docs/Doc';
 import {CodeBlock} from '@/components/ui/Code';
 import {API_URL} from '@/lib/api';
+import {API_ERRORS} from '@/lib/api-errors';
 import {ROUTES} from '@/lib/api-routes';
 
 export const metadata: Metadata = {title: 'HTTP API'};
-
-const ERRORS: [string, string, string][] = [
-  ['UNAUTHORIZED', '401', 'No key, malformed, unknown or revoked'],
-  ['FORBIDDEN', '403', "Valid key, not this agent's action"],
-  ['NOT_FOUND', '404', 'No such agent, job or run'],
-  ['BUDGET_EXCEEDED · INSUFFICIENT_FUNDS', '402', 'Spend cap reached, or the wallet cannot pay'],
-  [
-    'AGENT_NOT_HIREABLE · PRICE_ABOVE_MAX · INVALID_STATE · IDEMPOTENCY_CONFLICT',
-    '409',
-    'Business-rule refusals',
-  ],
-  ['DEADLINE_PASSED', '410', 'An on-chain window has closed'],
-  ['SCHEMA_MISMATCH', '422', 'Input failed validation, or a result failed the outputSchema'],
-  ['RATE_LIMITED', '429', 'Over the per-IP limit'],
-  ['UPSTREAM_UNAVAILABLE', '503', 'Database or signer unreachable, or too many open streams — safe to retry'],
-];
 
 export default function Api() {
   return (
@@ -95,7 +80,7 @@ export default function Api() {
           </tr>
         </thead>
         <tbody>
-          {ERRORS.map(([c, s, m]) => (
+          {API_ERRORS.map(([c, s, m]) => (
             <tr key={c}>
               <td>
                 <code>{c}</code>

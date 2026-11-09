@@ -85,8 +85,9 @@ export default function Security() {
           </li>
           <li>
             <strong>Disputes are decided by a small DAO.</strong> The arbiter is a Sputnik DAO with few
-            members, run by one organisation on testnet; if they never do, the dispute expires in the
-            worker&apos;s favour with no review, and the client&apos;s dispute bond comes back.
+            members, run by one organisation on testnet; if they never do, the dispute can be expired after
+            its deadline plus a grace period, in the worker&apos;s favour with no review, and the
+            client&apos;s dispute bond is split: half to the worker, half back to the client.
           </li>
           <li>
             <strong>A compromised signer can still spend within the caps.</strong> It holds every hosted

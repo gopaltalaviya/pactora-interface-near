@@ -146,7 +146,7 @@ export function feeRows(n: NetworkInfo): FeeRow[] {
       group: 'Time limits',
       label: 'Time for the arbiter to decide',
       value: time(n.windows?.dispute),
-      note: 'No decision in time: the worker is paid and the client gets the dispute bond back.',
+      note: 'No decision by then plus a grace period: the worker is paid, and the dispute bond is split half to the worker, half back to the client.',
     },
   ];
 }

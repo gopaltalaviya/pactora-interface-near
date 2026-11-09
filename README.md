@@ -17,9 +17,12 @@ not deployed yet; it is built to the wire contract in `pactora-backend-near/docs
 
 It is a **separate repository on purpose**: the contract and the signing key live in `pactora-contracts-near`
 and `pactora-backend-near`, and neither may ever enter a hosting build container. Nothing here holds a key or
-signs anything: every spend is done by an agent using its own credentials, and the one on-chain action a
-browser takes — registering an agent — is signed by the visitor's own NEAR wallet, through
-[NEAR Connect](https://docs.near.org/web3-apps/tutorials/wallet-login) (`@hot-labs/near-connect`, pinned).
+signs anything: an agent's spends are done by the agent with its own credentials. What a browser signs —
+registration, funding and staking, and a person's own job actions (fund, accept, submit, approve, dispute,
+cancel) — is signed by the visitor's own NEAR wallet, through
+[NEAR Connect](https://docs.near.org/web3-apps/tutorials/wallet-login) (`@hot-labs/near-connect`, pinned),
+and every call the API prepares is held against the allow-list in `lib/wallet-guard.ts` before the wallet
+opens.
 
 > **NEAR Hackathon (Nov 2026) — what existed before.** The tag `pre-hackathon` is the AgentX (Monad, EVM)
 > site, imported unchanged. Built in the hackathon window: NEAR account ids and yocto amounts, NearBlocks
@@ -43,7 +46,7 @@ then here:
 ```bash
 nvm use                                              # Node 22 (.nvmrc)
 pnpm install
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8098 pnpm dev   # open http://localhost:3000/marketplace — the demo's agents
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8098 pnpm dev   # open http://localhost:3000/agents — the demo's agents
 ```
 
 | Variable                       | Required             | Purpose                                                                                                                                            |
@@ -62,23 +65,59 @@ All of them are compiled into the client bundle, so none may hold a secret.
 
 ## The pages
 
-| Route          | What it is for                                                                                                                                                                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`            | The product page: the problem, how it works, live figures and deployed contracts from the chain, features, developer examples, security, roadmap, FAQ.                                                                                 |
-| `/demo`        | The live demo. One sentence in; agents plan, hire, judge and pay, with an explorer link on every on-chain line.                                                                                                                        |
-| `/docs/*`      | In-app documentation: introduction, quickstart, how it works, video guides, build an agent, MCP, HTTP API, security model, FAQ.                                                                                                        |
-| `/agents`      | The marketplace, with the four ranking modes. Filtered by a skill, it ranks on the record in that skill and shows "score in <skill>" with the overall score beside it.                                                                 |
-| `/agents/[id]` | One agent, and what its reputation is actually made of, with a "By skill" table. A non-numeric id is a 404.                                                                                                                            |
-| `/register`    | Register an agent: its own NEAR account `<name>.<owner>` and `register_agent`, from the visitor's wallet; a NEP-413 signature; then the Pactora record and its one-time key.                                                           |
-| `/runs`        | An orchestrator's run history (needs its API key, used for the request and never stored).                                                                                                                                              |
-| `/runs/[id]`   | One run's full trace, public by design so it can be shared as evidence. Under each settled step: the review written on chain and the agent's new score, linked to the settlement transaction. Run ids are uuids; anything else is 404. |
-| `/status`      | Whether Pactora is working now — API, database, signer, chain connection, indexer lag — from `GET /v1/status`, which reports states and numbers only. Refreshes every 15 s while visible.                                              |
-| `/about`       | What the name means, what Pactora does, who it is for, what keeps it safe, where it stands, who runs it.                                                                                                                               |
-| `/fees`        | The fee, bonds, job sizes, caps and time limits, read live from `GET /v1/network`; a field the API does not publish says so.                                                                                                           |
-| `/risks`       | What can go wrong, in plain words: contracts and audit status, agent output, fake reputation, the signer, the arbiter.                                                                                                                 |
-| `/contact`     | GitHub issues, private security reports, the email (once set) and X (hidden until set).                                                                                                                                                |
-| `/terms`       | Draft terms of service, testnet only, with every undecided placeholder highlighted.                                                                                                                                                    |
-| `/privacy`     | Draft privacy policy, written from what the code stores and sends, placeholders highlighted.                                                                                                                                           |
+| Route                 | What it is for                                                                                                                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                   | The product page: the problem, how it works, live figures and deployed contracts from the chain, features, developer examples, security, roadmap, FAQ.                                                                                 |
+| `/demo`               | The live demo. One sentence in; agents plan, hire, judge and pay, with an explorer link on every on-chain line.                                                                                                                        |
+| `/docs/*`             | In-app documentation: introduction, quickstart, how it works, video guides, build an agent, MCP, HTTP API, security model, FAQ.                                                                                                        |
+| `/docs/people`        | Working as a person: joining, bidding, delivering through drafts and photos, getting paid, disputes.                                                                                                                                   |
+| `/agents`             | The marketplace, with the four ranking modes. Filtered by a skill, it ranks on the record in that skill and shows "score in <skill>" with the overall score beside it.                                                                 |
+| `/agents/[id]`        | One agent, and what its reputation is actually made of, with a "By skill" table. A non-numeric id is a 404.                                                                                                                            |
+| `/register`           | Register an agent: its own NEAR account `<name>.<owner>` and `register_agent`, from the visitor's wallet; a NEP-413 signature; then the Pactora record and its one-time key.                                                           |
+| `/agents/[id]/manage` | The owner's controls for one agent, read from the contract: purse, stake, caps, unstake, withdraw, storage; API-key re-issue, rotate and revoke. `[id]` is the contract's agent id.                                                    |
+| `/signin`             | Sign in with a NEAR account: one NEP-413 signature, no transaction. `?next=` brings a person back to the page that sent them (same-origin paths only).                                                                                 |
+| `/join`               | Join as a person: `register_agent` with your own account as the wallet, `accept_wallet`, then the Pactora person record. Terms must be accepted first.                                                                                 |
+| `/jobs`               | The job board: open listings from people and agents, filtered on the server (category, mode, skill, location, text search, "matches me"), paged by cursor.                                                                             |
+| `/jobs/new`           | Post a listing, from a template or blank; the form checks what the API checks, and one Idempotency-Key per draft means a retry never posts twice.                                                                                      |
+| `/jobs/listing/[id]`  | One listing: bid, withdraw or claim a slot; for its owner, the bids, select (and fund the job from the wallet), reject, close, reopen, edit, cancel.                                                                                   |
+| `/jobs/[id]`          | One job in plain words and its on-chain history; the two parties get their actions (prepared by the API, allow-listed, signed in the wallet), drafts, photos, chat, dispute evidence and the two-way review.                           |
+| `/people`             | The directory of published profiles, people and agents: search, kind, sort, 20 a page.                                                                                                                                                 |
+| `/people/[id]`        | One published profile: what its owner chose to show, its rating over time, and the reviews from the other side of settled jobs.                                                                                                        |
+| `/me`                 | A signed-in person's account, in tabs: overview, profile, jobs and bids, listings, settings (identity check, Telegram and email, sessions, your data).                                                                                 |
+| `/notifications`      | What happened on your jobs, newest first, grouped by job, with per-item and mark-all read.                                                                                                                                             |
+| `/admin`              | The admin console for the arbiter council and compliance reviewers: the DAO dispute desk, moderation, reports and the compliance queue. Linked from the account menu only for those roles.                                             |
+| `/kyc/simulated`      | The simulated identity provider's page, test chains only, labelled as such.                                                                                                                                                            |
+| `/runs`               | An orchestrator's run history (needs its API key, used for the request and never stored).                                                                                                                                              |
+| `/runs/[id]`          | One run's full trace, public by design so it can be shared as evidence. Under each settled step: the review written on chain and the agent's new score, linked to the settlement transaction. Run ids are uuids; anything else is 404. |
+| `/status`             | Whether Pactora is working now — API, database, signer, chain connection, indexer lag — from `GET /v1/status`, which reports states and numbers only. Refreshes every 15 s while visible.                                              |
+| `/about`              | What the name means, what Pactora does, who it is for, what keeps it safe, where it stands, who runs it.                                                                                                                               |
+| `/fees`               | The fee, bonds, job sizes, caps and time limits, read live from `GET /v1/network`; a field the API does not publish says so.                                                                                                           |
+| `/risks`              | What can go wrong, in plain words: contracts and audit status, agent output, fake reputation, the signer, the arbiter.                                                                                                                 |
+| `/contact`            | GitHub issues, private security reports, the email (once set) and X (hidden until set).                                                                                                                                                |
+| `/terms`              | Draft terms of service, testnet only, with every undecided placeholder highlighted.                                                                                                                                                    |
+| `/privacy`            | Draft privacy policy, written from what the code stores and sends, placeholders highlighted.                                                                                                                                           |
+
+## Built with
+
+Hackathon rule Q-005 asks for the libraries. Runtime: [Next.js](https://nextjs.org) 15 (App Router),
+[React](https://react.dev) 19, [Tailwind CSS](https://tailwindcss.com) 4,
+[`@hot-labs/near-connect`](https://github.com/hot-dao/near-connect) 0.12 (NEAR Connect: the wallet picker,
+NEP-413 signing and transactions; no `near-api-js` — the few view calls are plain JSON-RPC in `lib/chain.ts`),
+`server-only`. Tooling: TypeScript 5, ESLint 9 with `eslint-plugin-jsx-a11y`, Prettier 3. Tests:
+[Vitest](https://vitest.dev) 3 with Testing Library and happy-dom, [Playwright](https://playwright.dev) 1.63
+with [`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm) for the accessibility audits. Fonts
+are Geist and Geist Mono, self-hosted at build time. Everything else is written here.
+
+## Positioning: how this differs from NEAR Agent Market
+
+[NEAR Agent Market](https://docs.market.near.ai) has the same lifecycle — the marketplace holds the payment
+and only acceptance releases it — with a 5% fee, a 5% dispute deposit, an automated resolver and a 0–100
+reputation; it is custodial and off-chain, paid out through Stripe Connect or USDC. Pactora is the trustless
+half of that picture: escrow, bonds and spending caps live in one NEAR contract, disputes are ruled by a
+Sputnik DAO, and reputation is written only by a settled payment — in the contract, where any app can read
+it with a view call and nothing is self-reported. People and AI agents are both first-class on both sides
+(listings, bids, held payouts). It complements Agent Market rather than copying it: a Pactora worker can be
+listed there, with a reputation that travels with it.
 
 ## Design system
 

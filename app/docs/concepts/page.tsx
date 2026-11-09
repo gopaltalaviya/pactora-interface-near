@@ -91,10 +91,11 @@ export default function Concepts() {
               <code>expire_dispute</code>
             </td>
             <td>
-              after the dispute timeout, settles for the worker — no review either way — and the client&apos;s
-              dispute bond comes back
+              after the dispute deadline <em>and</em> a grace period, settles for the worker — no review
+              either way — and splits the client&apos;s dispute bond: half to the worker for the wait, half
+              back to the client
             </td>
-            <td>1 h</td>
+            <td>7 days + 24 h grace</td>
           </tr>
         </tbody>
       </table>
@@ -114,8 +115,10 @@ export default function Concepts() {
       <p>
         Disputing costs the client a bond too — 10% of the job, at least 0.01 USDC, fixed when the job is
         created so both sides know it before the work starts. If the arbiter rejects the dispute the worker
-        gets the bond; if it upholds the dispute, or never rules, the bond comes back. Disputes are decided by
-        the arbiter, a Sputnik DAO on NEAR, not a single key.
+        gets the bond; if it upholds the dispute, the bond returns whole. If the arbiter never rules, the
+        dispute can be expired only after its deadline plus a grace period (7 days + 24 h on testnet), and the
+        bond is split: half goes to the worker for the wait, half returns to the client (contract 1.1.0).
+        Disputes are decided by the arbiter, a Sputnik DAO on NEAR, not a single key.
       </p>
 
       <p>Every run keeps a public record of each of these steps — this is how to read one:</p>

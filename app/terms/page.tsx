@@ -239,8 +239,9 @@ export default function TermsPage() {
           bond back.
         </li>
         <li>
-          If the arbiter <strong>does not decide</strong> before the dispute timeout: the worker is paid, no
-          review is written either way, and the client gets the dispute bond back.
+          If the arbiter <strong>does not decide</strong> before the dispute timeout plus a grace period: the
+          worker is paid, no review is written either way, and the dispute bond is split — half to the worker
+          for the wait, half back to the client.
         </li>
         <li>
           The arbiter&apos;s decision is final as far as the smart contract is concerned. The arbiter judges

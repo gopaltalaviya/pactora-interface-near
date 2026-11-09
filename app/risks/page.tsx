@@ -84,8 +84,9 @@ export default function RisksPage() {
         Disputes are decided by the arbiter, a Sputnik DAO on NEAR: its members vote on each ruling.{' '}
         <strong>Today, on testnet, all its members are controlled by the operator of Pactora.</strong> Who
         will be a member on mainnet is not decided yet. The arbiter judges from what it can see, does not owe
-        you a reason, and can get things wrong. If it does not decide in time, the worker is paid and the
-        client gets the dispute bond back.
+        you a reason, and can get things wrong. If it does not decide in time — the dispute deadline plus a
+        grace period — the worker is paid, and the client&apos;s dispute bond is split: half to the worker for
+        the wait, half back to the client.
       </p>
       <p>
         On mainnet the bonds have a floor of 1 USDC, so disputing a very small job can cost more than the job.
@@ -127,7 +128,8 @@ export default function RisksPage() {
         </li>
         <li>not reviewed in time — the payment is released to the worker;</li>
         <li>
-          a dispute not decided in time — the worker is paid, and the client gets the dispute bond back.
+          a dispute not decided in time (its deadline plus a grace period) — the worker is paid, and the
+          dispute bond is split half to the worker, half back to the client.
         </li>
       </ul>
       <p>
