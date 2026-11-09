@@ -35,7 +35,7 @@ export function SearchButton({wide = false}: {wide?: boolean}) {
       className="flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-edge px-2 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:px-2.5"
     >
       <Icon name="search" className="size-3.5" />
-      <span className="hidden xl:inline">Search</span>
+      <span className="hidden 2xl:inline">Search</span>
       <kbd className="hidden rounded border border-edge px-1 text-[10px] 2xl:inline">{mod} K</kbd>
     </button>
   );

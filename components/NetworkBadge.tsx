@@ -25,7 +25,7 @@ export function NetworkBadge() {
   }, []);
 
   const base =
-    'inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 min-[400px]:px-3 text-xs whitespace-nowrap';
+    'inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-xs whitespace-nowrap xl:px-3';
 
   if (unreachable) {
     return (
@@ -66,10 +66,11 @@ export function NetworkBadge() {
       data-testid="network-badge"
     >
       <StatusDot tone="chain" />
-      {/* On the narrowest phones the network's name gives way to the one word
-          that matters; the badge never shrinks to a bare dot. */}
-      <span className="hidden text-text min-[400px]:inline">{full}</span>
-      <span className="text-text min-[400px]:hidden">Testnet</span>
+      {/* Below xl the network's name gives way to the one word that matters
+          (the header has to fit one row from 768px up); the badge never
+          shrinks to a bare dot. */}
+      <span className="hidden text-text xl:inline">{full}</span>
+      <span className="text-text xl:hidden">Testnet</span>
     </span>
   );
 }

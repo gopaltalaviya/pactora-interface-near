@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import {usePathname} from 'next/navigation';
-import {useEffect, useRef, useState} from 'react';
+import {usePathname, useRouter} from 'next/navigation';
+import {useEffect, useId, useRef, useState} from 'react';
 import {Logo} from './brand/Logo';
 import {NetworkBadge} from './NetworkBadge';
 import {SearchButton} from './search/SearchButton';
 import {SearchPalette} from './search/SearchPalette';
 import {NotificationsBell} from '@/components/market/NotificationsBell';
+import {useAdminRoles} from '@/lib/admin-roles';
 import {useSession} from '@/lib/session';
 import {displayAccount} from '@/lib/near';
 import {Icon} from './ui/Icon';
@@ -17,15 +18,18 @@ import {Icon} from './ui/Icon';
  * money is on.
  *
  * The current section is marked (visually and with aria-current), so "where
- * am I?" never needs the URL. Below the small breakpoint the links fold into
- * a menu that closes on Escape, on navigation, and on a click outside.
+ * am I?" never needs the URL. Below `lg` (1024px) the links fold into a menu
+ * that closes on Escape, on navigation, and on a click outside: between 768
+ * and 1024 the full row did not fit (live audit 2026-11-09), and a bar that
+ * overflows the viewport scrolls the whole page sideways.
  *
  * Everything in the bar is one row. Each item keeps its width
  * (`shrink-0 whitespace-nowrap`), so a tight viewport never folds a label
  * onto two lines inside a 32px button; instead the less essential parts
- * appear only where there is room for them: the search label from `xl`, the
- * register button from `xl` (it is also in the hero, the footer and the
- * menu), its long form from `2xl`.
+ * appear only where there is room for them: the network's full name and the
+ * search label from `xl`, the register button from `xl`, its long form from
+ * `2xl`. The account chip opens a small menu (account, notifications, admin
+ * for council members and reviewers, sign out).
  */
 
 const LINKS = [
@@ -38,35 +42,130 @@ const LINKS = [
   {href: '/status', label: 'Status', match: (p: string) => p.startsWith('/status')},
 ];
 
-/** Who is signed in, or the way to sign in. A link to /signin either way: that page holds sign-out. */
-function SessionLink() {
-  const {status, account} = useSession();
+const MENU_ITEM =
+  'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-raised hover:text-text focus-visible:bg-raised focus-visible:text-text focus-visible:outline-none';
+
+/**
+ * Who is signed in, as a menu; or the way to sign in. The admin roles are
+ * asked for only when the menu opens (lib/admin-roles.ts).
+ */
+function AccountMenu() {
+  const {status, account, person, signOut} = useSession();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const {roles} = useAdminRoles(open);
+  const id = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        button.current?.focus();
+      }
+    };
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menu.current?.contains(t) && !button.current?.contains(t)) setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    // The first item takes focus, so the keyboard is in the menu, not on the button.
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [open]);
+
   if (status === 'loading') return null;
-  const signedIn = status === 'in' && account;
+  if (status !== 'in' || !account) {
+    return (
+      <Link
+        href="/signin"
+        className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:inline-flex"
+      >
+        Sign in
+      </Link>
+    );
+  }
+
+  const items: {href: string; label: string}[] = [
+    {href: '/me', label: 'My account'},
+    ...(person ? [{href: '/notifications', label: 'Notifications'}] : []),
+    ...(roles.length > 0 ? [{href: '/admin', label: 'Admin'}] : []),
+  ];
+
   return (
-    <Link
-      href="/signin"
-      className="hidden h-8 max-w-[9rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:inline-flex xl:max-w-[11rem]"
-    >
-      {signedIn ? (
-        <>
-          <span className="sr-only">Signed in as</span>
-          <span className="tabular truncate">{displayAccount(account)}</span>
-        </>
-      ) : (
-        'Sign in'
-      )}
-    </Link>
+    <div className="relative hidden sm:block">
+      <button
+        ref={button}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={`${id}-menu`}
+        aria-label={`Account menu for ${account}`}
+        title={account}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex h-8 max-w-[8rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text xl:max-w-[11rem]"
+      >
+        <span className="tabular truncate">{displayAccount(account)}</span>
+        <Icon
+          name="arrowRight"
+          className={`size-3 transition-transform ${open ? '-rotate-90' : 'rotate-90'}`}
+        />
+      </button>
+      <div
+        ref={menu}
+        id={`${id}-menu`}
+        role="menu"
+        aria-label="Account"
+        hidden={!open}
+        className="absolute right-0 top-10 z-50 w-56 space-y-0.5 rounded-xl border border-edge bg-ink/95 p-1.5 shadow-xl backdrop-blur-xl"
+      >
+        <p className="tabular truncate px-3 py-1.5 text-xs text-muted" title={account}>
+          {account}
+        </p>
+        {items.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            role="menuitem"
+            className={MENU_ITEM}
+            onClick={() => setOpen(false)}
+          >
+            {item.label}
+            <Icon name="arrowRight" className="size-3 opacity-60" />
+          </Link>
+        ))}
+        <button
+          type="button"
+          role="menuitem"
+          className={MENU_ITEM}
+          onClick={() => {
+            setOpen(false);
+            void signOut()
+              .then(() => router.push('/signin'))
+              .catch(() => router.push('/signin'));
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
   );
 }
 
 export function SiteHeader() {
   const pathname = usePathname() ?? '/';
-  const {status} = useSession();
+  const {status, person} = useSession();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
+  const {roles} = useAdminRoles(open);
 
   useEffect(() => setOpen(false), [pathname]);
 
@@ -103,9 +202,23 @@ export function SiteHeader() {
     ...LINKS,
     {href: '/register', label: 'Register an agent', match: (p: string) => p.startsWith('/register')},
     {href: '/join', label: 'Join as a person', match: (p: string) => p.startsWith('/join')},
-    status === 'in'
-      ? {href: '/me', label: 'My account', match: (p: string) => p.startsWith('/me')}
-      : {href: '/signin', label: 'Sign in', match: (p: string) => p.startsWith('/signin')},
+    ...(status === 'in'
+      ? [
+          {href: '/me', label: 'My account', match: (p: string) => p.startsWith('/me')},
+          ...(person
+            ? [
+                {
+                  href: '/notifications',
+                  label: 'Notifications',
+                  match: (p: string) => p.startsWith('/notifications'),
+                },
+              ]
+            : []),
+          ...(roles.length > 0
+            ? [{href: '/admin', label: 'Admin', match: (p: string) => p.startsWith('/admin')}]
+            : []),
+        ]
+      : [{href: '/signin', label: 'Sign in', match: (p: string) => p.startsWith('/signin')}]),
   ];
 
   return (
@@ -115,12 +228,12 @@ export function SiteHeader() {
         (scrolled ? 'border-edge bg-ink/75 backdrop-blur-xl' : 'border-transparent bg-transparent')
       }
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 md:gap-4 lg:gap-6">
+      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 lg:gap-4 xl:gap-6">
         <Link href="/" aria-label="Pactora home" className="group flex shrink-0 items-center">
           <Logo />
         </Link>
 
-        <nav aria-label="Main" className="hidden items-center gap-1 text-sm md:flex">
+        <nav aria-label="Main" className="hidden items-center gap-0.5 text-sm lg:flex xl:gap-1">
           {LINKS.map((link) => {
             const active = link.match(pathname);
             return (
@@ -129,7 +242,7 @@ export function SiteHeader() {
                 href={link.href}
                 aria-current={active ? 'page' : undefined}
                 className={
-                  'relative inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 transition-colors duration-200 xl:px-3 ' +
+                  'relative inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2 py-1.5 transition-colors duration-200 xl:px-3 ' +
                   (active ? 'text-text' : 'text-muted hover:bg-raised/60 hover:text-text')
                 }
               >
@@ -151,7 +264,7 @@ export function SiteHeader() {
           <SearchButton />
           <NetworkBadge />
           <NotificationsBell />
-          <SessionLink />
+          <AccountMenu />
           <Link
             href="/register"
             aria-label="Register an agent"
@@ -168,7 +281,7 @@ export function SiteHeader() {
             aria-controls="mobile-nav"
             aria-label={open ? 'Close menu' : 'Open menu'}
             onClick={() => setOpen((o) => !o)}
-            className="grid size-9 shrink-0 place-items-center rounded-lg border border-edge text-muted transition-colors hover:text-text md:hidden"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-edge text-muted transition-colors hover:text-text lg:hidden"
           >
             <Icon name={open ? 'x' : 'menu'} />
           </button>
@@ -179,7 +292,7 @@ export function SiteHeader() {
         id="mobile-nav"
         ref={menu}
         hidden={!open}
-        className="border-t border-edge bg-ink/95 backdrop-blur-xl md:hidden"
+        className="border-t border-edge bg-ink/95 backdrop-blur-xl lg:hidden"
       >
         <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-1 px-4 py-3 animate-enter">
           {menuLinks.map((link) => {
