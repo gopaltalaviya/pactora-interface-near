@@ -43,7 +43,7 @@ const LINKS = [
 ];
 
 const MENU_ITEM =
-  'flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-raised hover:text-text focus-visible:bg-raised focus-visible:text-text focus-visible:outline-none';
+  'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[0.875rem] text-muted transition-colors hover:bg-raised hover:text-text focus-visible:bg-raised focus-visible:text-text focus-visible:outline-none';
 
 /**
  * Who is signed in, as a menu; or the way to sign in. The admin roles are
@@ -85,7 +85,7 @@ function AccountMenu() {
     return (
       <Link
         href="/signin"
-        className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text sm:inline-flex"
+        className="hidden h-8 shrink-0 items-center whitespace-nowrap rounded-lg border border-edge bg-surface/60 px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:bg-raised hover:text-text sm:inline-flex"
       >
         Sign in
       </Link>
@@ -109,7 +109,7 @@ function AccountMenu() {
         aria-label={`Account menu for ${account}`}
         title={account}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-8 max-w-[8rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:text-text xl:max-w-[11rem]"
+        className="inline-flex h-8 max-w-[8rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge bg-surface/60 px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:bg-raised hover:text-text aria-expanded:border-edge-strong aria-expanded:bg-raised aria-expanded:text-text xl:max-w-[11rem]"
       >
         <span className="tabular truncate">{displayAccount(account)}</span>
         <Icon
@@ -123,9 +123,12 @@ function AccountMenu() {
         role="menu"
         aria-label="Account"
         hidden={!open}
-        className="absolute right-0 top-10 z-50 w-56 space-y-0.5 rounded-xl border border-edge bg-ink/95 p-1.5 shadow-xl backdrop-blur-xl"
+        className="absolute right-0 top-10 z-50 w-60 animate-enter space-y-0.5 rounded-xl border border-edge-strong/70 bg-overlay/95 p-1.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_24px_48px_-12px_rgb(0_0_0/0.7)] backdrop-blur-xl"
       >
-        <p className="tabular truncate px-3 py-1.5 text-xs text-muted" title={account}>
+        <p
+          className="tabular mb-1 truncate border-b border-edge px-3 pb-2 pt-1.5 text-xs text-muted"
+          title={account}
+        >
           {account}
         </p>
         {items.map((item) => (
@@ -224,8 +227,10 @@ export function SiteHeader() {
   return (
     <header
       className={
-        'sticky top-0 z-40 border-b transition-[background-color,border-color,backdrop-filter] duration-300 ' +
-        (scrolled ? 'border-edge bg-ink/75 backdrop-blur-xl' : 'border-transparent bg-transparent')
+        'sticky top-0 z-40 border-b backdrop-blur-xl backdrop-saturate-150 transition-[background-color,border-color,box-shadow] duration-300 ' +
+        (scrolled
+          ? 'border-edge/80 bg-ink/75 shadow-[0_8px_24px_-16px_rgb(0_0_0/0.8)]'
+          : 'border-transparent bg-ink/30')
       }
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 lg:gap-4 xl:gap-6">
@@ -233,7 +238,7 @@ export function SiteHeader() {
           <Logo />
         </Link>
 
-        <nav aria-label="Main" className="hidden items-center gap-0.5 text-sm lg:flex xl:gap-1">
+        <nav aria-label="Main" className="hidden items-center gap-0.5 text-[0.875rem] lg:flex xl:gap-1">
           {LINKS.map((link) => {
             const active = link.match(pathname);
             return (
@@ -243,7 +248,7 @@ export function SiteHeader() {
                 aria-current={active ? 'page' : undefined}
                 className={
                   'relative inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2 py-1.5 transition-colors duration-200 xl:px-3 ' +
-                  (active ? 'text-text' : 'text-muted hover:bg-raised/60 hover:text-text')
+                  (active ? 'bg-white/[0.06] text-text' : 'text-muted hover:bg-white/[0.04] hover:text-text')
                 }
               >
                 {link.label}
@@ -270,11 +275,14 @@ export function SiteHeader() {
             aria-label="Register an agent"
             // Signed in, the account chip takes the room (NEAR account ids are
             // long): the button waits for 2xl, and the menu still offers it.
-            className={`hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] ${status === 'in' ? '2xl:inline-flex' : 'xl:inline-flex'}`}
+            className={`group/cta hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_6px_18px_-8px_rgb(233_237_245/0.45)] transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] ${status === 'in' ? '2xl:inline-flex' : 'xl:inline-flex'}`}
           >
             <span className="2xl:hidden">Register</span>
             <span className="hidden 2xl:inline">Register an agent</span>
-            <Icon name="arrowRight" className="size-3" />
+            <Icon
+              name="arrowRight"
+              className="size-3 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+            />
           </Link>
           <button
             ref={toggle}
@@ -283,7 +291,7 @@ export function SiteHeader() {
             aria-controls="mobile-nav"
             aria-label={open ? 'Close menu' : 'Open menu'}
             onClick={() => setOpen((o) => !o)}
-            className="grid size-9 shrink-0 place-items-center rounded-lg border border-edge text-muted transition-colors hover:text-text lg:hidden"
+            className="grid size-10 shrink-0 place-items-center rounded-lg border border-edge bg-surface/60 text-muted transition-colors hover:border-edge-strong hover:bg-raised hover:text-text aria-expanded:bg-raised aria-expanded:text-text lg:hidden"
           >
             <Icon name={open ? 'x' : 'menu'} />
           </button>
@@ -294,9 +302,9 @@ export function SiteHeader() {
         id="mobile-nav"
         ref={menu}
         hidden={!open}
-        className="border-t border-edge bg-ink/95 backdrop-blur-xl lg:hidden"
+        className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-edge bg-ink/95 shadow-[0_24px_48px_-16px_rgb(0_0_0/0.8)] backdrop-blur-xl lg:hidden"
       >
-        <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-1 px-4 py-3 animate-enter">
+        <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-1 px-4 py-3 animate-enter sm:px-6">
           {menuLinks.map((link) => {
             const active = link.match(pathname);
             return (
@@ -305,8 +313,10 @@ export function SiteHeader() {
                 href={link.href}
                 aria-current={active ? 'page' : undefined}
                 className={
-                  'flex items-center justify-between rounded-lg px-3 py-3 text-sm ' +
-                  (active ? 'bg-raised text-text' : 'text-muted hover:bg-raised hover:text-text')
+                  'flex min-h-11 items-center justify-between rounded-xl px-3.5 py-3 text-[0.9375rem] transition-colors ' +
+                  (active
+                    ? 'bg-raised font-medium text-text shadow-[inset_2px_0_0_var(--color-accent)]'
+                    : 'text-muted hover:bg-raised/70 hover:text-text')
                 }
               >
                 {link.label}

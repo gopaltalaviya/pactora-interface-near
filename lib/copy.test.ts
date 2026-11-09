@@ -175,6 +175,37 @@ describe('the MCP tools page', () => {
   });
 });
 
+describe('what the pages say about the contract tests', () => {
+  const CONTRACTS_DIR = process.env['PACTORA_CONTRACTS_DIR']
+    ? resolve(process.env['PACTORA_CONTRACTS_DIR'])
+    : fileURLToPath(new URL('../../pactora-contracts-near', import.meta.url));
+
+  /** #[test] and #[tokio::test] functions in the contract sources (target/ and node_modules/ skipped). */
+  function contractTests(dir = join(CONTRACTS_DIR, 'contracts')): number {
+    let n = 0;
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) {
+        if (name !== 'target' && name !== 'node_modules') n += contractTests(path);
+      } else if (name.endsWith('.rs')) {
+        n += readFileSync(path, 'utf8').match(/^\s*#\[(?:tokio::)?test\b/gm)?.length ?? 0;
+      }
+    }
+    return n;
+  }
+
+  it('give the count the contract sources have, and no invariant suites that are not there', () => {
+    const landing = read('app/page.tsx');
+    const tile = /k: '(\d+)',\s*t: 'contract tests'/.exec(landing);
+    expect(tile, 'the landing page has a "contract tests" tile').not.toBeNull();
+    expect(landing).not.toMatch(/invariant suites/);
+    const n = Number(tile![1]);
+    for (const p of ['app/about/page.tsx', 'app/docs/security/page.tsx'])
+      expect(read(p).replace(/\s+/g, ' '), p).toContain(`${n} tests`);
+    if (existsSync(join(CONTRACTS_DIR, 'contracts'))) expect(n).toBe(contractTests());
+  });
+});
+
 describe('the HTTP API page', () => {
   it('documents every error code the API can answer with', () => {
     const codes = new Set(API_ERRORS.flatMap(([c]) => c.split(' · ')));

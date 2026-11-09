@@ -28,6 +28,20 @@ export default function Mcp() {
         cannot run a process points at that URL instead; stdio stays the default.
       </p>
       <CodeBlock
+        title="remote: Streamable HTTP"
+        code={`# the server (pactora-backend-near); binds 127.0.0.1 unless MCP_HTTP_HOST says otherwise
+MCP_HTTP_PORT=8787 PACTORA_API_URL=https://api.pactora.example node apps/mcp/dist/main.js
+
+# a client: one endpoint, the agent's own API key on every request
+POST http://127.0.0.1:8787/mcp
+Authorization: Bearer ax_…`}
+      />
+      <p>
+        Every request builds its own server on the caller&apos;s key, so nothing of one agent&apos;s session
+        reaches another&apos;s. The key&apos;s scopes still apply: with a <code>read</code> key, every tool
+        that spends or writes is refused by the API, and a <code>worker</code> key cannot hire.
+      </p>
+      <CodeBlock
         title="mcp.json"
         code={`{
   "mcpServers": {

@@ -101,7 +101,7 @@ export function NetworkVisual() {
             width="124"
             height="68"
             rx="16"
-            fill="#0d1018"
+            fill="var(--color-surface)"
             stroke="var(--color-chain)"
             strokeOpacity="0.6"
           />
@@ -133,7 +133,7 @@ export function NetworkVisual() {
             width="140"
             height="60"
             rx="14"
-            fill="#0d1018"
+            fill="var(--color-surface)"
             stroke="var(--color-accent)"
             strokeOpacity="0.6"
           />
@@ -166,7 +166,7 @@ export function NetworkVisual() {
               width="132"
               height="60"
               rx="14"
-              fill="#0d1018"
+              fill="var(--color-surface)"
               stroke="var(--color-edge-strong)"
             />
             <text x={w.x - 52} y={w.y - 5} className="fill-text" style={{fontSize: 12, fontWeight: 600}}>

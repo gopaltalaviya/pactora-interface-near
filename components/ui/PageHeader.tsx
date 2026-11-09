@@ -13,7 +13,7 @@ export function PageHeader({
   description,
   back,
   actions,
-  titleClassName = 'text-3xl',
+  titleClassName = 'text-3xl sm:text-4xl',
 }: {
   eyebrow?: string;
   title: ReactNode;
@@ -23,23 +23,25 @@ export function PageHeader({
   titleClassName?: string;
 }) {
   return (
-    <header className="animate-enter space-y-3">
+    <header className="animate-enter space-y-4">
       {back && (
         <Link
           href={back.href}
-          className="group inline-flex min-h-6 items-center gap-1.5 text-sm text-muted transition-colors hover:text-text"
+          className="group -ml-1 inline-flex min-h-8 items-center gap-1.5 rounded-lg px-1 text-sm text-muted transition-colors hover:text-text"
         >
           <Icon name="arrowLeft" className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
           {back.label}
         </Link>
       )}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0 space-y-2">
+        <div className="min-w-0 space-y-2.5">
           {eyebrow && (
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-accent">{eyebrow}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">{eyebrow}</p>
           )}
-          <h1 className={`font-semibold tracking-tight text-balance ${titleClassName}`}>{title}</h1>
-          {description && <div className="max-w-2xl text-sm leading-relaxed text-muted">{description}</div>}
+          <h1 className={`font-semibold tracking-[-0.03em] text-balance ${titleClassName}`}>{title}</h1>
+          {description && (
+            <div className="max-w-2xl text-[0.9375rem] leading-relaxed text-muted">{description}</div>
+          )}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>

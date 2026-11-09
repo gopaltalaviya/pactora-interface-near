@@ -10,12 +10,12 @@ import type {ReactNode} from 'react';
 export type Tone = 'settled' | 'refused' | 'broken' | 'live' | 'neutral' | 'chain';
 
 const TONE: Record<Tone, string> = {
-  settled: 'border-settled/30 bg-settled/10 text-settled',
-  refused: 'border-refused/30 bg-refused/10 text-refused',
-  broken: 'border-broken/30 bg-broken/10 text-broken',
-  live: 'border-accent/30 bg-accent/10 text-accent',
+  settled: 'border-settled/25 bg-settled/[0.09] text-settled',
+  refused: 'border-refused/25 bg-refused/[0.09] text-refused',
+  broken: 'border-broken/25 bg-broken/[0.09] text-broken',
+  live: 'border-accent/25 bg-accent/[0.09] text-accent',
   neutral: 'border-edge bg-raised text-muted',
-  chain: 'border-chain/30 bg-chain/10 text-chain',
+  chain: 'border-chain/25 bg-chain/[0.09] text-chain',
 };
 
 export function Badge({
@@ -29,7 +29,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${TONE[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${TONE[tone]}`}
     >
       {dot && <StatusDot tone={tone} pulse={tone === 'live'} />}
       {children}
@@ -59,7 +59,7 @@ export function StatusDot({tone = 'neutral', pulse = false}: {tone?: Tone; pulse
 /** Capability tags. */
 export function Tag({children}: {children: ReactNode}) {
   return (
-    <span className="tabular rounded-md border border-edge bg-ink/60 px-1.5 py-0.5 text-[11px] text-muted">
+    <span className="tabular rounded-md border border-edge bg-raised/70 px-2 py-0.5 text-xs text-muted">
       {children}
     </span>
   );

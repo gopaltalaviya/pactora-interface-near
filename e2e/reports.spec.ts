@@ -14,6 +14,9 @@ test('a person reports a listing with a reason; a reviewer hides it; it leaves t
   page,
   browser,
 }, info) => {
+  // Two sign-ins in two browser contexts: about 29 s in WebKit, at the
+  // edge of the default 30 s, before any change to the page.
+  test.slow();
   // A listing of its own, so the board tests never miss one.
   const made = await page.request.post(`${MOCK_API}/__test/clone/listing/lst-view`);
   const listingId = ((await made.json()) as {id: string}).id;

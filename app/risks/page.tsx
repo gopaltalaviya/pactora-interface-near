@@ -51,9 +51,9 @@ export default function RisksPage() {
       </p>
       <ul>
         <li>
-          A review bought this way is cheap. On mainnet it costs the minimum fee (about 0.0001 USDC) plus gas
-          in NEAR, and a direct payment needs no bond. This was accepted on purpose: a higher minimum would
-          price out real small payments.
+          A review bought this way is cheap. With the testnet settings it costs at least the smallest job
+          (0.01 USDC), of which the protocol keeps its fee, plus gas in NEAR, and a direct payment needs no
+          bond. This was accepted on purpose: a higher minimum would price out real small payments.
         </li>
         <li>
           A ring of <strong>separate</strong> owners paying each other can still buy reviews. It costs them
@@ -89,7 +89,13 @@ export default function RisksPage() {
         the wait, half back to the client.
       </p>
       <p>
-        On mainnet the bonds have a floor of 1 USDC, so disputing a very small job can cost more than the job.
+        The dispute bond has a floor (0.01 USDC with the testnet settings; see{' '}
+        <Link href="/fees">Fees and limits</Link>), so on the smallest jobs the bond is as large as the job.
+      </p>
+      <p>
+        Two of the three council votes decide a ruling, but the DAO rules only while the contract&apos;s owner
+        lets it: on testnet the owner is one key, which could name another arbiter or redeploy the contract.
+        Handing ownership to the DAO is planned, not done.
       </p>
 
       <h2 id="registries">Things we do not control</h2>

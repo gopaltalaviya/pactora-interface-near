@@ -21,17 +21,17 @@ export function Card({
   return (
     <Tag
       aria-labelledby={labelledBy}
-      className={`rounded-xl border border-edge bg-surface/80 p-5 backdrop-blur-sm ${className}`}
+      className={`rounded-2xl border border-edge bg-surface/80 p-5 backdrop-blur-sm sm:p-6 ${className}`}
     >
       {(title || actions) && (
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-0.5">
             {title && (
-              <h2 id={labelledBy} className="text-sm font-semibold tracking-tight">
+              <h2 id={labelledBy} className="text-[0.9375rem] font-semibold tracking-[-0.01em]">
                 {title}
               </h2>
             )}
-            {description && <p className="text-xs text-muted">{description}</p>}
+            {description && <p className="text-xs leading-relaxed text-muted">{description}</p>}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
@@ -54,10 +54,10 @@ export function Stat({
   tone?: string;
 }) {
   return (
-    <div className="rounded-xl border border-edge bg-surface/80 px-4 py-3 backdrop-blur-sm">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted">{label}</div>
-      <div className={`tabular mt-1 text-xl font-semibold ${tone}`}>{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-muted">{hint}</div>}
+    <div className="rounded-2xl border border-edge bg-surface/80 px-4 py-3.5 backdrop-blur-sm sm:px-5 sm:py-4">
+      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">{label}</div>
+      <div className={`tabular mt-1.5 text-2xl font-semibold tracking-[-0.02em] ${tone}`}>{value}</div>
+      {hint && <div className="mt-1 text-xs leading-relaxed text-muted">{hint}</div>}
     </div>
   );
 }

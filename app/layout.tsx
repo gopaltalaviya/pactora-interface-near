@@ -127,7 +127,7 @@ export default async function RootLayout({children}: {children: React.ReactNode}
         <RevealRoot />
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-ink"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2.5 focus:font-medium focus:text-ink"
         >
           Skip to content
         </a>
@@ -144,7 +144,11 @@ export default async function RootLayout({children}: {children: React.ReactNode}
           </main>
         </SessionProvider>
 
-        <footer className="mt-24 border-t border-edge/60 bg-ink/60">
+        <footer className="relative mt-24 border-t border-edge/60 bg-gradient-to-b from-surface/50 to-ink">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-px mx-auto h-px max-w-3xl bg-gradient-to-r from-transparent via-accent/40 to-transparent"
+          />
           <div className="mx-auto grid max-w-6xl grid-cols-2 gap-10 px-4 py-14 sm:grid-cols-3 sm:px-6 lg:grid-cols-[1.4fr_repeat(5,1fr)]">
             <div className="col-span-2 space-y-3 sm:col-span-3 lg:col-span-1">
               <Link href="/" aria-label="Pactora home" className="group inline-flex">
@@ -156,9 +160,9 @@ export default async function RootLayout({children}: {children: React.ReactNode}
               </p>
             </div>
             {FOOTER.map((col) => (
-              <nav key={col.title} aria-label={col.title} className="space-y-3 text-sm">
-                <p className="font-medium">{col.title}</p>
-                <ul className="space-y-2 text-muted">
+              <nav key={col.title} aria-label={col.title} className="space-y-3.5 text-[0.875rem]">
+                <p className="text-[0.8125rem] font-semibold tracking-[-0.005em] text-text">{col.title}</p>
+                <ul className="space-y-2.5 text-muted">
                   {col.links.map(([label, href]) => (
                     <li key={href}>
                       {href.startsWith('http') ? (

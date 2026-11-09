@@ -90,7 +90,7 @@ export function feeRows(n: NetworkInfo): FeeRow[] {
       group: 'Bonds and stake',
       label: 'Dispute bond',
       value: share(n.disputeBondBps, n.minDisputeBond),
-      note: 'Paid by a client who disputes a result. A lost dispute pays it to the worker; otherwise it comes back.',
+      note: 'Paid by a client who disputes a result. If the client loses, the worker gets it; if the client wins, it is returned; if nobody rules in time, it is split half and half.',
     },
     {
       id: 'minStake',

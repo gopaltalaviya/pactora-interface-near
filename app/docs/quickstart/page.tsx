@@ -28,36 +28,38 @@ export default function Quickstart() {
 
       <h2 id="local">2 · Run the full demo locally</h2>
       <p>
-        The demo registers four agents on testnet, starts the signer and API, and runs a real goal end to end.
-        With <code>AGENT_MODE=cached</code> it replays a recorded model session, so it needs no model API key
-        and costs only testnet NEAR (a few NEAR, from the faucet).
+        One command starts Postgres and a fresh local NEAR node in Docker, deploys the contracts from their
+        committed, hash-checked build, registers an orchestrator and three workers, and runs a real goal end
+        to end. With <code>AGENT_MODE=cached</code> (the default) it replays recorded model answers, so it
+        needs no keys and no API quota.
       </p>
       <Steps>
-        <Step title="Start Postgres and build">
+        <Step title="Clone both repos side by side">
           <CodeBlock
-            title="pactora-backend-near"
-            code={`docker compose up -d        # Postgres on 127.0.0.1:5443
-pnpm install && pnpm -r build
-DATABASE_URL=postgres://pactora:pactora@127.0.0.1:5443/pactora_near pnpm --filter @pactora/db migrate`}
+            title="shell"
+            code={`git clone -b human-work https://github.com/gopaltalaviya/pactora-contracts-near
+git clone -b human-work https://github.com/gopaltalaviya/pactora-backend-near
+cd pactora-backend-near && pnpm install`}
           />
-        </Step>
-        <Step title="Name a funded testnet account">
-          <p>
-            The demo pays for its transactions from a NEAR testnet account you control, named in{' '}
-            <code>pactora-backend-near/.env</code> (its <code>.env.example</code> lists each variable). Keys
-            live only in <code>.env</code> files and the local keystore — never in code, chat or commits.
-          </p>
+          <p>Needs Docker (running), Node 22.12 or later and pnpm.</p>
         </Step>
         <Step title="Run it">
-          <CodeBlock
-            title="pactora-backend-near"
-            code={`ENABLED_CHAINS=near:testnet PACTORA_CONTRACTS_ROOT=../pactora-contracts-near \\
-DATABASE_URL=postgres://pactora:pactora@127.0.0.1:5443/pactora_near \\
-DEMO_X402=1 AGENT_MODE=cached AGENT_REPLAY_MAX_MS=2000 node scripts/demo.mjs`}
-          />
+          <CodeBlock title="pactora-backend-near" code={`pnpm demo:local`} />
           <p>
-            About 2½ minutes later it prints every settlement with its explorer link, the x402 payment, and
-            the refusals it provokes on purpose — a stolen worker key, a self-hire, a job below the minimum.
+            About 10 minutes after the images are built it ends with <code>Demo passed.</code> Every line on
+            the way is a check against the chain: hires within the caps, judged results, workers paid, the
+            contract holding exactly what it owes, a listing with two bids becoming two escrow jobs, x402 paid
+            and refunded, and the attack — a farmed agent refused by the counterparty check, a purchase over
+            the per-task cap refused, and a stolen key that cannot withdraw.
+          </p>
+        </Step>
+        <Step title="Then a swarm (optional)">
+          <CodeBlock title="pactora-backend-near" code={`pnpm swarm:local`} />
+          <p>
+            With the local node still up: 20 buyer agents post listings, 5 seller agents bid by price rules,
+            and every job is funded, delivered and settled on chain, with a report of fills, prices and each
+            seller&apos;s reputation. <code>DEMO_HOLD=1 pnpm demo:local</code> keeps the API up on port 8098
+            for this site.
           </p>
         </Step>
       </Steps>

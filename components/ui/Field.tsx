@@ -60,9 +60,14 @@ import {Icon, type IconName} from './Icon';
 
 const FRAME =
   'group flex w-full items-center gap-2 rounded-lg border bg-ink/70 px-3 ' +
-  'transition-[border-color,box-shadow] duration-200 ' +
-  'focus-within:border-accent focus-within:shadow-[0_0_0_3px_rgb(110_168_255/0.15)] ' +
-  'has-[:disabled]:opacity-60';
+  'shadow-[inset_0_1px_2px_rgb(0_0_0/0.35)] ' +
+  'transition-[border-color,box-shadow,background-color] duration-200 ' +
+  'focus-within:border-accent/80 focus-within:bg-ink ' +
+  'focus-within:shadow-[inset_0_1px_2px_rgb(0_0_0/0.35),0_0_0_4px_rgb(110_168_255/0.16)] ' +
+  'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60';
+
+// 16px text on phones: iOS zooms the page into any smaller field on focus.
+const CONTROL_TEXT = 'text-base sm:text-[0.875rem]';
 
 export function Field({
   label,
@@ -87,7 +92,7 @@ export function Field({
 }) {
   return (
     <div className={`space-y-1.5 ${className}`}>
-      <label htmlFor={htmlFor} className={srOnlyLabel ? 'sr-only' : 'block text-sm font-medium'}>
+      <label htmlFor={htmlFor} className={srOnlyLabel ? 'sr-only' : 'block text-[0.875rem] font-medium'}>
         {label}
       </label>
       {children}
@@ -102,7 +107,7 @@ export function Field({
           {warning}
         </p>
       ) : hint ? (
-        <p id={hintId} className="text-xs text-muted">
+        <p id={hintId} className="text-xs leading-relaxed text-muted">
           {hint}
         </p>
       ) : null}
@@ -127,7 +132,7 @@ export function TextInput({
       <input
         {...rest}
         aria-invalid={invalid || undefined}
-        className={`h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted/70 ${mono ? 'tabular' : ''}`}
+        className={`h-11 min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted/70 sm:h-10 ${CONTROL_TEXT} ${mono ? 'tabular' : ''}`}
       />
       {actions && <div className="-mr-1.5 flex items-center gap-0.5">{actions}</div>}
     </div>
@@ -140,7 +145,7 @@ export function TextArea({className = '', ...rest}: ComponentProps<'textarea'>) 
     <div className={`${FRAME} border-edge py-2 hover:border-edge-strong ${className}`}>
       <textarea
         {...rest}
-        className="w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted/70"
+        className={`w-full resize-none bg-transparent leading-relaxed outline-none placeholder:text-muted/70 ${CONTROL_TEXT}`}
       />
     </div>
   );
@@ -150,7 +155,10 @@ export function TextArea({className = '', ...rest}: ComponentProps<'textarea'>) 
 export function Select({className = '', ...rest}: ComponentProps<'select'>) {
   return (
     <div className={`${FRAME} border-edge hover:border-edge-strong ${className}`}>
-      <select {...rest} className="h-10 w-full bg-transparent text-sm outline-none" />
+      <select
+        {...rest}
+        className={`select-native h-11 w-full bg-transparent outline-none sm:h-10 ${CONTROL_TEXT}`}
+      />
     </div>
   );
 }

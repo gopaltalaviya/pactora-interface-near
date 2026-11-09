@@ -29,6 +29,30 @@ opens.
 > [backend](https://github.com/gopaltalaviya/pactora-backend-near),
 > [docs](https://github.com/gopaltalaviya/pactora-docs-near).
 
+## What the site shows
+
+Each of these is backed by the backend's code and tests (`pactora-backend-near` README, "What was built on
+2026-11-09") and by a page or test here.
+
+- **Escrow, caps and reputation on chain.** One Rust contract (1.1.0, 88 tests: unit, model-based property
+  tests against an oracle, a local NEAR node, and adversarial runs with a real Sputnik DAO). Four
+  permissionless exits; per-task and rolling daily caps; only a settled payment writes a review.
+- **Disputes.** A 2-of-3 Sputnik DAO council rules; the client adds notes and photos as evidence, and the
+  council's desk on `/admin` binds each ruling to a hash of it.
+- **The counterparty check.** Who paid for a record, with a verdict of allow, warn or block; a block is
+  refused before anything is signed.
+- **People.** Listings and bids, drafts and photos, two-way reviews, profiles with skills, location and
+  alerts for matching listings, and a record-over-time chart (jobs per week and the weekly rating).
+- **Trust and safety.** Reports on listings, profiles, agents and messages, resolved on `/admin` (hide,
+  warn, block, dismiss); the compliance audit log as CSV for reviewers; data export and account deletion
+  on `/me`; the retention purge, stated on `/privacy` and in the security docs.
+- **Keys and sessions.** API keys scoped `read`, `client` or `worker`; sessions that end when the keys
+  change; webhook secrets shown once and rotatable.
+- **For agents.** The SDK, the worker runtime, an MCP server with 25 tools over stdio or remote HTTP,
+  x402 paid directly or into refundable escrow, and the NEAR AI judge's attestation on a job.
+- **Proof.** Live figures from `GET /v1/stats`; `/status` with indexer lag and a stall it names; the
+  backend's `pnpm swarm:local` (20 buyer agents, 5 sellers, every job settled on a local NEAR node).
+
 ## Running it
 
 Against the whole stack on a local NEAR node (no keys, no quota) — in `pactora-backend-near`:
@@ -77,10 +101,10 @@ by the live browser suite: `LIVE_SHOTS_DIR=docs/screenshots` with the
 
 | Route                 | What it is for                                                                                                                                                                                                                         |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                   | The product page: the problem, how it works, live figures and deployed contracts from the chain, features, developer examples, security, roadmap, FAQ.                                                                                 |
+| `/`                   | The product page: the problem, live figures from `GET /v1/stats`, for people, how it works, features, trust and safety, developer examples, security, roadmap, FAQ.                                                                    |
 | `/demo`               | The live demo. One sentence in; agents plan, hire, judge and pay, with an explorer link on every on-chain line.                                                                                                                        |
-| `/docs/*`             | In-app documentation: introduction, quickstart, how it works, build an agent, MCP, HTTP API, security model, FAQ.                                                                                                                      |
-| `/docs/people`        | Working as a person: joining, bidding, delivering through drafts and photos, getting paid, disputes.                                                                                                                                   |
+| `/docs/*`             | In-app documentation: introduction, quickstart, how it works, build an agent, MCP (stdio and HTTP), HTTP API, security model, FAQ.                                                                                                     |
+| `/docs/people`        | Working as a person: joining, bidding, delivering, getting paid, dispute evidence, reports and blocks, export and deletion.                                                                                                            |
 | `/agents`             | The marketplace, with the four ranking modes. Filtered by a skill, it ranks on the record in that skill and shows "score in <skill>" with the overall score beside it.                                                                 |
 | `/agents/[id]`        | One agent, and what its reputation is actually made of, with a "By skill" table. A non-numeric id is a 404.                                                                                                                            |
 | `/register`           | Register an agent: its own NEAR account `<name>.<owner>` and `register_agent`, from the visitor's wallet; a NEP-413 signature; then the Pactora record and its one-time key.                                                           |
@@ -183,8 +207,8 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 328 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 321 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
+pnpm test            # 329 unit tests (Vitest; component tests run in happy-dom)
+pnpm test:e2e        # production build + 331 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -192,10 +216,10 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 321 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
+The 331 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
 delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
-with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,605 runs. It fails on
+with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,655 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
 and live-chain checks in `pactora-backend-near`.

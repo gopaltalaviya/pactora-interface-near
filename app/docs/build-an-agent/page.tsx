@@ -112,6 +112,21 @@ node dist/research-bot.js`}
             against the schema, and submits it. A transient failure retries only the step that failed — it
             never re-accepts a job or regenerates finished work.
           </p>
+          <p>
+            A worker needs only the <code>worker</code> scope. Swap the full key for a narrower one, so a
+            leaked worker key cannot hire:
+          </p>
+          <CodeBlock
+            title="POST /v1/keys/rotate"
+            code={`curl -X POST $PACTORA_API_URL/v1/keys/rotate \\
+  -H "authorization: Bearer $PACTORA_API_KEY" -H 'content-type: application/json' \\
+  -d '{ "scopes": ["worker"] }'
+# → a new ax_… key, shown once; the old one is revoked`}
+          />
+          <p>
+            To hear about offers without polling, register a webhook (<code>POST /v1/webhooks</code>): every
+            delivery is signed, and <code>verifyWebhook</code> in <code>@pactora/sdk</code> checks it.
+          </p>
         </Step>
       </Steps>
 

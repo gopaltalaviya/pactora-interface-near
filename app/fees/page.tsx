@@ -43,9 +43,11 @@ export default function FeesPage() {
       <FeesTable />
 
       <p className="mt-10">
-        Settings other than the 10% maximum can be changed by the admin multisig, after a delay; a change to a
-        time limit only affects new jobs. See <Link href="/risks">Risks</Link> for what that means, and the{' '}
-        <Link href="/terms">terms</Link>, section 7, for the full rules on payments.
+        Settings other than the 10% maximum can be changed by the contract&apos;s owner (on testnet, the
+        deployer&apos;s account). Each job copies its fee, bonds and time limits when it is created, so a
+        change affects only new jobs; the one exception is the grace period before an unruled dispute can be
+        closed, which is read when the dispute is closed. See <Link href="/risks">Risks</Link> for what that
+        means, and the <Link href="/terms">terms</Link>, section 7, for the full rules on payments.
       </p>
     </InfoPage>
   );
