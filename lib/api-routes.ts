@@ -1,8 +1,8 @@
 /**
  * The /docs/api route table: [route, auth, what it does]. It mirrors the
- * endpoint index of pactora-docs-near docs/15-api.md — same routes, same order —
- * which a backend test keeps equal to the routes the API serves;
- * api-routes.test.ts keeps this list equal to that index. Wording may be
+ * routes the API serves (pactora-backend-near apps/api/src/openapi.ts ROUTES,
+ * which docs/15-api.md's endpoint index is held equal to by a backend test);
+ * api-routes.test.ts keeps this list equal to that one. Wording may be
  * shorter. It lives here, not in the page, because a Next page may export
  * nothing but the page and its config.
  */
@@ -56,6 +56,17 @@ export const ROUTES: [string, string, string][] = [
     'GET /v1/me',
     'session',
     'People: the account, its person agent, earnings from settled jobs only, and spend',
+  ],
+  ['GET /v1/me/export', 'session', 'People: everything off chain about the account, as a JSON file'],
+  [
+    'POST /v1/me/delete/challenge',
+    'session',
+    'People: a 5-minute single-use nonce that confirms an account deletion',
+  ],
+  [
+    'DELETE /v1/me',
+    'session',
+    "People: scrub the account's off-chain personal data (409 while a job is open); chain data cannot be deleted",
   ],
   [
     'POST /v1/jobs/:id/person-actions/prepare',
@@ -170,6 +181,21 @@ export const ROUTES: [string, string, string][] = [
     'Send a message: 1-4000 characters, 100 per job, while accepted or submitted',
   ],
   [
+    'POST /v1/jobs/:id/dispute/notes',
+    'key or session (client)',
+    'Attach written dispute evidence: 1-2000 characters, 10 per job, while submitted or disputed',
+  ],
+  [
+    'POST /v1/jobs/:id/dispute/files',
+    'key or session (client)',
+    'Attach a dispute photo: PNG/JPEG/WebP by its bytes, metadata removed, at most 8 MiB, 10 per job',
+  ],
+  [
+    'GET /v1/jobs/:id/dispute',
+    'key or session (party)',
+    "The dispute's reason and hash, and the client's notes and photos",
+  ],
+  [
     'GET /v1/events',
     'key or session',
     "The caller's agent feed after a seq, with no gaps; wait up to 30 s for new events",
@@ -216,6 +242,17 @@ export const ROUTES: [string, string, string][] = [
   ],
   ['GET /v1/admin/reviews', 'session (admin)', 'Moderation: the latest reviews'],
   ['POST /v1/admin/reviews/:id/hide', 'session (admin)', 'Moderation: hide a review with a reason'],
+  [
+    'POST /v1/reports',
+    'key or session',
+    'Report a listing, person, agent or message: a reason and details; 10 an hour per client',
+  ],
+  ['GET /v1/admin/reports', 'session (reviewer)', 'The moderation queue, by status'],
+  [
+    'POST /v1/admin/reports/:id/resolve',
+    'session (reviewer)',
+    'hide, warn, none or block, with a note; a block writes the standing',
+  ],
   ['GET /v1/kyc', 'session', 'Your identity check, your standing, and what screening covers'],
   [
     'POST /v1/kyc/start',

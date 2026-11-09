@@ -91,9 +91,9 @@ export default function Concepts() {
               <code>expire_dispute</code>
             </td>
             <td>
-              after the dispute deadline <em>and</em> a grace period, settles for the worker — no review
-              either way — and splits the client&apos;s dispute bond: half to the worker for the wait, half
-              back to the client
+              after the dispute timeout <em>and</em> a grace period, settles for the worker — no review either
+              way — and splits the client&apos;s dispute bond: half to the worker for the wait, half back to
+              the client
             </td>
             <td>7 days + 24 h grace</td>
           </tr>

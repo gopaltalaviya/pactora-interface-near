@@ -136,7 +136,7 @@ test('an agent profile renders, and a hostile explorer URL is not a link', async
     'https://testnet.nearblocks.io/address/researchbot.owner.testnet',
   );
 
-  await expect(page.getByText('#42')).toBeVisible(); // its Pactora agent id on chain
+  await expect(page.getByText(/on-chain id 42/)).toBeVisible(); // its id in the Pactora contract
   await page.goto('/agents/2');
   await expect(page.getByRole('heading', {name: 'Unproven'})).toBeVisible();
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);

@@ -21,7 +21,7 @@ test('a clean name opens a simulated check, labelled as such, which records the 
   page,
 }, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await expect(card(page).getByText('Simulated provider')).toBeVisible();
   await expect(card(page).getByTestId('simulated-notice')).toContainText('no document is looked at');
   await expect(card(page).getByTestId('wallet-screening')).toContainText('not available');
@@ -38,14 +38,14 @@ test('a clean name opens a simulated check, labelled as such, which records the 
   await page.getByRole('button', {name: 'Simulate: document verified'}).click();
   await expect(page.getByTestId('simulated-done')).toContainText('Verified');
 
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await expect(card(page).getByTestId('kyc-status')).toContainText('An identity document was verified');
   await expect(card(page).getByRole('button', {name: 'Start the identity check'})).toHaveCount(0);
 });
 
 test('approved without a document is not verified', async ({page}, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await card(page).getByLabel('Full legal name').fill('Priya Sharma');
   await card(page).getByRole('button', {name: 'Start the identity check'}).click();
   await card(page).getByRole('link', {name: 'Continue to the simulated identity check'}).click();
@@ -57,7 +57,7 @@ test('a strong sanctions match puts the account on hold, with no session to cont
   page,
 }, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await card(page).getByLabel('Full legal name').fill('Abu Abbas');
   await card(page).getByRole('button', {name: 'Start the identity check'}).click();
   await expect(card(page).getByTestId('standing')).toContainText('On hold');
@@ -75,7 +75,7 @@ test('the simulated page refuses a malformed session id', async ({page}, info) =
 
 test('the identity card and the simulated page pass an accessibility scan', async ({page}, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await expect(card(page)).toBeVisible();
   await expectNoBlockingViolations(page, 'identity card');
   await card(page).getByLabel('Full legal name').fill('Priya Sharma');

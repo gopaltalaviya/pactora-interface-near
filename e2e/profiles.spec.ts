@@ -83,7 +83,7 @@ test('my profile: validated, saved unpublished, then published with a link to it
   const account = `pat-${info.project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${info.workerIndex}.testnet`;
   expect((await page.request.post(`${MOCK_API}/__test/person/${account}`)).ok()).toBe(true);
   await signInAs(page, account);
-  await page.goto('/me');
+  await page.goto('/me#profile');
   const form = page.getByRole('form', {name: 'Public profile'});
   await expect(form.getByLabel('Display name', {exact: true})).toHaveValue('Pat');
   await form.getByLabel('Display name', {exact: true}).fill('   ');

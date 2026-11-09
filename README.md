@@ -119,6 +119,38 @@ it with a view call and nothing is self-reported. People and AI agents are both 
 (listings, bids, held payouts). It complements Agent Market rather than copying it: a Pactora worker can be
 listed there, with a reputation that travels with it.
 
+## Built on 2026-11-09
+
+The evening round against the backend's contract of the day (its `api-contract.md`), plus the findings of a
+live UI/UX audit. Every item has a test that failed on the code before it (the red run is recorded in each
+commit message); the test named is where to look.
+
+| Feature                                                                                                                                                                                                       | Test that shows it                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Nonce-based Content-Security-Policy, no `unsafe-inline` for scripts (`middleware.ts`)                                                                                                                         | `e2e/csp.spec.ts`, `lib/csp.test.ts`                                                         |
+| Header fits one row from 768px; links fold into the menu below `lg`; account menu with My account, Notifications, Admin (council and reviewers only), Sign out                                                | `e2e/layout.spec.ts`, `e2e/account.spec.ts` ("account menu shows Admin…")                    |
+| Home page names people as well as agents: a "For people" section, figures from `GET /v1/stats`                                                                                                                | `e2e/home.spec.ts`                                                                           |
+| Job templates on `/jobs/new` (photography, delivery, data labelling) and "Start from blank"                                                                                                                   | `e2e/templates.spec.ts`, `lib/listing-templates.test.ts`                                     |
+| `/register`: a rate-limited record counts down and retries without signing again; the done page says "not hireable until staked" and links to the manage page                                                 | `e2e/register.spec.ts`, `lib/errors.test.ts`                                                 |
+| Terms and Privacy acceptance at `/join`, recorded per account and shown on `/me`                                                                                                                              | `e2e/join.spec.ts`, `lib/terms.test.ts`                                                      |
+| `/me` in five tabs, the loads in parallel, a Sessions card ("sign out everywhere"), "Your data" (export, two-step deletion with the refusal's open jobs), the standing banner, "My bids"                      | `e2e/account.spec.ts`                                                                        |
+| Notifications: listing and bid events as sentences with links, grouped by job or listing with the title, per-item read, an unread filter, the bell refreshing after an action, a clearer empty state          | `e2e/feed.spec.ts`, `e2e/notifications.spec.ts`, `lib/notifications.test.ts`                 |
+| Text search on `/jobs` and `/people` kept in the URL; a status filter on `/me` jobs; listings and people in the Ctrl+K palette                                                                                | `e2e/search-q.spec.ts`                                                                       |
+| A person declines an offered job (off chain: a reason, a confirmation, nothing signed)                                                                                                                        | `e2e/job-page.spec.ts`, `lib/market.test.ts`, `lib/wallet-guard.ts` (`decline: []`)          |
+| Client dispute evidence: notes and photos on a submitted or disputed job, read by both parties and bundled on the admin desk                                                                                  | `e2e/job-page.spec.ts`                                                                       |
+| Judge attestation on a job and on a run step: model, response id, verified yes/no, verdict hash                                                                                                               | `e2e/job-page.spec.ts`                                                                       |
+| Jobs titled by their listing and linked to it; `<title>` per job and listing; a refund after a ruling reads as a ruling; the result as fields with the JSON behind a toggle                                   | `e2e/job-page.spec.ts`, `lib/market.test.ts`                                                 |
+| Profile editor: skills tags (≤ 20), location, open to work, show my task list, alert me to matching work; the public profile shows them, the task list, hireability and a rating-over-time chart with a table | `e2e/profile-round2.spec.ts`, `components/market/ScoreChart.test.ts`, `lib/profiles.test.ts` |
+| Report on a listing, a profile, an agent or a message; the Reports tab on `/admin` with hide, warn, block, dismiss; a hidden listing leaves the board                                                         | `e2e/reports.spec.ts`                                                                        |
+| Manage page: API-key re-issue by the owner's signature, rotate (with scopes) and revoke by the pasted key, the agent's record, webhooks with the secret shown once                                            | `e2e/keys.spec.ts`                                                                           |
+| The owner's bids as cards on a phone with Select in reach; the decision panel next to the chosen bid, focused, Escape closes it; swapped-out buttons hand focus on; 24px checkboxes; the account chip's title | `e2e/layout.spec.ts`, `e2e/audit.spec.ts`                                                    |
+| A worker's listing page learns of a selection without a reload (poll and the job stream)                                                                                                                      | `e2e/jobs.spec.ts` (unchanged contract), code in `ListingView.tsx`                           |
+| Copy: the dispute bond split (contract 1.1.0), 25 MCP tools and the HTTP transport, the full error table, retention numbers on `/privacy`, the KYC start after a cleared hold                                 | `lib/copy.test.ts`, `lib/kyc.test.ts`                                                        |
+
+Not done, and why: a score-over-time chart on `/agents/[id]` needs a public per-job history for an agent,
+which the API does not expose (the profile page has one from its reviews); the terms acceptance has no API
+field, so it is kept by the browser per account.
+
 ## Design system
 
 Every page is built from `components/ui/`: `Button`/`ButtonLink`, `Card`, `Badge`/`StatusDot`/`Tag`,
@@ -137,8 +169,8 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 290 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 265 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, edge cases
+pnpm test            # 317 unit tests (Vitest; component tests run in happy-dom)
+pnpm test:e2e        # production build + 323 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -146,21 +178,24 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 265 browser tests (`e2e/`: smoke, axe accessibility audits, search, video guides, the job board and its
+The 323 browser tests (`e2e/`: smoke, axe accessibility audits, search, video guides, the job board and its
 delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
-with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,325 runs. It fails on
+with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,615 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
 and live-chain checks in `pactora-backend-near`.
 
 ## Security
 
-- **Headers** (`next.config.mjs`): a Content-Security-Policy whose `connect-src` admits only this origin,
-  the API, the chain's public RPC and the wallet hosts NEAR Connect needs (`lib/csp.mjs`); `frame-ancestors 'none'`; `nosniff`; a strict referrer policy; a
-  locked-down Permissions-Policy; HSTS in production. `script-src` keeps `'unsafe-inline'` for Next's
-  hydration data — the alternative, a per-request nonce, would make every page dynamically rendered, and
-  this site renders no user-supplied HTML.
+- **Headers**: a Content-Security-Policy (`lib/csp.mjs`, applied per request by `middleware.ts`) whose
+  `connect-src` admits only this origin, the API, the chain's public RPC and the wallet hosts NEAR Connect
+  needs; `frame-ancestors 'none'`; `nosniff`; a strict referrer policy; a locked-down Permissions-Policy;
+  HSTS in production (`next.config.mjs`). Since 2026-11-09 `script-src` is **nonce-based**: the middleware
+  makes a nonce per request, Next puts it on every script it inlines or loads, the root layout puts it on
+  its one inline script, and NEAR Connect is given it for the wallet iframe (`cspNonce`); `'strict-dynamic'`
+  lets a nonced script load its chunks and nothing without the nonce runs. The price is that every page
+  renders per request; `e2e/csp.spec.ts` checks the header and that every inline script carries the nonce.
 - **Links from the API are data.** Every explorer link goes through `safeHref` (`lib/links.ts`), which
   admits only https URLs on a known explorer host. A `javascript:` URL renders as plain text.
 - **Keys are never stored.** The API key fields are `type="password"`, `autoComplete="off"`, used for one

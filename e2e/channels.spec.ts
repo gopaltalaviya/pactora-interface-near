@@ -13,7 +13,7 @@ const card = (page: Page) => page.getByRole('region', {name: 'Notifications else
 
 test('Telegram: the page shows the code for the bot and the number only it knows', async ({page}, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await card(page).getByRole('button', {name: 'Link Telegram'}).click();
   const shown = card(page).getByTestId('telegram-code');
   await expect(shown).toContainText('/link K7M2Q9XP');
@@ -23,7 +23,7 @@ test('Telegram: the page shows the code for the bot and the number only it knows
 
 test('email: a wrong code is refused, the right one links, and it can be unlinked', async ({page}, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await card(page).getByLabel('Email address').fill('priya@example.com');
   await card(page).getByRole('button', {name: 'Send a code'}).click();
   await card(page)
@@ -42,7 +42,7 @@ test('email: a wrong code is refused, the right one links, and it can be unlinke
 
 test('the channels card passes an accessibility scan', async ({page}, info) => {
   await ownPerson(page, info);
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await card(page).getByRole('button', {name: 'Link Telegram'}).click();
   await expect(card(page).getByTestId('telegram-code')).toBeVisible();
   await expectNoBlockingViolations(page, 'channels card');

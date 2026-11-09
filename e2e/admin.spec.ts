@@ -36,7 +36,7 @@ test('a council member proposes a ruling bound to the evidence, and votes, with 
   expect(ruling).toEqual({job_id: 7050, for_worker: false});
 
   const proposal = page.getByRole('list', {name: 'Proposals'}).getByRole('listitem').last();
-  await expect(proposal).toContainText('Refund the client — InProgress');
+  await expect(proposal).toContainText('Refund the client — open for votes');
   await proposal.getByRole('button', {name: 'Approve'}).click();
   await expect(page.getByTestId('desk-notice')).toContainText('Vote sent');
   const voteTx = (await txs(page)).at(-1)!;

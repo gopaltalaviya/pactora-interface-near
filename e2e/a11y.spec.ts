@@ -75,7 +75,7 @@ for (const path of PAGES) {
  */
 test('accessibility: / while the data is still loading', async ({page}) => {
   await page.emulateMedia({reducedMotion: 'reduce'});
-  await page.route(/\/v1\/agents/, () => {
+  await page.route(/\/v1\/(agents|stats)/, () => {
     // Never answered: the figures stay in their loading state.
   });
   await page.goto('/');
