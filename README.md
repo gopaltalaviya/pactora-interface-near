@@ -34,10 +34,10 @@ opens.
 Against the whole stack on a local NEAR node (no keys, no quota) — in `pactora-backend-near`:
 
 ```bash
-DEMO_HOLD=1 pnpm demo:local     # runs the demo, then keeps the API up on :8098 until Ctrl+C
+DEMO_HOLD=1 pnpm demo:local     # runs the demo, prints the verdict, then keeps the API up on :8098 until Ctrl+C
 ```
 
-then here:
+then here (clone with `-b human-work`, the submission branch; Node ≥ 22.12):
 
 ```bash
 nvm use                                              # Node 22 (.nvmrc)
@@ -183,7 +183,7 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 317 unit tests (Vitest; component tests run in happy-dom)
+pnpm test            # 328 unit tests (Vitest; component tests run in happy-dom)
 pnpm test:e2e        # production build + 321 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
@@ -234,7 +234,7 @@ So `scripts/check-api-contract.mjs` asks a **running** API whether every field t
 exists. Run it after any backend change:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8080 pnpm check:contract
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8098 pnpm check:contract
 ```
 
 It reports `– no run yet` style notes rather than passing silently when there is no data to check
