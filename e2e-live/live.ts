@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
-import {expect, type Browser, type BrowserContext, type Page, type TestInfo} from '@playwright/test';
+import {expect, test, type Browser, type BrowserContext, type Page, type TestInfo} from '@playwright/test';
 
 /**
  * Helpers for the LIVE browser tests: the real API, the real signer and
@@ -334,4 +334,28 @@ export function pngWithMark(mark: string): Buffer {
     chunk('IDAT', idat),
     chunk('IEND', Buffer.alloc(0)),
   ]);
+}
+
+/**
+ * A screenshot of a real page for the README and the demo post, saved only
+ * when LIVE_SHOTS_DIR is set and only in chromium (one set, not five).
+ */
+export async function shot(page: Page, name: string): Promise<void> {
+  const dir = process.env.LIVE_SHOTS_DIR;
+  if (!dir || test.info().project.name !== 'chromium') return;
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.screenshot({path: `${dir}/${name}.png`, fullPage: false});
+}
+
+/** Every visible header control ends inside the viewport (real account ids and network names are long). */
+export async function expectHeaderFits(page: Page): Promise<void> {
+  // The bell's unread count and the account chip load after the page: settle first.
+  await page.waitForLoadState('networkidle').catch(() => {});
+  const clipped = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('header a, header button')]
+      .filter((e) => e.offsetParent !== null)
+      .map((e) => ({text: (e.textContent ?? '').trim().slice(0, 24), right: e.getBoundingClientRect().right}))
+      .filter((x) => x.right > window.innerWidth + 0.5),
+  );
+  expect(clipped, `header items past the right edge at ${page.viewportSize()?.width}px`).toEqual([]);
 }

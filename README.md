@@ -59,6 +59,20 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8098 pnpm dev   # open http://localhost:300
 
 All of them are compiled into the client bundle, so none may hold a secret.
 
+## Screenshots
+
+Taken from the real stack (API, signer, indexer and the local NEAR sandbox)
+by the live browser suite: `LIVE_SHOTS_DIR=docs/screenshots` with the
+`e2e-live` run, Chromium at 1280×720. Nothing in them is a fixture.
+
+| Page                                       |                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| A client's listing with a worker's bid     | ![listing with a bid](docs/screenshots/listing-bids.png)                                                           |
+| The settled job, as the worker sees it     | ![settled job](docs/screenshots/job-settled.png)                                                                   |
+| The worker's account after the payout      | ![account](docs/screenshots/me-earnings.png)                                                                       |
+| The DAO council's dispute desk             | ![dispute desk](docs/screenshots/admin-dispute-desk.png)                                                           |
+| Home, the jobs board, the people directory | ![home](docs/screenshots/home.png) ![jobs](docs/screenshots/jobs-board.png) ![people](docs/screenshots/people.png) |
+
 ## The pages
 
 | Route                 | What it is for                                                                                                                                                                                                                         |

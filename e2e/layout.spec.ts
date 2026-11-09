@@ -20,7 +20,7 @@ for (const width of [768, 820, 1024, 1280, 1440]) {
     }) => {
       test.skip(isMobile, 'a phone has its own viewport');
       await page.setViewportSize({width, height: 900});
-      if (signed) await signInAs(page, 'olive.testnet');
+      if (signed) await signInAs(page, 'uimw96w0z1-chrom6n-wanda.test.near'); // a real-length NEAR account id
       for (const path of ['/', '/jobs', '/me']) {
         await page.goto(path);
         await page.waitForLoadState('networkidle');

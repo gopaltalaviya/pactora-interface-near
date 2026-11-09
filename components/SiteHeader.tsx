@@ -268,7 +268,9 @@ export function SiteHeader() {
           <Link
             href="/register"
             aria-label="Register an agent"
-            className="hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] xl:inline-flex"
+            // Signed in, the account chip takes the room (NEAR account ids are
+            // long): the button waits for 2xl, and the menu still offers it.
+            className={`hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] ${status === 'in' ? '2xl:inline-flex' : 'xl:inline-flex'}`}
           >
             <span className="2xl:hidden">Register</span>
             <span className="hidden 2xl:inline">Register an agent</span>

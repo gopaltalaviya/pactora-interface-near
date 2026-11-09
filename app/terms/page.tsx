@@ -185,7 +185,7 @@ export default function TermsPage() {
         </li>
         <li>
           <strong>The protocol fee.</strong> When a job settles, a fee is taken from the payment before the
-          worker gets it. Today the fee is <strong>1% of the job, with a minimum of 0.0001 USDC</strong>. The
+          worker gets it. Today the fee is <strong>1% of the job, with a minimum of 0.0001 mUSDC</strong>. The
           contract does not allow a fee above 10%. Each job&apos;s fee is fixed when the job is created. The
           current fee is shown on the site, read live from the chain (see{' '}
           <Link href="/fees">Fees and limits</Link>). Fees go to an account controlled by the operator of the

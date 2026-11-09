@@ -1,5 +1,7 @@
 import {expect, test, type Page} from '@playwright/test';
 import {
+  expectHeaderFits,
+  shot,
   apiFetch,
   apiRaw,
   apiSession,
@@ -293,6 +295,13 @@ test('worker bids; client reviews the bids, selects, and funds the job from the 
 
   const page = client!.page;
   await page.goto(`/jobs/listing/${s.listingId}`);
+  const firstBid = page
+    .getByTestId(/^bid-(row|card)$/)
+    .filter({visible: true})
+    .first();
+  await firstBid.waitFor();
+  await firstBid.scrollIntoViewIfNeeded();
+  await shot(page, 'listing-bids');
   // A table from md up, cards on a phone: whichever this viewport shows.
   const row = page
     .getByTestId(/^bid-(row|card)$/)
@@ -412,8 +421,13 @@ test('client accepts the draft; worker submits it on chain; client approves and 
   };
   expect(me.earnings.settledCount).toBe(1);
   expect(me.earnings.receivedBaseUnits).toBe(String(paid));
+  await wpage.goto(`/jobs/${s.jobId}`);
+  await expect(wpage.getByRole('banner')).toBeVisible();
+  await expectHeaderFits(wpage);
+  await shot(wpage, 'job-settled');
   await wpage.goto('/me');
   await expect(wpage.getByTestId('me-settled')).toHaveText('1');
+  await shot(wpage, 'me-earnings');
 });
 
 test('the worker sees notifications; both parties leave a review, revealed once both have', async () => {
@@ -642,6 +656,7 @@ test('council members rule a dispute through the arbiter DAO from /admin', async
     }).toPass({timeout: 60_000, intervals: [2_000, 5_000]});
     await m1.page.getByRole('button', {name: `Job ${chainJobId}`}).click();
     await expect(m1.page.getByTestId('dispute-reason')).toContainText('pharmacy next door');
+    await shot(m1.page, 'admin-dispute-desk');
     await m1.page.getByRole('button', {name: 'Propose: refund the client'}).click();
     await expect(m1.page.getByTestId('desk-notice')).toContainText('Proposed to the DAO', {timeout: 90_000});
     const proposals = await eventually(
@@ -689,6 +704,7 @@ test('visitor (signed out): home, agents, jobs board, people, docs and status sh
   const {page} = v;
   await page.goto('/');
   await expect(page.locator('main')).toBeVisible();
+  await shot(page, 'home');
 
   await page.goto('/agents');
   await expect(page.getByText(s.operatorName!).first()).toBeVisible({timeout: 30_000});
@@ -697,11 +713,13 @@ test('visitor (signed out): home, agents, jobs board, people, docs and status sh
   await expect(page.getByText(`Second front ${s.tag} ${facts.run.slice(-4)}`).first()).toBeVisible({
     timeout: 30_000,
   });
+  await shot(page, 'jobs-board');
   await page.goto(`/jobs/listing/${s.listing2Id}`);
   await expect(page.getByRole('link', {name: 'Sign in'}).first()).toBeVisible();
 
   await page.goto('/people');
   await expect(page.getByText(s.worker!.name).first()).toBeVisible({timeout: 30_000});
+  await shot(page, 'people');
 
   await page.goto('/docs');
   await expect(page.getByRole('heading').first()).toBeVisible();

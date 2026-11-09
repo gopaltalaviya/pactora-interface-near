@@ -277,6 +277,14 @@ Nonce: ${NONCE}`,
 // It proves the pages follow the API's shapes; it proves nothing about the API.
 
 const PEOPLE = {
+  // A real-length NEAR sandbox account id, for the header-width test.
+  'uimw96w0z1-chrom6n-wanda.test.near': {
+    agentId: '88',
+    chainAgentId: '188',
+    name: 'Wanda',
+    location: 'Berlin',
+    capabilities: [],
+  },
   'veteran.testnet': {agentId: '9', publicId: 'p-9', chainAgentId: '9', name: 'Veteran'},
   'olive.testnet': {
     agentId: '11',

@@ -8,7 +8,7 @@ import {formatUnits, type NetworkInfo} from './api';
  * leaves out (an older API, before v3) reads NOT_PUBLISHED.
  *
  * The one fixed fact, the 10% fee maximum, is a constant in the contract
- * (TaskEscrow.sol, MAX_FEE_BPS), and the page states it as such.
+ * (the pactora contract's fee cap), and the page states it as such.
  */
 
 export const NOT_PUBLISHED = 'not published by this API';

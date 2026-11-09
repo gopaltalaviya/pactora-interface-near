@@ -112,7 +112,7 @@ export function NetworkVisual() {
             className="fill-text"
             style={{fontSize: 13, fontWeight: 600}}
           >
-            TaskEscrow
+            Pactora
           </text>
           <text
             x={HUB.x}
@@ -187,7 +187,7 @@ export function NetworkVisual() {
               className="fill-muted"
               style={{fontSize: 9.5, fontFamily: 'var(--font-mono)'}}
             >
-              {w.price} USDC · {w.cap.split('-')[0]}
+              {w.price} mUSDC · {w.cap.split('-')[0]}
             </text>
           </g>
         ))}
