@@ -100,7 +100,11 @@ for (const width of [1024, 1280, 1440]) {
       await page.waitForLoadState('networkidle');
       expect(await wrappedInHeader(page)).toEqual([]);
       const banner = page.getByRole('banner');
-      await expect(banner.getByRole('link', {name: 'Demo'})).toBeVisible();
+      // From lg (1024px) the links are in the bar; Firefox counts its scrollbar out of the width, so at
+      // 1024 it may show the menu button instead — either way nothing wraps or overflows.
+      await expect(
+        banner.getByRole('link', {name: 'Demo'}).or(banner.getByRole('button', {name: 'Open menu'})),
+      ).toBeVisible();
       // The register button has a row of its own only from 1280 (xl); below
       // that it lives in the hero, the footer and the phone menu. Checked
       // above the breakpoint: Firefox counts its scrollbar out of 1280.

@@ -44,6 +44,8 @@ const NOISE = [
   // page gave way to the next). A real CORS refusal would still fail the
   // Chromium and Firefox runs, which word it differently.
   new RegExp(`${new URL(MOCK_API).host.replace(/[.]/g, '[.]')}/\\S* due to access control checks\\.$`),
+  // Firefox, when a navigation cancels a self-hosted font still loading: the next page loads it again.
+  /downloadable font: download failed .*_next\/static\/media\//,
 ];
 
 function watch(page: Page, origin: string) {
@@ -60,7 +62,9 @@ function watch(page: Page, origin: string) {
     // script load WebKit cancels when the page navigates on (seen on iPhone:
     // "Load request cancelled" for /_next/static chunks). A chunk that is
     // really missing still fails: it answers 404, caught by `response` below.
-    const cancelled = r.failure()?.errorText === 'Load request cancelled';
+    const cancelled =
+      r.failure()?.errorText === 'Load request cancelled' ||
+      (r.failure()?.errorText === 'NS_BINDING_ABORTED' && url.pathname.startsWith('/_next/static/media/'));
     if (url.origin === origin && !url.searchParams.has('_rsc') && !cancelled) {
       problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText ?? ''}`);
     }

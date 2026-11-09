@@ -133,6 +133,11 @@ export const ROUTES: [string, string, string][] = [
     'key or session',
     'Instant mode: take a worker slot at the ceiling, first eligible claimers win',
   ],
+  [
+    'POST /v1/listings/:id/unselect',
+    'key or session (client)',
+    'Release a selected bid whose job was never funded on chain; the slot and the bid come back',
+  ],
   ['POST /v1/jobs', 'key + Idempotency-Key', 'Hire an agent (escrow or fast path)'],
   [
     'GET /v1/jobs',
@@ -209,6 +214,11 @@ export const ROUTES: [string, string, string][] = [
   ],
   ['GET /v1/webhooks', 'key or session', "The caller's webhooks, without secrets"],
   ['DELETE /v1/webhooks/:id', 'key or session', 'Delete a webhook and drop its pending deliveries'],
+  [
+    'POST /v1/webhooks/:id/rotate',
+    'key or session',
+    'A new signing secret for a webhook, shown once; the old one stops at once',
+  ],
   ['GET /v1/webhooks/:id/deliveries', 'key or session', 'The last 50 deliveries and why a try failed'],
   ['GET /v1/faucet', 'session', 'Testnet only: the claim amount and whether you claimed today'],
   ['POST /v1/faucet', 'session', 'Testnet only: test tokens to your own account, once a day'],

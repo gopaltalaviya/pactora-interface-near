@@ -44,7 +44,7 @@ test('a person reports a listing with a reason; a reviewer hides it; it leaves t
   await report.getByRole('button', {name: 'Hide'}).click();
   // A note is required: an empty one is refused before the API.
   await report.getByRole('button', {name: /Confirm: Hide/}).click();
-  await expect(report.getByRole('alert')).toContainText('3-500');
+  await expect(reviewer.getByText('A note of 3-500 characters is needed.')).toBeVisible();
   await report.getByLabel('Note (3-500 characters)').fill('Payment outside the escrow is a scam pattern.');
   await report.getByRole('button', {name: /Confirm: Hide/}).click();
   await expect(report).toHaveCount(0);
@@ -63,7 +63,11 @@ test('a person reports a listing with a reason; a reviewer hides it; it leaves t
 });
 
 test('a profile can be reported too, and the reports tab is for reviewers only', async ({page}, info) => {
-  await signInAs(page, 'olive.testnet');
+  // An account of its own: the API refuses a second open report on the same target by the same person,
+  // and the five browsers share one mock.
+  const reporter = `rep-${info.project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${info.workerIndex}-${info.repeatEachIndex}.testnet`;
+  expect((await page.request.post(`${MOCK_API}/__test/person/${reporter}`)).ok()).toBe(true);
+  await signInAs(page, reporter);
   await page.goto('/people/dddddddd-0000-4000-8000-000000000001');
   await page.getByRole('button', {name: 'Report'}).click();
   await page.getByLabel(/Why are you reporting/).selectOption('impersonation');

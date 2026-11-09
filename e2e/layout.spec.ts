@@ -67,12 +67,14 @@ test('checkboxes on /jobs and /me are at least 24px targets at 390px', async ({p
   await page.setViewportSize({width: 390, height: 844});
   await signInAs(page, 'olive.testnet');
   await page.goto('/jobs');
-  const matches = page.getByLabel('Matches me');
+  const matches = page.getByRole('checkbox', {name: 'Matches me'}).and(page.locator(':enabled'));
+  await expect(matches).toBeVisible();
   const a = (await matches.boundingBox())!;
-  expect(Math.min(a.width, a.height)).toBeGreaterThanOrEqual(24);
+  // Rounded: a 1.5rem box measures 23.99999 under some zoom factors.
+  expect(Math.round(Math.min(a.width, a.height))).toBeGreaterThanOrEqual(24);
   await page.goto('/me#profile');
   const publish = page.getByLabel(/Publish: list me/);
   await expect(publish).toBeVisible();
   const b = (await publish.boundingBox())!;
-  expect(Math.min(b.width, b.height)).toBeGreaterThanOrEqual(24);
+  expect(Math.round(Math.min(b.width, b.height))).toBeGreaterThanOrEqual(24);
 });

@@ -22,9 +22,9 @@ test('the editor saves skills, location and the three toggles', async ({page}, i
   await form.getByRole('button', {name: 'Remove skill delivery'}).click();
   await expect(tags).toHaveCount(1);
   await form.getByLabel('Location', {exact: true}).fill('Pune, Maharashtra');
-  await form.getByLabel('Open to work').check();
-  await form.getByLabel('Show my task list').check();
-  await form.getByLabel('Alert me to matching work').check();
+  await form.getByRole('checkbox', {name: /^Open to work/}).check();
+  await form.getByRole('checkbox', {name: /^Show my task list/}).check();
+  await form.getByRole('checkbox', {name: /^Alert me to matching work/}).check();
   const put = page.waitForRequest((r) => r.method() === 'PUT' && r.url().endsWith('/v1/me/profile'));
   await form.getByRole('button', {name: 'Save profile'}).click();
   const body = (await put).postDataJSON() as Record<string, unknown>;
@@ -37,7 +37,9 @@ test('the editor saves skills, location and the three toggles', async ({page}, i
   });
   await expect(page.getByTestId('profile-saved')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('form', {name: 'Public profile'}).getByLabel('Open to work')).toBeChecked();
+  await expect(
+    page.getByRole('form', {name: 'Public profile'}).getByRole('checkbox', {name: /^Open to work/}),
+  ).toBeChecked();
 });
 
 test('at most 20 skills', async ({page}, info) => {

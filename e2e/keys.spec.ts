@@ -80,6 +80,7 @@ async function asOwner(page: Page) {
   await installWallet(page);
   await mockChain(page);
   await page.goto('/signin');
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', {name: 'Connect and sign in'}).click();
   await expect(page.getByTestId('signed-in-account')).toBeVisible();
   await page.goto('/agents/7/manage');
