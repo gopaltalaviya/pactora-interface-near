@@ -69,6 +69,8 @@ async function join(user: User, name: string): Promise<Person> {
   const {page} = user;
   await page.goto('/join');
   await page.locator('#join-name').fill(name);
+  // Join stays disabled until the terms are accepted (the /join terms box).
+  await page.getByLabel(/I accept the Terms and Privacy policy/).check();
   await page.getByRole('button', {name: 'Join', exact: true}).click();
   await expect(page.getByRole('heading', {name: `Welcome, ${name}`})).toBeVisible({timeout: 60_000});
   const session = (await apiFetch('/v1/session', {token: await pageToken(page)})) as {
@@ -225,6 +227,8 @@ test('worker person: signs in, joins on chain, stakes, edits a public profile', 
 
   await page.goto('/me');
   await expect(page.getByTestId('me-person')).toHaveText(worker.name);
+  // /me is tabbed; a tab opens from the URL hash.
+  await page.goto('/me#profile');
   await page.locator('#pf-name').fill(worker.name);
   await page.locator('#pf-headline').fill('Photos of shop fronts, same day');
   await page.getByLabel('Publish: list me in the directory').check();
@@ -289,7 +293,11 @@ test('worker bids; client reviews the bids, selects, and funds the job from the 
 
   const page = client!.page;
   await page.goto(`/jobs/listing/${s.listingId}`);
-  const row = page.getByTestId('bid-row').filter({hasText: worker!.name});
+  // A table from md up, cards on a phone: whichever this viewport shows.
+  const row = page
+    .getByTestId(/^bid-(row|card)$/)
+    .filter({hasText: worker!.name})
+    .filter({visible: true});
   await expect(row).toContainText('0.05');
   await row.getByRole('button', {name: `Select ${worker!.name}`}).click();
   await page.locator('#decide-reason').fill('Lives next door and has a clear plan.');
@@ -475,7 +483,7 @@ test('a held account (a real sanctions hit) is refused posting and bidding, with
     `Holly ${s.tag} ${facts.run.slice(-4)}`,
   );
   const {page} = held;
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await page.locator('#kyc-name').fill(SANCTIONED);
   await page.getByRole('button', {name: 'Start the identity check'}).click();
   await expect(page.getByTestId('standing')).toContainText('On hold', {timeout: 30_000});
@@ -513,7 +521,7 @@ test('a held account (a real sanctions hit) is refused posting and bidding, with
   }
   const after = (await apiFetch('/v1/kyc', {token: await pageToken(page)})) as {standing: string};
   expect(after.standing).toBe('clear');
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await expect(page.getByTestId('standing')).toContainText('Clear');
   await held.context.close();
 });
@@ -533,7 +541,7 @@ test('a blocked account is refused posting and bidding, with the reason', async 
   await expect(page.getByText(/blocked after a compliance review and cannot post work/)).toBeVisible();
   await bid(page, s.listing2Id!);
   await expect(page.getByText(/blocked after a compliance review and cannot apply for work/)).toBeVisible();
-  await page.goto('/me');
+  await page.goto('/me#settings');
   await expect(page.getByTestId('standing')).toContainText('Blocked');
   await blocked.context.close();
 });
@@ -626,8 +634,12 @@ test('council members rule a dispute through the arbiter DAO from /admin', async
   try {
     const m1 = await userContext(browser, info, members[0]!);
     await signIn(m1);
-    await m1.page.goto('/admin');
-    await expect(m1.page.getByTestId('admin-roles')).toContainText('Arbiter council', {timeout: 30_000});
+    // The API caches the arbiter's council for 30 s (admin.ts councilCacheMs),
+    // and the arbiter just changed: reload until the cache has turned over.
+    await expect(async () => {
+      await m1.page.goto('/admin');
+      await expect(m1.page.getByTestId('admin-roles')).toContainText('Arbiter council', {timeout: 5_000});
+    }).toPass({timeout: 60_000, intervals: [2_000, 5_000]});
     await m1.page.getByRole('button', {name: `Job ${chainJobId}`}).click();
     await expect(m1.page.getByTestId('dispute-reason')).toContainText('pharmacy next door');
     await m1.page.getByRole('button', {name: 'Propose: refund the client'}).click();
