@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import {cleanup, render} from '@testing-library/react';
+import {cleanup, fireEvent, render} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {TourVideo, tourVideoEnabled} from './TourVideo';
 
@@ -18,11 +18,18 @@ describe('TourVideo', () => {
     ['overview', '/video/overview'],
     ['demo', '/video/demo'],
   ] as const)('renders the %s video with webm, then mp4, and English captions', (which, base) => {
-    const {container} = render(<TourVideo which={which} enabled />);
+    const {container, getByRole} = render(<TourVideo which={which} enabled />);
+    // Until it is asked for there is no <video>: only the poster and a play button,
+    // so the page never waits on the media (WebKit held the load event on it).
+    expect(container.querySelector('video')).toBeNull();
+    const play = getByRole('button', {name: /^Play/});
+    expect(play.getAttribute('aria-label')).toMatch(/captioned/);
+    expect(container.querySelector('img')!.getAttribute('src')).toBe(`${base}.jpg`);
+    fireEvent.click(play);
     const video = container.querySelector('video')!;
     expect(video).not.toBeNull();
     expect(video.hasAttribute('controls')).toBe(true);
-    expect(video.getAttribute('preload')).toBe('metadata');
+    expect(video.hasAttribute('autoplay')).toBe(true);
     expect(video.getAttribute('poster')).toBe(`${base}.jpg`);
     expect(video.getAttribute('aria-label')).toMatch(/captioned/);
     const sources = [...video.querySelectorAll('source')].map((s) => [

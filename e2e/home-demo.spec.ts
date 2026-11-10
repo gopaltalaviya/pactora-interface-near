@@ -35,6 +35,9 @@ test('the hero badge says testnet and test tokens, not "real jobs"', async ({pag
 
 /** The player, its two sources, and an English captions track whose file is served (the videos have no sound). */
 async function expectTourVideo(page: Page, which: 'overview' | 'demo') {
+  // The poster and a play button first; the <video> exists only once asked for.
+  await expect(page.locator(`video[data-testid="tour-video-${which}"]`)).toHaveCount(0);
+  await page.getByRole('button', {name: /^Play .*captioned/}).click();
   const video = page.getByTestId(`tour-video-${which}`);
   await expect(video).toBeVisible();
   await expect(video).toHaveAttribute('poster', `/video/${which}.jpg`);
@@ -69,15 +72,15 @@ test('the home page shows the captioned overview, and the hero CTA leads to it',
     '#tour',
   );
   await expect(page.getByTestId('hero-cta-note')).toContainText(/captioned/);
-  await expect(page.locator('video')).toHaveCount(1);
   await expectTourVideo(page, 'overview');
+  await expect(page.locator('video')).toHaveCount(1);
 });
 
 test('/demo shows the captioned demo recording to a visitor without a key', async ({page}) => {
   await page.goto('/demo');
   const slot = page.getByRole('region', {name: /No key\? Watch instead/});
-  await expect(slot.locator('video')).toHaveCount(1);
   await expectTourVideo(page, 'demo');
+  await expect(slot.locator('video')).toHaveCount(1);
 });
 
 test('in cached mode the demo offers only the goal the API has a recording for', async ({page}) => {
