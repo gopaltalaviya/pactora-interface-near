@@ -243,8 +243,8 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 365 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 373 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
+pnpm test            # 367 unit tests (Vitest; component tests run in happy-dom)
+pnpm test:e2e        # production build + 374 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -252,10 +252,10 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 373 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
+The 374 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
 delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
-with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,865 runs. It fails on
+with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,870 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
 and live-chain checks in `pactora-backend-near`.
