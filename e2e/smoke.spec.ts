@@ -137,6 +137,11 @@ test('an agent profile renders, and a hostile explorer URL is not a link', async
   );
 
   await expect(page.getByText(/on-chain id 42/)).toBeVisible(); // its id in the Pactora contract
+  // Leave only once the page's own requests are done: WebKit reports a fetch
+  // cancelled by navigating away as "/v1/network … due to access control
+  // checks" (iPhone, 1 run in 10 before this, on ee51c0f too). See the
+  // company pages test below.
+  await page.waitForLoadState('networkidle');
   await page.goto('/agents/2');
   await expect(page.getByRole('heading', {name: 'Unproven'})).toBeVisible();
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
