@@ -1,11 +1,14 @@
-import {expect, test, type Page} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+import {expect, test, type Browser, type Page, type TestInfo} from '@playwright/test';
 import {
   expectHeaderFits,
   shot,
   apiFetch,
+  apiPerson,
   apiRaw,
   apiSession,
   chainView,
+  depositInto,
   eventually,
   facts,
   ftBalance,
@@ -120,6 +123,27 @@ async function bid(page: Page, listingId: string) {
   await page.locator('#bid-price').fill('0.05');
   await page.locator('#bid-proposal').fill('I live next door and can photograph it within the hour.');
   await page.getByRole('button', {name: 'Send my bid'}).click();
+}
+
+/**
+ * Since 3f13e04 the page reads the standing first and offers no bid (the
+ * form is disabled, with the reason); the API still refuses one, in words.
+ */
+async function bidRefused(page: Page, listingId: string, pageWords: string, apiWords: RegExp) {
+  await page.goto(`/jobs/listing/${listingId}`);
+  await expect(page.getByTestId('bid-not-ready')).toContainText(pageWords, {timeout: 30_000});
+  await expect(page.getByRole('button', {name: 'Send my bid'})).toBeDisabled();
+  const res = await apiRaw(`/v1/listings/${listingId}/applications`, {
+    method: 'POST',
+    token: await pageToken(page),
+    body: {
+      action: 'apply',
+      priceBaseUnits: PRICE,
+      proposal: 'I live next door and can photograph it within the hour.',
+    },
+  });
+  expect(res.status).toBe(403);
+  expect(await res.text()).toMatch(apiWords);
 }
 
 test.beforeAll(({}, info) => {
@@ -508,10 +532,12 @@ test('a held account (a real sanctions hit) is refused posting and bidding, with
   await expect(
     page.getByText(/on hold while a compliance review is open, and cannot post work/),
   ).toBeVisible();
-  await bid(page, s.listing2Id!);
-  await expect(
-    page.getByText(/on hold while a compliance review is open, and cannot apply for work/),
-  ).toBeVisible();
+  await bidRefused(
+    page,
+    s.listing2Id!,
+    'on hold',
+    /on hold while a compliance review is open, and cannot apply for work/,
+  );
 
   // The compliance reviewers, on /admin. A strong match needs both.
   for (const [i, reviewer] of facts.reviewers.entries()) {
@@ -553,8 +579,12 @@ test('a blocked account is refused posting and bidding, with the reason', async 
   const {page} = blocked;
   await fillListing(page, `Blocked try ${s.tag}`);
   await expect(page.getByText(/blocked after a compliance review and cannot post work/)).toBeVisible();
-  await bid(page, s.listing2Id!);
-  await expect(page.getByText(/blocked after a compliance review and cannot apply for work/)).toBeVisible();
+  await bidRefused(
+    page,
+    s.listing2Id!,
+    'blocked',
+    /blocked after a compliance review and cannot apply for work/,
+  );
   await page.goto('/me#settings');
   await expect(page.getByTestId('standing')).toContainText('Blocked');
   await blocked.context.close();
@@ -737,6 +767,577 @@ test('visitor (signed out): home, agents, jobs board, people, docs and status sh
     20_000,
   );
   await v.context.close();
+});
+
+// ── 2026-11-10: the flows of 3f13e04 / 2ffa24b, live ──────────────────────
+// Each test below makes its own accounts, so it runs alone (--grep) as well
+// as in order. People are made through the chain and the API (apiPerson:
+// register_agent, accept_wallet, POST /v1/people, all real); what the test is
+// about happens in the page.
+
+const STAKE = () => BigInt(facts.minStake) + 1_000_000n;
+const CRITERIA = 'The whole shop front and its sign are in the photo, in focus.';
+
+/** The page's `utc()` (components/market/ListingCard.tsx), to compare what the page prints. */
+function utcText(iso: string) {
+  const d = new Date(iso);
+  return `${d.getUTCDate()} ${d.toLocaleString('en', {month: 'short', timeZone: 'UTC'})} ${d.getUTCFullYear()}, ${pad(
+    d.getUTCHours(),
+  )}:${pad(d.getUTCMinutes())} UTC`;
+}
+
+function listingBody(title: string) {
+  return {
+    title,
+    description: 'Photograph the front of the corner bakery in daylight.',
+    category: 'physical',
+    interactionMode: 'capture',
+    skills: ['shop-photos'],
+    location: 'Berlin',
+    maxPriceBaseUnits: PRICE,
+    maxWorkers: 1,
+    estimatedMinutes: 30,
+    deadline: new Date(Date.now() + DAY).toISOString(),
+    criteria: CRITERIA,
+  };
+}
+
+/** A signed-in page for an account the wallet service holds. */
+async function signedIn(browser: Browser, info: TestInfo, account: string): Promise<User> {
+  const u = await userContext(browser, info, account);
+  await signIn(u);
+  return u;
+}
+
+interface PageAgent {
+  owner: User;
+  name: string;
+  agentId: string;
+  chainAgentId: string;
+  apiKey: string;
+}
+
+/** An agent registered on /register by its owner (sub-account, register_agent, optional Fund); its key read off the page. */
+async function registerInPage(
+  browser: Browser,
+  info: TestInfo,
+  label: string,
+  {fund, musdc = 20_000_000n}: {fund?: string; musdc?: bigint} = {},
+): Promise<PageAgent> {
+  const owner = await userContext(browser, info, await newAccount(`${s.tag}-${label}`, {near: '6', musdc}));
+  const {page} = owner;
+  const name = `${label} bot ${s.tag} ${facts.run.slice(-4)}`;
+  await page.goto('/register');
+  await page.getByRole('button', {name: /Connect wallet/}).click();
+  await page.locator('#reg-name').fill(name);
+  await page.locator('#reg-capabilities').fill('shop-photos');
+  await page.locator('#reg-price').fill(PRICE);
+  if (fund) await page.getByLabel('First funding (optional)').fill(fund);
+  await page
+    .getByRole('button', {name: /Register/})
+    .last()
+    .click();
+  const keyText = page.getByText(/ax_[A-Za-z0-9_-]{20,}/).first();
+  await expect(keyText).toBeVisible({timeout: 90_000});
+  const apiKey = /ax_[A-Za-z0-9_-]{20,}/.exec((await keyText.textContent()) ?? '')![0];
+  const href = (await page.getByRole('link', {name: /View its profile/}).getAttribute('href'))!;
+  const agentId = href.split('/').pop()!;
+  const agent = (await apiFetch(`/v1/agents/${agentId}`)) as {chainAgentId: string; walletAddress: string};
+  await eventually(
+    () => chainView<{wallet: string | null}>('get_agent', {agent_id: Number(agent.chainAgentId)}),
+    (a) => a?.wallet === agent.walletAddress,
+    'agent wallet accepted on chain',
+  );
+  return {owner, name, agentId, chainAgentId: String(agent.chainAgentId), apiKey};
+}
+
+const hireCard = (page: Page) => page.getByRole('region', {name: 'Hire this agent'});
+
+test('person → agent: "Hire this agent" on its page, create_job from the wallet, the agent delivers by API, the person approves', async ({
+  browser,
+}, info) => {
+  const agent = await registerInPage(browser, info, 'hireme');
+  await depositInto(agent.owner.account, agent.chainAgentId, STAKE(), 'Stake');
+  await agent.owner.context.close();
+  expect(
+    (await chainView<{hireable: boolean}>('stake_of', {agent_id: Number(agent.chainAgentId)})).hireable,
+  ).toBe(true);
+  const hirer = await apiPerson(`${s.tag}-hirer`, `Hana ${s.tag} ${facts.run.slice(-4)}`, {
+    musdc: 5_000_000n,
+    fund: 1_000_000n,
+  });
+  const user = await signedIn(browser, info, hirer.account);
+  const {page} = user;
+
+  await page.goto(`/agents/${agent.agentId}`);
+  const card = hireCard(page);
+  await expect(card).toBeVisible({timeout: 30_000});
+  await expect(card.getByLabel(/^Price/)).toHaveValue('0.05');
+  await card.getByLabel('What should the agent do?').fill('Photograph the bakery front on Main Street.');
+  await card.getByRole('button', {name: 'Hire'}).click();
+  await expect(card.getByTestId('will-sign-create')).toContainText(`create_job on ${facts.pactora}`, {
+    timeout: 30_000,
+  });
+  await card.getByRole('button', {name: 'Sign and fund the job'}).click();
+  await expect(card.getByTestId('hire-funded')).toContainText('Funded', {timeout: 90_000});
+  const jobId = (await card.getByRole('link', {name: 'Open the job'}).getAttribute('href'))!
+    .split('/')
+    .pop()!;
+
+  // What the wallet was asked to sign, and what the chain then holds.
+  const sent = (await page.evaluate(() => (window as unknown as {__txs: unknown[]}).__txs)) as {
+    actions: {params?: {methodName?: string}}[];
+  }[];
+  expect(sent.map((t) => t.actions[0]?.params?.methodName)).toEqual(['create_job']);
+  const job = await eventually(
+    async () => (await apiFetch(`/v1/jobs/${jobId}`)) as {chainJobId: string | null; amount: string},
+    (j) => Boolean(j.chainJobId),
+    'API job on chain',
+  );
+  expect(job.amount).toBe(PRICE);
+  const created = await chainView<{state: string; amount: string; client: number; worker: number}>(
+    'get_job',
+    {
+      job_id: Number(job.chainJobId),
+    },
+  );
+  expect(created).toMatchObject({state: 'Created', amount: PRICE});
+  expect(String(created.client)).toBe(hirer.chainAgentId);
+  expect(String(created.worker)).toBe(agent.chainAgentId);
+
+  // The agent, through its key (the signer signs for its wallet).
+  await apiFetch(`/v1/jobs/${jobId}/accept`, {method: 'POST', token: agent.apiKey, body: {}});
+  await eventually(
+    () => chainView<{state: string}>('get_job', {job_id: Number(job.chainJobId)}),
+    (j) => j.state === 'Accepted',
+    'job accepted on chain',
+  );
+  await apiFetch(`/v1/jobs/${jobId}/result`, {
+    method: 'POST',
+    token: agent.apiKey,
+    body: {output: {photo: 'bakery-front.jpg', note: 'Sign in focus.'}, producedAt: new Date().toISOString()},
+  });
+  await eventually(
+    () => chainView<{state: string}>('get_job', {job_id: Number(job.chainJobId)}),
+    (j) => j.state === 'Submitted',
+    'job submitted on chain',
+  );
+
+  // The person approves in the page.
+  await expect(async () => {
+    await page.goto(`/jobs/${jobId}`);
+    await expect(page.getByRole('button', {name: 'Approve and pay'})).toBeVisible({timeout: 5_000});
+  }).toPass({timeout: 60_000, intervals: [2_000]});
+  await page.getByRole('button', {name: 'Approve and pay'}).click();
+  await expect(page.getByTestId('action-done')).toBeVisible({timeout: 90_000});
+  await eventually(
+    () => chainView<{state: string}>('get_job', {job_id: Number(job.chainJobId)}),
+    (j) => j.state === 'Settled',
+    'job settled on chain',
+  );
+  await eventually(
+    async () => ((await apiFetch(`/v1/jobs/${jobId}`)) as {state: string}).state,
+    (st) => st === 'settled',
+    'API job settled (indexer)',
+  );
+  await page.reload();
+  await expect(page.locator('header').getByText('Settled', {exact: true}).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  // The chain's own events, each with its transaction. The sandbox has no
+  // block explorer (networks.json), so its explorerUrl is not an absolute
+  // link and the page shows none; on testnet each is "View transaction".
+  const history = page.getByRole('region', {name: 'History'});
+  for (const step of [
+    'Job created on chain',
+    'Accepted on chain',
+    'Result submitted on chain',
+    'Settled on chain',
+  ])
+    await expect(history.getByText(step)).toBeVisible({timeout: 30_000});
+  const detail = (await apiFetch(`/v1/jobs/${jobId}`)) as {
+    events: {kind: string; txHash: string | null; explorerUrl: string | null}[];
+  };
+  const onChainEvents = detail.events.filter((e) => e.txHash);
+  expect(onChainEvents.length).toBeGreaterThanOrEqual(4);
+  for (const e of onChainEvents) expect(e.txHash).toMatch(/^[1-9A-HJ-NP-Za-km-z]{43,44}$/);
+  const linkable = detail.events.filter((e) => /^https:\/\//.test(e.explorerUrl ?? '')).length;
+  await expect(history.getByRole('link', {name: 'View transaction'})).toHaveCount(linkable);
+  await user.context.close();
+});
+
+test('agent → person: an agent posts and selects through its key, the person bids and delivers in the page, the agent pays', async ({
+  browser,
+}, info) => {
+  const agent = await registerInPage(browser, info, 'poster', {fund: '1'});
+  await agent.owner.context.close();
+  const worker = await apiPerson(`${s.tag}-agworker`, `Ada ${s.tag} ${facts.run.slice(-4)}`, {
+    stake: STAKE(),
+    musdc: STAKE(),
+  });
+  const title = `Agent's bakery ${s.tag} ${facts.run.slice(-4)}`;
+  const listing = (await apiFetch('/v1/listings', {
+    method: 'POST',
+    token: agent.apiKey,
+    headers: {'idempotency-key': `agent-listing-${s.tag}-${facts.run}`},
+    body: listingBody(title),
+  })) as {listingId: string};
+
+  const user = await signedIn(browser, info, worker.account);
+  const {page} = user;
+  await bid(page, listing.listingId);
+  await expect(page.getByTestId('my-bid')).toContainText('pending', {timeout: 30_000});
+
+  // The agent selects through the API; its signer funds create_job from its purse.
+  const apps = (await apiFetch(`/v1/listings/${listing.listingId}/applications`, {token: agent.apiKey})) as {
+    applications: {applicationId: string; applicant: {name: string}}[];
+  };
+  const mine = apps.applications.find((a) => a.applicant.name === worker.name)!;
+  const decided = (await apiFetch(`/v1/listings/${listing.listingId}/decide`, {
+    method: 'POST',
+    token: agent.apiKey,
+    body: {applicationId: mine.applicationId, action: 'select', reason: 'Lives next door, clear plan.'},
+  })) as {job: {jobId: string}};
+  const jobId = decided.job.jobId;
+  const job = await eventually(
+    async () => (await apiFetch(`/v1/jobs/${jobId}`)) as {chainJobId: string | null},
+    (j) => Boolean(j.chainJobId),
+    'agent-funded job on chain',
+    90_000,
+  );
+  const onChain = await chainView<{state: string; client: number; worker: number; amount: string}>(
+    'get_job',
+    {
+      job_id: Number(job.chainJobId),
+    },
+  );
+  expect(onChain).toMatchObject({state: 'Created', amount: PRICE});
+  expect(String(onChain.client)).toBe(agent.chainAgentId);
+  expect(String(onChain.worker)).toBe(worker.chainAgentId);
+
+  // The person accepts and delivers with a photo and a draft, in the page.
+  await page.goto(`/jobs/${jobId}`);
+  await expect(page.getByText('You are the worker').first()).toBeVisible({timeout: 30_000});
+  await page.getByRole('button', {name: 'Accept the job'}).click();
+  await expect(page.getByTestId('action-done')).toBeVisible({timeout: 90_000});
+  await eventually(
+    () => chainView<{state: string}>('get_job', {job_id: Number(job.chainJobId)}),
+    (j) => j.state === 'Accepted',
+    'job accepted on chain',
+  );
+  await page.reload();
+  await page.locator('#photo-input').setInputFiles({
+    name: 'front.png',
+    mimeType: 'image/png',
+    buffer: pngWithMark(GPS_MARK),
+  });
+  await expect(page.getByRole('list', {name: 'Photos'}).getByRole('listitem')).toHaveCount(1, {
+    timeout: 30_000,
+  });
+  await page.locator('#draft-text').fill('Round 1: the bakery front in daylight, sign in focus.');
+  await page.getByRole('button', {name: 'Post draft 1'}).click();
+  await expect(page.getByTestId('draft-1')).toBeVisible({timeout: 30_000});
+
+  // The agent reads the draft and its evidence, and accepts it, through its key.
+  const drafts = (await apiFetch(`/v1/jobs/${jobId}/drafts`, {token: agent.apiKey})) as {
+    drafts: {draftId: string; snapshotHash: string; snapshot?: {files?: unknown[]}}[];
+  };
+  const draft = drafts.drafts[0]!;
+  const files = (await apiFetch(`/v1/jobs/${jobId}/files`, {token: agent.apiKey})) as {files: unknown[]};
+  expect(files.files).toHaveLength(1);
+  await apiFetch(`/v1/jobs/${jobId}/drafts/${draft.draftId}/review`, {
+    method: 'POST',
+    token: agent.apiKey,
+    body: {
+      snapshotHash: draft.snapshotHash,
+      decision: 'accept_draft',
+      reason: 'The photo shows the whole front and the sign.',
+      checks: [{criterion: CRITERIA, met: true, support: 'draft 1 photo'}],
+    },
+  });
+
+  // The person submits the accepted draft on chain.
+  const before = await chainView<{balance: string}>('purse_of', {agent_id: Number(worker.chainAgentId)});
+  await page.reload();
+  await page.getByRole('button', {name: 'Sign and submit the accepted draft'}).click();
+  await expect(page.getByTestId('action-done')).toBeVisible({timeout: 90_000});
+  const delivered = await eventually(
+    () => chainView<{state: string; result_hash: string | null}>('get_job', {job_id: Number(job.chainJobId)}),
+    (j) => j.state === 'Submitted' || j.state === 'Settled',
+    'job submitted on chain',
+  );
+  // What went on chain is the snapshot the agent accepted.
+  const bare = (h: string | null) =>
+    String(h ?? '')
+      .replace(/^0x/, '')
+      .toLowerCase();
+  expect(bare(delivered.result_hash)).toBe(bare(draft.snapshotHash));
+
+  // The agent approves through its key. For an agent client its accepted
+  // draft already is its approval: the API's draft-settle sweep (app.ts,
+  // every 15 s) approves a submitted accepted draft by itself, so the job may
+  // be settled before this call, which is then refused as not submitted.
+  const approve = await apiRaw(`/v1/jobs/${jobId}/approve`, {method: 'POST', token: agent.apiKey, body: {}});
+  expect([200, 202, 409], await approve.clone().text()).toContain(approve.status);
+  const settled = await eventually(
+    () => chainView<{state: string; fee: string}>('get_job', {job_id: Number(job.chainJobId)}),
+    (j) => j.state === 'Settled',
+    'job settled on chain',
+    90_000,
+  );
+  const after = await chainView<{balance: string}>('purse_of', {agent_id: Number(worker.chainAgentId)});
+  expect(BigInt(after.balance) - BigInt(before.balance)).toBe(BigInt(PRICE) - BigInt(settled.fee));
+  await eventually(
+    async () => ((await apiFetch(`/v1/jobs/${jobId}`)) as {state: string}).state,
+    (st) => st === 'settled',
+    'API job settled (indexer)',
+  );
+  await page.reload();
+  await expect(page.locator('header').getByText('Settled', {exact: true}).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await user.context.close();
+});
+
+test('owner: My agents on /me lists the registered agent and leads to its manage page; its page shows Manage', async ({
+  browser,
+}, info) => {
+  const agent = await registerInPage(browser, info, 'mine');
+  const owner = agent.owner;
+  await signIn(owner);
+  const {page} = owner;
+  await page.goto('/me');
+  const card = page.getByRole('region', {name: 'My agents'});
+  const row = card.getByRole('listitem').filter({hasText: agent.name});
+  await expect(row).toHaveCount(1, {timeout: 30_000});
+  await expect(row.getByRole('link', {name: agent.name, exact: true})).toHaveAttribute(
+    'href',
+    `/agents/${agent.agentId}`,
+  );
+  const manage = row.getByRole('link', {name: `Manage ${agent.name}`});
+  await expect(manage).toHaveAttribute('href', `/agents/${agent.chainAgentId}/manage`);
+  await manage.click();
+  await page.waitForURL(new RegExp(`/agents/${agent.chainAgentId}/manage$`), {timeout: 30_000});
+  await expect(page.locator('#fund-amount')).toBeVisible({timeout: 30_000});
+
+  await page.goto(`/agents/${agent.agentId}`);
+  await expect(page.getByRole('link', {name: 'Manage', exact: true})).toHaveAttribute(
+    'href',
+    `/agents/${agent.chainAgentId}/manage`,
+    {timeout: 30_000},
+  );
+  await expect(hireCard(page)).toHaveCount(0);
+  await owner.context.close();
+});
+
+test('person client: a selection never funded shows "Needs funding" after a reload; Release opens the slot and the other bids again', async ({
+  browser,
+}, info) => {
+  const client = await apiPerson(`${s.tag}-nfclient`, `Nina ${s.tag} ${facts.run.slice(-4)}`, {
+    musdc: 2_000_000n,
+    fund: 1_000_000n,
+  });
+  const worker = await apiPerson(`${s.tag}-nfworker`, `Nils ${s.tag} ${facts.run.slice(-4)}`, {
+    stake: STAKE(),
+    musdc: STAKE(),
+  });
+  const listing = (await apiFetch('/v1/listings', {
+    method: 'POST',
+    token: client.token,
+    headers: {'idempotency-key': `unfunded-${s.tag}-${facts.run}`},
+    body: listingBody(`Unfunded ${s.tag} ${facts.run.slice(-4)}`),
+  })) as {listingId: string};
+  const application = (await apiFetch(`/v1/listings/${listing.listingId}/applications`, {
+    method: 'POST',
+    token: worker.token,
+    body: {action: 'apply', priceBaseUnits: PRICE, proposal: 'Around the corner, can do it today.'},
+  })) as {applicationId: string};
+  // A second bid, to pick instead once the first selection is released.
+  const other = await apiPerson(`${s.tag}-nfother`, `Nora ${s.tag} ${facts.run.slice(-4)}`, {
+    stake: STAKE(),
+    musdc: STAKE(),
+  });
+  const otherBid = (await apiFetch(`/v1/listings/${listing.listingId}/applications`, {
+    method: 'POST',
+    token: other.token,
+    body: {action: 'apply', priceBaseUnits: PRICE, proposal: 'I pass the bakery every morning.'},
+  })) as {applicationId: string};
+
+  const user = await signedIn(browser, info, client.account);
+  const {page} = user;
+  await page.goto(`/jobs/listing/${listing.listingId}`);
+  const selectButton = page.getByRole('button', {name: `Select ${worker.name}`}).filter({visible: true});
+  await selectButton.first().click();
+  await page.locator('#decide-reason').fill('Closest to the shop and a fair price.');
+  await page.getByRole('button', {name: 'Confirm selection'}).click();
+  await expect(page.getByRole('heading', {name: 'Fund the job'})).toBeVisible({timeout: 30_000});
+  // Not funded: the job exists off chain only.
+  const selected = (await apiFetch(`/v1/listings/${listing.listingId}`)) as {status: string};
+  expect(selected.status).toBe('filled');
+
+  await page.reload();
+  const slots = page.getByRole('list', {name: 'Slots'});
+  await expect(slots).toContainText('Needs funding', {timeout: 30_000});
+  await page.getByRole('button', {name: 'Release slot 1'}).click();
+  await expect(page.getByTestId('released')).toContainText('released', {timeout: 30_000});
+  await expect(slots).not.toContainText('Needs funding');
+  // The slot is open and the other bid can be selected; the released bid is
+  // closed with the API's reason, so its bidder is told (listings.ts UNSELECTED_REASON).
+  await expect(page.getByText('0 of 1 filled').first()).toBeVisible({timeout: 30_000});
+  await expect(page.getByRole('button', {name: `Select ${other.name}`}).first()).toBeAttached({
+    timeout: 30_000,
+  });
+  await expect(
+    page.getByText('The client released the selection before the job was funded.').first(),
+  ).toBeAttached();
+
+  // What the API holds: the listing open again, nothing on chain, nothing signed.
+  const after = (await apiFetch(`/v1/listings/${listing.listingId}`)) as {
+    status: string;
+    slotsFilled: number;
+  };
+  expect(after).toMatchObject({status: 'open', slotsFilled: 0});
+  const bids = (await apiFetch(`/v1/listings/${listing.listingId}/applications`, {token: client.token})) as {
+    applications: {applicationId: string; status: string}[];
+  };
+  const statusOf = (id: string) => bids.applications.find((a) => a.applicationId === id)?.status;
+  expect(statusOf(application.applicationId)).toBe('rejected');
+  expect(statusOf(otherBid.applicationId)).toBe('pending');
+  expect(await page.evaluate(() => (window as unknown as {__txs: unknown[]}).__txs.length)).toBe(0);
+  const purse = await chainView<{balance: string}>('purse_of', {agent_id: Number(client.chainAgentId)});
+  expect(purse.balance).toBe('1000000');
+  await user.context.close();
+});
+
+test('a person reports a listing; a compliance reviewer blocks it on /admin; it leaves the board', async ({
+  browser,
+}, info) => {
+  // A listing reserves its price against the poster's purse: fund it first.
+  const poster = await apiPerson(`${s.tag}-spammer`, `Sam ${s.tag} ${facts.run.slice(-4)}`, {
+    musdc: 2_000_000n,
+    fund: 1_000_000n,
+  });
+  const reporter = await apiPerson(`${s.tag}-reporter`, `Rita ${s.tag} ${facts.run.slice(-4)}`);
+  const title = `Too good to be true ${s.tag} ${facts.run.slice(-4)}`;
+  const listing = (await apiFetch('/v1/listings', {
+    method: 'POST',
+    token: poster.token,
+    headers: {'idempotency-key': `spam-${s.tag}-${facts.run}`},
+    body: listingBody(title),
+  })) as {listingId: string};
+  const onBoard = async () =>
+    (
+      (await apiFetch(`/v1/listings?q=${encodeURIComponent(title)}`)) as {listings: {listingId: string}[]}
+    ).listings.some((l) => l.listingId === listing.listingId);
+  expect(await onBoard()).toBe(true);
+
+  const r = await signedIn(browser, info, reporter.account);
+  await r.page.goto(`/jobs/listing/${listing.listingId}`);
+  await expect(r.page.getByRole('heading', {name: title})).toBeVisible({timeout: 30_000});
+  await r.page.getByRole('button', {name: 'Report', exact: true}).first().click();
+  const form = r.page.getByRole('form', {name: 'Report this listing'});
+  await form.getByLabel(/Why are you reporting/).selectOption('scam');
+  await form.getByLabel('Details (optional)').fill('Asks bidders to pay a fee first, off the platform.');
+  await form.getByRole('button', {name: 'Send the report'}).click();
+  await expect(r.page.getByTestId('report-sent')).toBeVisible({timeout: 30_000});
+  await r.context.close();
+
+  const reviewer = await signedIn(browser, info, facts.reviewers[0]!);
+  const {page} = reviewer;
+  await page.goto('/admin');
+  await expect(page.getByTestId('admin-roles')).toContainText('Compliance reviewer', {timeout: 30_000});
+  await page.getByRole('tab', {name: 'Reports'}).click();
+  const item = page
+    .getByRole('list', {name: 'Reports'})
+    .getByRole('listitem')
+    .filter({hasText: listing.listingId});
+  await expect(item).toContainText('scam', {timeout: 30_000});
+  await expect(item).toContainText('pay a fee first');
+  await item.getByRole('button', {name: 'Block', exact: true}).click();
+  await item.getByLabel('Note (3-500 characters)').fill('Fee-first scam, confirmed from the listing text.');
+  await item.getByRole('button', {name: 'Confirm: Block'}).click();
+  await expect(item).toHaveCount(0, {timeout: 30_000});
+  await reviewer.context.close();
+
+  // The poster is blocked, and the listing is off the board (API and page).
+  const kyc = (await apiFetch('/v1/kyc', {token: poster.token})) as {standing: string};
+  expect(kyc.standing).toBe('blocked');
+  await eventually(onBoard, (v) => v === false, 'listing off the board', 15_000);
+  const v = await userContext(browser, info, null);
+  await v.page.goto('/jobs');
+  await expect(v.page.getByRole('heading').first()).toBeVisible();
+  await v.page.waitForLoadState('networkidle').catch(() => {});
+  await expect(v.page.getByText(title)).toHaveCount(0);
+  await v.context.close();
+});
+
+test('/me: Export my data downloads a JSON file that names the person’s account', async ({browser}, info) => {
+  const person = await apiPerson(`${s.tag}-exporter`, `Edda ${s.tag} ${facts.run.slice(-4)}`);
+  const user = await signedIn(browser, info, person.account);
+  const {page} = user;
+  await page.goto('/me#settings');
+  const button = page.getByRole('button', {name: 'Export my data'});
+  await expect(button).toBeVisible({timeout: 30_000});
+  const [download] = await Promise.all([page.waitForEvent('download', {timeout: 30_000}), button.click()]);
+  expect(download.suggestedFilename()).toMatch(/\.json$/);
+  const path = await download.path();
+  const text = readFileSync(path!, 'utf8');
+  const data = JSON.parse(text) as unknown;
+  expect(JSON.stringify(data)).toContain(person.account);
+  expect(JSON.stringify(data)).toContain(person.name);
+  await user.context.close();
+});
+
+test('job page: a funded job shows the deadlines the chain holds (get_job), with the keeper line', async ({
+  browser,
+}, info) => {
+  const client = await apiPerson(`${s.tag}-dlclient`, `Dora ${s.tag} ${facts.run.slice(-4)}`, {
+    musdc: 2_000_000n,
+    fund: 1_000_000n,
+  });
+  const worker = await apiPerson(`${s.tag}-dlworker`, `Dirk ${s.tag} ${facts.run.slice(-4)}`, {
+    stake: STAKE(),
+    musdc: STAKE(),
+  });
+  const listing = (await apiFetch('/v1/listings', {
+    method: 'POST',
+    token: client.token,
+    headers: {'idempotency-key': `deadlines-${s.tag}-${facts.run}`},
+    body: listingBody(`Deadlines ${s.tag} ${facts.run.slice(-4)}`),
+  })) as {listingId: string};
+  const application = (await apiFetch(`/v1/listings/${listing.listingId}/applications`, {
+    method: 'POST',
+    token: worker.token,
+    body: {action: 'apply', priceBaseUnits: PRICE, proposal: 'Can photograph it this afternoon.'},
+  })) as {applicationId: string};
+  const decided = (await apiFetch(`/v1/listings/${listing.listingId}/decide`, {
+    method: 'POST',
+    token: client.token,
+    body: {applicationId: application.applicationId, action: 'select', reason: 'Quick and close by.'},
+  })) as {job: {jobId: string}};
+  const jobId = decided.job.jobId;
+  await personAction(client.token, client.account, jobId, 'create');
+  const chainJobId = ((await apiFetch(`/v1/jobs/${jobId}`)) as {chainJobId: string}).chainJobId;
+  const onChain = await chainView<{
+    state: string;
+    accept_deadline: number | string;
+    work_deadline: number | string;
+  }>('get_job', {job_id: Number(chainJobId)});
+  expect(onChain.state).toBe('Created');
+  const iso = (v: number | string) => new Date(Number(v) * 1000).toISOString();
+
+  const user = await signedIn(browser, info, client.account);
+  const {page} = user;
+  await page.goto(`/jobs/${jobId}`);
+  const card = page.getByTestId('job-deadlines');
+  await expect(card.getByTestId('deadline-acceptBy')).toHaveText(utcText(iso(onChain.accept_deadline)), {
+    timeout: 30_000,
+  });
+  await expect(card.getByTestId('deadline-workBy')).toHaveText(utcText(iso(onChain.work_deadline)));
+  await expect(card).toContainText('Accept by');
+  await expect(card).toContainText('Deliver by');
+  await expect(card).toContainText('keeper');
+  await user.context.close();
 });
 
 test.afterAll(async () => {

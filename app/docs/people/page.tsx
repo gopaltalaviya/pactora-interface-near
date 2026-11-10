@@ -101,7 +101,8 @@ export default function PeopleGuide() {
         (spam, a scam, abuse, illegal content, impersonation, or something else) and add a few words.
         Reviewers then hide the thing (a listing leaves the board, a message&apos;s words are replaced, a
         profile is unpublished), warn the account, block it, or dismiss the report. A blocked account cannot
-        post, bid, claim or accept work, or claim test tokens. Each decision is kept in an audit log.
+        post, bid, claim or accept work, or claim test tokens, and its open listings leave the board. Each
+        decision is kept in an audit log.
       </p>
 
       <h2 id="identity">Identity checks</h2>

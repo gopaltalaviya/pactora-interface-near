@@ -166,6 +166,100 @@ export async function personAction(
   throw new Error(`confirm ${action}: never final`);
 }
 
+// ── the chain, as a given account (the wallet service signs) ─────────────
+
+const TGAS = 1_000_000_000_000n;
+
+/** One function call signed with the account's own key; throws on a chain failure, returns the decoded value. */
+export async function callAs<T = unknown>(
+  signerId: string,
+  receiverId: string,
+  methodName: string,
+  args: Record<string, unknown>,
+  {gas = 100n * TGAS, deposit = 0n}: {gas?: bigint; deposit?: bigint} = {},
+): Promise<T | null> {
+  const [outcome] = await svc<{status: unknown; transaction: {hash: string}}[]>('/send', {
+    signerId,
+    transactions: [
+      {
+        receiverId,
+        actions: [
+          {
+            type: 'FunctionCall',
+            params: {methodName, args, gas: String(gas), deposit: String(deposit)},
+          },
+        ],
+      },
+    ],
+  });
+  const status = outcome!.status as {SuccessValue?: string; Failure?: unknown} | string;
+  if (typeof status === 'object' && status && 'Failure' in status) {
+    throw new Error(`${methodName} on ${receiverId} failed: ${JSON.stringify(status.Failure)}`);
+  }
+  const raw = typeof status === 'object' && status?.SuccessValue ? status.SuccessValue : '';
+  return raw ? (JSON.parse(Buffer.from(raw, 'base64').toString('utf8')) as T) : null;
+}
+
+/** ft_transfer_call into Pactora: `Fund` (the purse) or `Stake`, for an on-chain agent id. */
+export async function depositInto(
+  from: string,
+  chainAgentId: string,
+  amount: bigint,
+  kind: 'Fund' | 'Stake',
+) {
+  await callAs(
+    from,
+    facts.token,
+    'ft_transfer_call',
+    {
+      receiver_id: facts.pactora,
+      amount: String(amount),
+      msg: JSON.stringify({[kind]: {agent_id: Number(chainAgentId)}}),
+    },
+    {gas: 150n * TGAS, deposit: 1n},
+  );
+}
+
+export interface ApiPerson {
+  account: string;
+  name: string;
+  chainAgentId: string;
+  token: string;
+}
+
+/**
+ * A person made the way /join makes one, without the page: register_agent
+ * with the account as its own wallet, accept_wallet (both signed with the
+ * account's key, landing on the sandbox), then POST /v1/people under a real
+ * NEP-413 session. Stake and Fund are real ft_transfer_calls.
+ */
+export async function apiPerson(
+  label: string,
+  name: string,
+  {
+    near = '5',
+    musdc = 0n,
+    stake = 0n,
+    fund = 0n,
+  }: {near?: string; musdc?: bigint; stake?: bigint; fund?: bigint} = {},
+): Promise<ApiPerson> {
+  const account = await newAccount(label, {near, musdc});
+  const id = await callAs<number | string>(
+    account,
+    facts.pactora,
+    'register_agent',
+    {wallet: account, card_uri: `data:,${encodeURIComponent(name)}`},
+    {deposit: 10n ** 23n},
+  );
+  const chainAgentId = String(id);
+  await callAs(account, facts.pactora, 'accept_wallet', {agent_id: Number(chainAgentId)});
+  const token = await apiSession(account);
+  await apiFetch('/v1/people', {method: 'POST', token, body: {chainAgentId, name}});
+  if (stake > 0n) await depositInto(account, chainAgentId, stake, 'Stake');
+  if (fund > 0n) await depositInto(account, chainAgentId, fund, 'Fund');
+  return {account, name, chainAgentId, token};
+}
+
 // ── the browser, as a given account ──────────────────────────────────────
 
 /** What the project's device emulation sets, so a second user's context looks like the first. */
