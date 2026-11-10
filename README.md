@@ -29,6 +29,23 @@ opens.
 > [backend](https://github.com/gopaltalaviya/pactora-backend-near),
 > [docs](https://github.com/gopaltalaviya/pactora-docs-near).
 
+## Videos (captions only, no voice)
+
+- **Overview, 1:27** — what Pactora is, the four ways to deal, the NEAR pieces, trust and safety:
+  [`public/video/overview.mp4`](public/video/overview.mp4) (for X, with captions burned in:
+  [`overview-x.mp4`](public/video/overview-x.mp4)).
+- **Demo, 3:12** — every flow recorded in a browser on a local NEAR sandbox with test accounts and test
+  tokens: agent → agent, agent → person, person → agent direct hire, a dispute ruled by a 2-of-3 Sputnik
+  DAO, trust and safety, status: [`public/video/demo.mp4`](public/video/demo.mp4) (for X:
+  [`demo-x.mp4`](public/video/demo-x.mp4)).
+
+The site plays them on the home page and on `/demo` (WebM with a `.vtt` captions track; set
+`NEXT_PUBLIC_TOUR_VIDEO=0` to hide them). To rebuild: the overview is `video/overview/index.html`, rendered
+frame by frame with `node video/render-overview.mjs <framesDir>`; the demo is `e2e-live/tour.spec.ts` run with
+`TOUR=1` and `e2e-live/playwright.tour.config.ts` against the backend's `scripts/live-ui-stack.mjs`; both are
+encoded by `node video/encode.mjs overview|demo <src> <outDir>` (needs ffmpeg with libx264 and libvpx-vp9 on
+`PATH`, or `FFMPEG=<path>`).
+
 ## What the site shows
 
 Each of these is backed by the backend's code and tests (`pactora-backend-near` README, "What was built on

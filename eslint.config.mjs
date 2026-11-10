@@ -33,7 +33,7 @@ const config = [
   {
     // A CLI that reports to a terminal: console is its output, and
     // `cond ? ok() : fail()` is how every check in it reads.
-    files: ['scripts/**'],
+    files: ['scripts/**', 'video/**'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/no-unused-expressions': ['error', {allowTernary: true}],
