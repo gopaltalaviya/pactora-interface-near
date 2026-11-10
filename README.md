@@ -21,13 +21,28 @@ cancel) — is signed by the visitor's own NEAR wallet, through
 and every call the API prepares is held against the allow-list in `lib/wallet-guard.ts` before the wallet
 opens.
 
-> **NEAR Hackathon (Nov 2026) — disclosure.** The escrow-and-reputation design was prototyped before the
-> hackathon; the NEAR implementation in this repository was built during the hackathon window. The tag
-> `pre-hackathon` marks the imported baseline the work started from; the hackathon work is
-> [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
+## Built for NEAR, in the hackathon window
+
+Built from 2026-11-05 on, in [this history](https://github.com/gopaltalaviya/pactora-interface-near/commits/human-work):
+
+- **NEAR wallets**: sign-in and registration with NEAR Connect and a NEP-413 challenge, every prepared
+  call checked against `lib/wallet-guard.ts` (new) before the wallet opens. The marketplace, demo and
+  registration pages were ported from the prototype to NEAR.
+- **New: people's flows**: the job board, listings and bids, drafts and evidence photos, `/me`,
+  profiles, and person → agent direct hire ("Hire this agent").
+- **New: `/admin`**: the DAO dispute desk for the 2-of-3 Sputnik DAO council, moderation and
+  compliance.
+- **New: trust and safety** pages and controls: reports, blocks, holds, identity checks, data export.
+- **New: two captioned videos** (below) and a live-chain browser suite that runs every flow on a local
+  NEAR node in five browsers (`e2e-live/`).
+
+> **Disclosure (rules Q-002, Q-003).** The escrow-and-reputation idea was prototyped before the
+> hackathon. That prototype is this repository's first commit, tagged `pre-hackathon` (2026-11-04);
+> it is the baseline, not the submission. Everything after it is the NEAR work, dated in the
+> history: [`pre-hackathon...human-work`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...human-work)
+> (`hackathon-submission` once tagged).
 > Sibling repos: [contracts](https://github.com/gopaltalaviya/pactora-contracts-near),
-> [backend](https://github.com/gopaltalaviya/pactora-backend-near),
-> [docs](https://github.com/gopaltalaviya/pactora-docs-near).
+> [backend](https://github.com/gopaltalaviya/pactora-backend-near), [docs](https://github.com/gopaltalaviya/pactora-docs-near).
 
 ## Videos (captions only, no voice)
 
