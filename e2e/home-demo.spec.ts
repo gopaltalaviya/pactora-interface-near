@@ -1,4 +1,4 @@
-import {expect, test} from '@playwright/test';
+import {expect, test, type Page} from '@playwright/test';
 
 /**
  * The home page and the demo say what is true about them (2026-11-10):
@@ -33,14 +33,51 @@ test('the hero badge says testnet and test tokens, not "real jobs"', async ({pag
   await expect(hero).not.toContainText(/Settling real jobs/);
 });
 
-test('without the tour video, the hero CTA goes to /demo and says what is there', async ({page}) => {
+/** The player, its two sources, and an English captions track whose file is served (the videos have no sound). */
+async function expectTourVideo(page: Page, which: 'overview' | 'demo') {
+  const video = page.getByTestId(`tour-video-${which}`);
+  await expect(video).toBeVisible();
+  await expect(video).toHaveAttribute('poster', `/video/${which}.jpg`);
+  await expect(video.locator('source')).toHaveCount(2);
+  await expect(video.locator('source').nth(0)).toHaveAttribute('src', `/video/${which}.webm`);
+  await expect(video.locator('source').nth(1)).toHaveAttribute('src', `/video/${which}.mp4`);
+  const track = video.locator('track');
+  await expect(track).toHaveAttribute('kind', 'captions');
+  await expect(track).toHaveAttribute('srclang', 'en');
+  await expect(track).toHaveAttribute('src', `/video/${which}.vtt`);
+  // The browser loaded the track and it is showing.
+  await expect
+    .poll(() =>
+      video.evaluate((v: HTMLVideoElement) => {
+        const t = v.textTracks[0];
+        return t ? `${t.kind}:${t.mode}:${t.cues?.length ?? 0}` : 'none';
+      }),
+    )
+    .toMatch(/^captions:showing:[1-9]\d*$/);
+  for (const file of [`${which}.vtt`, `${which}.jpg`, `${which}.webm`, `${which}.mp4`]) {
+    const res = await page.request.head(`/video/${file}`);
+    expect(res.status(), file).toBe(200);
+  }
+  const vtt = await (await page.request.get(`/video/${which}.vtt`)).text();
+  expect(vtt.startsWith('WEBVTT')).toBe(true);
+}
+
+test('the home page shows the captioned overview, and the hero CTA leads to it', async ({page}) => {
   await page.goto('/');
   await expect(page.getByRole('link', {name: /Watch agents pay each other/})).toHaveAttribute(
     'href',
-    '/demo',
+    '#tour',
   );
-  await expect(page.getByTestId('hero-cta-note')).toContainText(/recorded run|your own key/);
-  await expect(page.locator('video')).toHaveCount(0);
+  await expect(page.getByTestId('hero-cta-note')).toContainText(/captioned/);
+  await expect(page.locator('video')).toHaveCount(1);
+  await expectTourVideo(page, 'overview');
+});
+
+test('/demo shows the captioned demo recording to a visitor without a key', async ({page}) => {
+  await page.goto('/demo');
+  const slot = page.getByRole('region', {name: /No key\? Watch instead/});
+  await expect(slot.locator('video')).toHaveCount(1);
+  await expectTourVideo(page, 'demo');
 });
 
 test('in cached mode the demo offers only the goal the API has a recording for', async ({page}) => {

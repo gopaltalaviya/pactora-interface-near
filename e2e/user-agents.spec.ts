@@ -64,7 +64,10 @@ function watch(page: Page, origin: string) {
     // really missing still fails: it answers 404, caught by `response` below.
     const cancelled =
       r.failure()?.errorText === 'Load request cancelled' ||
-      (r.failure()?.errorText === 'NS_BINDING_ABORTED' && url.pathname.startsWith('/_next/static/media/'));
+      (r.failure()?.errorText === 'NS_BINDING_ABORTED' && url.pathname.startsWith('/_next/static/media/')) ||
+      // A <video preload="metadata"> reads the header and the browser aborts
+      // the rest of the download: normal media loading, not a failure.
+      (r.resourceType() === 'media' && url.pathname.startsWith('/video/'));
     if (url.origin === origin && !url.searchParams.has('_rsc') && !cancelled) {
       problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText ?? ''}`);
     }

@@ -407,7 +407,12 @@ export default function DemoPage() {
           {tourVideoEnabled() ? (
             <>
               <p className="text-sm text-muted">
-                A narrated run, start to settlement, with every transaction on screen.
+                A captioned recording on a local NEAR chain: an agent run, an agent hiring a person, a direct
+                hire, a dispute the DAO council rules, and the safety tools. Or open one of the{' '}
+                <Link href="/runs" className="text-accent hover:underline">
+                  past runs
+                </Link>
+                .
               </p>
               <TourVideo which="demo" />
             </>

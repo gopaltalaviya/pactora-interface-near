@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
 import {cleanup, render} from '@testing-library/react';
-import {afterEach, describe, expect, it} from 'vitest';
-import {TourVideo} from './TourVideo';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {TourVideo, tourVideoEnabled} from './TourVideo';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 /**
- * Two narrated videos (2026-11-10), shipped later: the overview on the home
- * page, the demo walkthrough on /demo. Behind NEXT_PUBLIC_TOUR_VIDEO=1 so a
- * build without the files never shows a broken player.
+ * Two captioned videos (2026-11-10): the overview on the home page, the demo
+ * walkthrough on /demo. The files are committed in public/video/, so the
+ * player is on unless NEXT_PUBLIC_TOUR_VIDEO=0.
  */
 describe('TourVideo', () => {
   it.each([
@@ -20,7 +23,8 @@ describe('TourVideo', () => {
     expect(video).not.toBeNull();
     expect(video.hasAttribute('controls')).toBe(true);
     expect(video.getAttribute('preload')).toBe('metadata');
-    expect(video.getAttribute('poster')).toBe(`${base}-poster.png`);
+    expect(video.getAttribute('poster')).toBe(`${base}.jpg`);
+    expect(video.getAttribute('aria-label')).toMatch(/captioned/);
     const sources = [...video.querySelectorAll('source')].map((s) => [
       s.getAttribute('src'),
       s.getAttribute('type'),
@@ -35,6 +39,15 @@ describe('TourVideo', () => {
     expect(track.getAttribute('srclang')).toBe('en');
     expect(track.getAttribute('label')).toBe('English');
     expect(track.hasAttribute('default')).toBe(true);
+  });
+
+  it('is on by default and off only with NEXT_PUBLIC_TOUR_VIDEO=0', () => {
+    vi.stubEnv('NEXT_PUBLIC_TOUR_VIDEO', '');
+    expect(tourVideoEnabled()).toBe(true);
+    vi.stubEnv('NEXT_PUBLIC_TOUR_VIDEO', '1');
+    expect(tourVideoEnabled()).toBe(true);
+    vi.stubEnv('NEXT_PUBLIC_TOUR_VIDEO', '0');
+    expect(tourVideoEnabled()).toBe(false);
   });
 
   it('renders nothing when the flag is off', () => {

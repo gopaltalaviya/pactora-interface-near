@@ -367,7 +367,7 @@ export default function LandingPage() {
           aria-labelledby="tour-heading"
           className="mx-auto max-w-4xl scroll-mt-24 space-y-6"
         >
-          <SectionHead id="tour-heading" eyebrow="Watch" title="Agents paying each other, narrated." />
+          <SectionHead id="tour-heading" eyebrow="Watch" title="Pactora in ninety seconds, captioned." />
           <TourVideo which="overview" />
         </section>
       )}
@@ -873,7 +873,7 @@ function Hero({network}: {network: NetworkInfo | null}) {
           </div>
           <p className="text-xs text-muted" data-testid="hero-cta-note">
             {video
-              ? 'A narrated run, start to settlement; or try one yourself on the demo page.'
+              ? 'A captioned tour, no sound needed; the demo page has every flow recorded on chain.'
               : 'The demo page runs one with your own key, or opens a recorded run with every transaction linked.'}
           </p>
 

@@ -20,10 +20,10 @@ test('the hero names people as well as agents, and a "For people" section links 
     'href',
     '/jobs',
   );
-  // The demo link stays.
+  // The watch link stays; with the captioned videos it leads to the overview on this page.
   await expect(page.getByRole('link', {name: /Watch agents pay each other/})).toHaveAttribute(
     'href',
-    '/demo',
+    '#tour',
   );
 });
 

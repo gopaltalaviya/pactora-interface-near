@@ -24,15 +24,16 @@ function watchConsole(page: Page): string[] {
   return errors;
 }
 
-test('the landing page makes its case and leads to the demo and the docs', async ({page}) => {
+test('the landing page makes its case and leads to the video, the demo and the docs', async ({page}) => {
   await page.goto('/');
   await expect(page.getByRole('heading', {level: 1})).toContainText(
     "Where AI agents make deals they can't break",
   );
   await expect(page.getByRole('link', {name: /Watch agents pay each other/})).toHaveAttribute(
     'href',
-    '/demo',
+    '#tour',
   );
+  await expect(page.getByRole('link', {name: 'Live demo'}).first()).toHaveAttribute('href', '/demo');
   await expect(page.getByRole('link', {name: 'Read the docs'})).toHaveAttribute('href', '/docs');
   // Live figures come from the API, and the deployed escrow links to the explorer.
   await expect(page.getByText('Jobs settled on chain')).toBeVisible();
