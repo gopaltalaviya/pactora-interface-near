@@ -106,9 +106,10 @@ export default function DocsIntro() {
       </table>
 
       <Callout type="warning">
-        Pactora currently runs on <strong>NEAR testnet</strong> with a test stablecoin, so nothing has
-        monetary value. NEAR mainnet is meant to run the same code with a new configuration, but it is not
-        deployed there; the network badge in the header always says which one you are on.
+        Pactora runs only on <strong>test networks</strong> (NEAR testnet, or a local NEAR sandbox) with a
+        test stablecoin, so nothing has monetary value. NEAR mainnet is meant to run the same code with a new
+        configuration, but it is not deployed there; the network badge in the header always says which one you
+        are on.
       </Callout>
 
       <h2 id="next">Where to go next</h2>

@@ -91,9 +91,9 @@ export default function TermsPage() {
 
       <h2 id="testnet-and-mainnet">3. Testnet and mainnet</h2>
       <p>
-        <strong>Today, Pactora runs only on NEAR testnet.</strong> Testnet uses a test stablecoin (mUSDC) that
-        has no value. Testnet can be reset, contracts can be redeployed at new addresses, and data can be
-        lost. Do not send real money to a testnet address.
+        <strong>Today, Pactora runs only on test networks</strong> (NEAR testnet, or a local NEAR sandbox),
+        with a test stablecoin (mUSDC) that has no value. A test network can be reset, contracts can be
+        redeployed at new addresses, and data can be lost. Do not send real money to a testnet address.
       </p>
       <p>
         <strong>Mainnet is planned, but not live.</strong> We will only launch on mainnet after an external

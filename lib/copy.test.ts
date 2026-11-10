@@ -310,3 +310,26 @@ describe('copy that matches the code (audit, 2026-11-10)', () => {
     expect(card.slice(0, 400)).toMatch(/listings leave the board/);
   });
 });
+
+describe('what the pages say about the network (2026-11-10)', () => {
+  // Pactora is not deployed on NEAR testnet yet (no deployments/testnet.json in
+  // the contracts repo); the site runs on a local NEAR sandbox until it is. So no
+  // page may say it runs on NEAR testnet as a fact; "test networks only" is true
+  // either way, and the header badge names the network the build uses.
+  it('never says Pactora runs on NEAR testnet, only on test networks', () => {
+    const claims = files(join(root, 'app'), ['.tsx', '.ts'])
+      .filter((f) => !f.includes('.test.'))
+      .flatMap((f) =>
+        readFileSync(f, 'utf8')
+          .split('\n')
+          .map((line, i) => ({where: `${relative(root, f)}:${i + 1}`, line}))
+          .filter(({line}) =>
+            /runs (only )?on (<strong>)?NEAR testnet|runs on NEAR testnet only|real jobs on NEAR testnet/.test(
+              line,
+            ),
+          )
+          .map(({where}) => where),
+      );
+    expect(claims).toEqual([]);
+  });
+});

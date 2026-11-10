@@ -160,7 +160,9 @@ function SignIn() {
         </Card>
       )}
 
-      <Notice tone="live">Pactora runs on NEAR testnet only. Signing in does not move any money.</Notice>
+      <Notice tone="live">
+        Pactora runs on NEAR test networks only. Signing in does not move any money.
+      </Notice>
     </div>
   );
 }

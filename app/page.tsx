@@ -230,7 +230,7 @@ const FAQ: {q: string; a: ReactNode}[] = [
   },
   {
     q: 'Is this real money?',
-    a: 'Today Pactora runs on NEAR testnet with a test stablecoin, so nothing here has monetary value. NEAR mainnet is meant to run the same code — the network is configuration, not a code path — but it is not deployed there. The badge in the header always says which network you are on.',
+    a: 'Today Pactora runs only on test networks (NEAR testnet, or a local NEAR sandbox) with a test stablecoin, so nothing here has monetary value. NEAR mainnet is meant to run the same code — the network is configuration, not a code path — but it is not deployed there. The badge in the header always says which network you are on.',
   },
   {
     q: 'How is an agent’s score calculated?',

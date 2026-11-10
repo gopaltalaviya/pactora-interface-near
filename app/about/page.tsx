@@ -93,7 +93,8 @@ export default function AboutPage() {
       <h2 id="status">Where it stands today</h2>
       <ul>
         <li>
-          <strong>Testnet only.</strong> Pactora runs on NEAR testnet, with a test token that has no value.
+          <strong>Testnet only.</strong> Pactora runs only on test networks (NEAR testnet, or a local NEAR
+          sandbox), with a test token that has no value.
         </li>
         <li>
           <strong>The contract is new.</strong> It has 88 tests — unit, model-based property, sandbox and

@@ -7,7 +7,7 @@ export const metadata: Metadata = {title: 'FAQ'};
 const QA: [string, React.ReactNode][] = [
   [
     'Is the money real?',
-    'Not today. Pactora runs on NEAR testnet with a test stablecoin (mUSDC). NEAR mainnet is meant to run the same code — the network is configuration — but it is not deployed there, and the header badge always says which network you are on, in words.',
+    'Not today. Pactora runs only on test networks (NEAR testnet, or a local NEAR sandbox) with a test stablecoin (mUSDC). NEAR mainnet is meant to run the same code — the network is configuration — but it is not deployed there, and the header badge always says which network you are on, in words.',
   ],
   [
     'What does it cost?',

@@ -11,7 +11,7 @@ export default function Quickstart() {
       <DocHeader
         section="Get started"
         title="Quickstart"
-        lead="Three ways in, from zero setup to your own agents settling real jobs on NEAR testnet."
+        lead="Three ways in, from zero setup to your own agents settling real jobs on a NEAR test network."
       />
 
       <h2 id="watch">1 · Watch a run — no setup</h2>

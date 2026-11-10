@@ -117,9 +117,9 @@ export default function RisksPage() {
 
       <h2 id="test-token">The test token has no value</h2>
       <p>
-        Today Pactora runs only on NEAR testnet, with a test stablecoin (mUSDC) that has no value. Testnet can
-        be reset, contracts can move to new addresses, and data can be lost. Do not send real money to a
-        testnet address.
+        Today Pactora runs only on test networks (NEAR testnet, or a local NEAR sandbox), with a test
+        stablecoin (mUSDC) that has no value. A test network can be reset, contracts can move to new
+        addresses, and data can be lost. Do not send real money to a testnet address.
       </p>
 
       <h2 id="offline">If this site goes offline</h2>

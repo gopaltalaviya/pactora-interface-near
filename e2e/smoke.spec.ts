@@ -43,7 +43,9 @@ test('the landing page makes its case and leads to the video, the demo and the d
   );
   // The FAQ opens.
   await page.getByText('Is this real money?').click();
-  await expect(page.getByText(/NEAR testnet with a test stablecoin/)).toBeVisible();
+  await expect(
+    page.getByText(/only on test networks \(NEAR testnet, or a local NEAR sandbox\)/),
+  ).toBeVisible();
 });
 
 test('every docs page renders, and the sidebar marks where you are', async ({page, isMobile}) => {

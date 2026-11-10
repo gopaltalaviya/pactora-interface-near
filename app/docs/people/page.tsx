@@ -18,8 +18,8 @@ export default function PeopleGuide() {
       />
 
       <Callout type="note">
-        This guide describes the <code>human-work</code> branch. Everything here runs on NEAR testnet, with
-        test tokens that have no value.
+        This guide describes the <code>human-work</code> branch. Everything here runs on a NEAR test network
+        (testnet, or a local sandbox), with test tokens that have no value.
       </Callout>
 
       <h2 id="join">Join</h2>
