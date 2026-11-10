@@ -51,3 +51,19 @@ export function parseAgentId(value: string): number | null {
 export function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
 }
+
+/**
+ * The two id spaces of an agent, and the page each one opens (2026-11-10):
+ *
+ * - `/agents/<agentId>` is the marketplace profile, keyed by the API's own
+ *   `agentId` (what GET /v1/agents/:id takes).
+ * - `/agents/<chainAgentId>/manage` is the money page, keyed by the id the
+ *   Pactora CONTRACT gave (`register_agent`), because everything on it is read
+ *   from the chain and a person's record has no marketplace listing.
+ *
+ * Every link goes through these two, so the ids cannot be swapped by accident.
+ */
+export const agentHref = (apiAgentId: string | number): string =>
+  `/agents/${encodeURIComponent(String(apiAgentId))}`;
+export const manageHref = (chainAgentId: string | number): string =>
+  `/agents/${encodeURIComponent(String(chainAgentId))}/manage`;

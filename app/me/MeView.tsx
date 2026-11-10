@@ -22,10 +22,11 @@ import {
   type JobState,
   type Listing,
   type ListingStatus,
+  type MyAgent,
 } from '@/lib/market';
 import {displayAccount} from '@/lib/near';
 import {notifications, type FaucetClaim, type FaucetStatus} from '@/lib/notifications';
-import {safeHref} from '@/lib/links';
+import {agentHref, manageHref, safeHref} from '@/lib/links';
 import {ProfileEditor} from '@/components/market/Profile';
 import {IdentityCard} from '@/components/market/Identity';
 import {ChannelsCard} from '@/components/market/Channels';
@@ -104,9 +105,12 @@ export function MeView() {
         description="What Pactora knows about your account: your person record, what settled jobs have paid you, your listings, your jobs and bids, and your settings."
         actions={
           <>
-            <ButtonLink href="/jobs/new" size="sm">
-              Post a listing
-            </ButtonLink>
+            {/* Posting needs a person record: offered only to someone who has one. */}
+            {session.status === 'in' && session.person && (
+              <ButtonLink href="/jobs/new" size="sm">
+                Post a listing
+              </ButtonLink>
+            )}
             <ButtonLink href="/jobs" size="sm">
               Browse jobs
             </ButtonLink>
@@ -174,6 +178,7 @@ function Signed({onDeleted}: {onDeleted: (what: string) => void}) {
         {tab === 'overview' && (
           <>
             <Overview />
+            <MyAgents />
             {person && <FaucetCard />}
           </>
         )}
@@ -204,6 +209,9 @@ function Signed({onDeleted}: {onDeleted: (what: string) => void}) {
 }
 
 function JoinFirst({what}: {what: string}) {
+  const {personError} = useSession();
+  // The record is unknown (the API failed), not missing: the session banner says so.
+  if (personError) return null;
   return (
     <Notice>
       {what}{' '}
@@ -284,10 +292,13 @@ function Overview() {
         </dl>
         {me.person ? (
           <p className="mt-4 text-sm">
-            <Link href={`/agents/${me.person.chainAgentId}/manage`} className="text-accent underline">
+            <Link href={manageHref(me.person.chainAgentId)} className="text-accent underline">
               Fund and stake
             </Link>
-            <span className="text-muted"> · on-chain agent #{me.person.chainAgentId}</span>
+            <span className="text-muted">
+              {' '}
+              · your record&apos;s purse and stake (on-chain #{me.person.chainAgentId})
+            </span>
           </p>
         ) : (
           <div className="mt-4">
@@ -319,6 +330,79 @@ function Overview() {
         />
       </div>
     </>
+  );
+}
+
+/**
+ * The agents this account owns (GET /v1/me/agents), each with its profile
+ * (the API's id) and its manage page (the contract's id). The person record
+ * is shown above, so it is left out here.
+ */
+function MyAgents() {
+  const {authed} = useSession();
+  const [rows, setRows] = useState<MyAgent[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const c = new AbortController();
+    setError(null);
+    authed((t) => market.myAgents(t, c.signal))
+      .then((r) => setRows(r.agents.filter((a) => a.kind === 'agent')))
+      .catch((err: unknown) => {
+        if (!c.signal.aborted) setError(errorText(err));
+      });
+    return () => c.abort();
+  }, [authed, attempt]);
+
+  if (error && !rows)
+    return (
+      <ErrorState
+        title="Could not load your agents"
+        action={
+          <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+            Retry
+          </Button>
+        }
+      >
+        {error}
+      </ErrorState>
+    );
+  if (!rows || rows.length === 0) return null;
+  return (
+    <Card
+      title="My agents"
+      labelledBy="my-agents"
+      description="Agents registered by this account. Manage is where you fund, stake and set caps, and handle the API key."
+    >
+      <ul className="divide-y divide-edge text-sm">
+        {rows.map((a) => (
+          <li key={a.agentId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <span className="flex flex-wrap items-center gap-2">
+              <Link href={agentHref(a.agentId)} className="font-medium text-accent underline">
+                {a.name}
+              </Link>
+              <Badge tone={a.active ? 'settled' : 'refused'}>{a.active ? 'accepting work' : 'paused'}</Badge>
+            </span>
+            {a.chainAgentId ? (
+              <Link
+                href={manageHref(a.chainAgentId)}
+                aria-label={`Manage ${a.name}`}
+                className="text-accent underline"
+              >
+                Manage
+              </Link>
+            ) : (
+              <span className="text-xs text-muted">not registered on chain yet</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-muted">
+        <Link href="/register" className="underline">
+          Register another agent
+        </Link>
+      </p>
+    </Card>
   );
 }
 

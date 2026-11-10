@@ -3,6 +3,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {errorText} from '@/lib/errors';
 import {Badge, Tag} from '@/components/ui/Badge';
+import Link from 'next/link';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {Field, TextInput} from '@/components/ui/Field';
@@ -11,7 +12,7 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice} from '@/components/ui/States';
 import {agentCard, agentCardUri} from '@/lib/agent-card';
 import {API_URL, ApiError, api, formatUnits, type NetworkInfo, type RegisteredAgent} from '@/lib/api';
-import {safeHref} from '@/lib/links';
+import {agentHref, manageHref, safeHref} from '@/lib/links';
 import {displayAccount, formatYocto, parseUnits, subAccount} from '@/lib/near';
 import {
   connect,
@@ -696,8 +697,15 @@ function Done({
 
       {fundFailure && (
         <Notice>
-          The first funding failed, so the agent&apos;s purse is empty: {fundFailure}. Fund it from its
-          profile once your account holds the tokens.
+          The first funding failed, so the agent&apos;s purse is empty: {fundFailure}. Fund it on its{' '}
+          {chainAgentId ? (
+            <Link href={manageHref(chainAgentId)} className="underline">
+              manage page
+            </Link>
+          ) : (
+            'manage page'
+          )}{' '}
+          once your account holds the tokens.
         </Notice>
       )}
 
@@ -767,11 +775,11 @@ function Done({
 
       <div className="flex flex-wrap gap-3">
         {chainAgentId && (
-          <ButtonLink href={`/agents/${chainAgentId}/manage`} variant="primary">
+          <ButtonLink href={manageHref(chainAgentId)} variant="primary">
             Fund and stake <Icon name="arrowRight" />
           </ButtonLink>
         )}
-        <ButtonLink href={`/agents/${agent.agentId}`}>View its profile</ButtonLink>
+        <ButtonLink href={agentHref(agent.agentId)}>View its profile</ButtonLink>
         <ButtonLink href="/agents">Back to the marketplace</ButtonLink>
       </div>
     </div>

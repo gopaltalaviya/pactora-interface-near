@@ -9,6 +9,7 @@
  * says (the listing's `viewer`, `match=me`).
  */
 
+import type {JobDeadlines} from './job-deadlines';
 import {bearer, formatUnits, request, type ChainId} from './api';
 
 export type Category = 'physical' | 'expertise' | 'judgment';
@@ -72,6 +73,8 @@ export interface Application {
   jobId: string | null;
   createdAt: string;
   decidedAt: string | null;
+  /** The chain's word on whether the bidder can be hired now (stake); null when it could not be read. */
+  hireable?: boolean | null;
 }
 
 export interface ApplicantApplication extends Application {
@@ -83,6 +86,8 @@ export interface ApplicantApplication extends Application {
     location: string;
     score: number;
     completed: number;
+    /** Standing clear (no hold, not blocked). */
+    counterpartyClear?: boolean;
   };
 }
 
@@ -171,6 +176,34 @@ export interface Decision {
   };
   funding?: Funding;
   replayed: boolean;
+}
+
+/** One row of GET /v1/me/agents. `agentId` is the API's id; `chainAgentId` the contract's. */
+export interface MyAgent {
+  agentId: string;
+  chainAgentId: string | null;
+  name: string;
+  kind: 'agent' | 'person';
+  active: boolean;
+  capabilities: string[];
+  pricePerTask: string;
+}
+
+/** `POST /v1/jobs/hire` (a person session only): hire an agent directly at a price the person names. */
+export interface HireBody {
+  /** The API's agentId of the agent hired. */
+  workerAgentId: string;
+  /** Token base units. */
+  amount: string;
+  task: string;
+  capability?: string;
+  idempotencyKey: string;
+}
+
+/** 201: the job, not yet on chain, and how it is funded (the same shape `decide` answers). */
+export interface Hired {
+  job: NonNullable<Decision['job']>;
+  funding?: Funding;
 }
 
 export interface Me {
@@ -263,6 +296,8 @@ export interface JobDetail {
   events: JobEventRow[];
   declined: {reason: string; at: string} | null;
   dispute: {reason: string; reasonHash: string; at: string} | null;
+  /** The contract's deadlines as ISO times (2026-11-10); null until on chain or the phase starts. */
+  deadlines?: JobDeadlines | null;
 }
 
 export interface PreparedAction {
@@ -403,11 +438,35 @@ export const market = {
       'could not record the decision',
     ),
 
+  /** The agents the signed-in account owns, its person record among them (GET /v1/me/agents). */
+  myAgents: (token: string, signal?: AbortSignal) =>
+    request<{agents: MyAgent[]}>(
+      '/v1/me/agents',
+      {headers: bearer(token), ...(signal ? {signal} : {})},
+      'could not load your agents',
+    ),
+
+  /** A person hires an agent directly (POST /v1/jobs/hire); a person client funds it with their wallet next. */
+  hire: (token: string, body: HireBody) =>
+    request<Hired>(
+      '/v1/jobs/hire',
+      {method: 'POST', headers: json(token), body: JSON.stringify(body)},
+      'could not hire the agent',
+    ),
+
   close: (token: string, id: string) =>
     request<Listing>(
       `/v1/listings/${enc(id)}/close`,
       {method: 'POST', headers: json(token), body: '{}'},
       'could not close the listing',
+    ),
+
+  /** Release a selection whose job never reached the chain: the bid is set aside and the slot comes back. */
+  unselect: (token: string, id: string, applicationId: string) =>
+    request<{application: Application; released: boolean; reopened: boolean}>(
+      `/v1/listings/${enc(id)}/unselect`,
+      {method: 'POST', headers: json(token), body: JSON.stringify({applicationId})},
+      'could not release the selection',
     ),
 
   reopen: (token: string, id: string) =>
@@ -530,6 +589,13 @@ export function jobStateWords(
         'The arbiter never ruled, so after the deadline and the grace the worker was paid; the dispute bond was split, half to the worker, half back to the client.',
     };
   }
+  // A "no" before the job was funded: nothing was paid, the listing's slot is open again (item 3).
+  if (job.state === 'created' && !job.chainJobId && job.declined) {
+    return {
+      label: 'Declined before funding',
+      plain: `The worker said no before the job was funded (“${job.declined.reason}”). Nothing was paid and nothing needs signing. If it came from a listing, its slot is open again: pick another bid there.`,
+    };
+  }
   if (job.state === 'created' && !job.chainJobId) {
     return {
       label: 'Not funded yet',
@@ -618,11 +684,15 @@ export function partyOf(
  * delivery). The API and the contract still check; this decides what to offer.
  */
 export function availableActions(
-  job: Pick<JobDetail, 'state' | 'chainJobId' | 'resultMismatch' | 'clientAgentId' | 'workerAgentId'>,
+  job: Pick<JobDetail, 'state' | 'chainJobId' | 'resultMismatch' | 'clientAgentId' | 'workerAgentId'> & {
+    declined?: JobDetail['declined'] | undefined;
+  },
   myAgentId: string | null,
 ): PersonAction[] {
   const party = partyOf(job, myAgentId);
   const onChain = Boolean(job.chainJobId);
+  // A declined job is never funded or declined again; on chain, its client still cancels for the refund.
+  if (job.declined && job.state === 'created') return party === 'client' && onChain ? ['cancel'] : [];
   if (party === 'worker') {
     // Declining is off chain and possible before the job is funded; accepting needs it on chain.
     if (job.state === 'created') return onChain ? ['accept', 'decline'] : ['decline'];

@@ -48,6 +48,21 @@ export const MCP_TOOLS: [string, 'read' | 'spends' | 'writes', string][] = [
     'select hires the applicant: an escrow job is created at their bid price. reject sets the bid aside with a reason.',
   ],
   [
+    'find_listings',
+    'read',
+    'Open listings people and agents posted, filtered by capability and ceiling, so your agent can find work to bid on.',
+  ],
+  [
+    'bid_on_listing',
+    'writes',
+    'Bid on a listing at or under its ceiling, with a short pitch. The poster picks; a selected bid becomes an escrow job.',
+  ],
+  [
+    'claim_listing',
+    'writes',
+    'Take a slot on an instant-hire listing at its ceiling; the first eligible claimers win, and the job is created for you.',
+  ],
+  [
     'close_applications',
     'writes',
     'Stop hiring on a listing you posted; pending bids are set aside, not rejected.',

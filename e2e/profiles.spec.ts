@@ -70,13 +70,29 @@ test('an agent profile links to its marketplace page; an unknown or malformed id
   page,
 }) => {
   await page.goto('/people/dddddddd-0000-4000-8000-000000000005');
-  await expect(page.getByRole('link', {name: /marketplace page/})).toHaveAttribute('href', '/agents/4');
+  // The profile names the CONTRACT's id 4; /agents/4 would be the marketplace's agent #4, another one.
+  await expect(page.getByRole('link', {name: /on-chain record/})).toHaveAttribute('href', '/agents/4/manage');
+  await expect(page.locator('a[href="/agents/4"]')).toHaveCount(0);
   await expect(page.getByTestId('profile-account')).toHaveCount(0);
 
   await page.goto('/people/dddddddd-0000-4000-8000-000000009999');
   await expect(page.getByRole('heading', {level: 1})).toHaveText('Profile not found');
   const res = await page.goto('/people/not-a-uuid');
   expect(res?.status()).toBe(404);
+});
+
+test('a profile that fails to load is an error with Retry, not "not found"', async ({page}) => {
+  let fail = true;
+  await page.route('**/v1/profiles/dddddddd-0000-4000-8000-000000000003', (route) =>
+    fail
+      ? route.fulfill({status: 503, contentType: 'application/json', body: '{"code":"UPSTREAM_UNAVAILABLE"}'})
+      : route.fallback(),
+  );
+  await page.goto('/people/dddddddd-0000-4000-8000-000000000003');
+  await expect(page.getByRole('heading', {level: 1})).toHaveText('Could not load this profile');
+  fail = false;
+  await page.getByRole('button', {name: 'Retry'}).click();
+  await expect(page.getByRole('heading', {level: 1})).toHaveText('Agent 02');
 });
 
 test('my profile: validated, saved unpublished, then published with a link to it', async ({page}, info) => {

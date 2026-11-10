@@ -10,7 +10,7 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import {ApiError, api, formatUnits, type NetworkInfo} from '@/lib/api';
 import {readAgent, type AgentOnChain} from '@/lib/chain';
-import {safeHref} from '@/lib/links';
+import {agentHref, safeHref} from '@/lib/links';
 import {displayAccount, formatYocto, parseUnits} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {signInHref} from '@/lib/signin-next';
@@ -61,19 +61,25 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<Done | null>(null);
   // The API's own id for this agent, when the marketplace lists it (the key routes need it).
-  const [apiAgentId, setApiAgentId] = useState<string | null>(null);
+  // The API serves at most 100 a page (it refused 200, so the lookup never found one).
+  const [listed, setListed] = useState<{agentId: string; name: string} | null>(null);
+  const apiAgentId = listed?.agentId ?? null;
 
   useEffect(() => {
     const controller = new AbortController();
     api
-      .agents({limit: 200}, controller.signal)
+      .agents({limit: 100}, controller.signal)
       .then((list) => {
         const found = list.find((a) => String(a.chainAgentId ?? '') === chainAgentId);
-        if (found) setApiAgentId(String(found.agentId));
+        if (found) setListed({agentId: String(found.agentId), name: found.name});
       })
       .catch(() => undefined);
     return () => controller.abort();
   }, [chainAgentId]);
+
+  // The signed-in person's own record: it speaks of "you", and has no API key to manage.
+  const ownPerson =
+    session.status === 'in' && session.person !== null && session.person.chainAgentId === chainAgentId;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -132,8 +138,25 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
     [session],
   );
 
-  const back = {href: '/agents', label: 'Marketplace'};
-  const title = `On-chain agent ${chainAgentId}`;
+  const back = ownPerson
+    ? {href: '/me', label: 'My account'}
+    : apiAgentId
+      ? {href: agentHref(apiAgentId), label: listed?.name ?? 'Its profile'}
+      : {href: '/agents', label: 'Marketplace'};
+  const title = ownPerson
+    ? 'Your person record'
+    : listed
+      ? `${listed.name}: money and keys`
+      : `On-chain agent ${chainAgentId}`;
+  const faucet = network?.testnet ? (
+    <p className="mt-2 text-xs text-muted">
+      Need test {symbol || 'tokens'}?{' '}
+      <Link href="/me#overview" className="text-accent underline">
+        Claim them from the faucet
+      </Link>{' '}
+      on your account page, then stake here.
+    </p>
+  ) : null;
 
   if (loadError && !data) {
     return (
@@ -181,10 +204,16 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
     <div className="space-y-6">
       <PageHeader
         back={back}
-        eyebrow="Owner controls"
+        eyebrow={ownPerson ? 'Fund and stake' : 'Owner controls'}
         title={title}
         description={
           <>
+            {ownPerson && (
+              <span className="mb-2 block">
+                Your person record is an agent in the Pactora contract (#{chainAgentId}): its purse pays for
+                the jobs you hire, and its stake is the bond that lets people and agents hire you.
+              </span>
+            )}
             Owned by <span className="tabular">{displayAccount(agent.owner)}</span>
             {agent.wallet ? (
               <>
@@ -264,7 +293,15 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Purse" description="What the agent can spend, within its caps." labelledBy="purse">
+        <Card
+          title="Purse"
+          description={
+            ownPerson
+              ? 'Money you have put in to pay for the work you hire, within the caps you set.'
+              : 'What the agent can spend, within its caps.'
+          }
+          labelledBy="purse"
+        >
           {purse ? (
             <div className="grid grid-cols-2 gap-4">
               <Stat label="Balance" value={units(purse.balance)} />
@@ -278,7 +315,15 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
           )}
         </Card>
 
-        <Card title="Stake" description="The bond that makes a worker hireable." labelledBy="stake">
+        <Card
+          title="Stake"
+          description={
+            ownPerson
+              ? 'Your bond. Below the minimum, nobody can hire you; a share is locked while you work a job.'
+              : 'The bond that makes a worker hireable.'
+          }
+          labelledBy="stake"
+        >
           {stake ? (
             <div className="grid grid-cols-2 gap-4">
               <Stat label="Available" value={units(stake.available)} />
@@ -293,8 +338,10 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
           ) : (
             <p className="text-sm text-muted">No stake record.</p>
           )}
+          {faucet}
           <p className="mt-3 text-xs text-muted">
-            Storage held for this agent: {data.storage ? `${formatYocto(data.storage)} NEAR` : 'not read'}.
+            Storage held for {ownPerson ? 'your record' : 'this agent'}:{' '}
+            {data.storage ? `${formatYocto(data.storage)} NEAR` : 'not read'}.
           </p>
         </Card>
       </div>
@@ -423,7 +470,30 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
         <Notice>The API does not name the payment token yet, so funding and staking are off.</Notice>
       )}
 
-      {isOwner && (
+      {isOwner && apiAgentId && !ownPerson && (
+        <p className="text-sm">
+          <Link href={agentHref(apiAgentId)} className="text-accent underline">
+            Its marketplace profile (#{apiAgentId})
+          </Link>
+          <span className="text-muted">
+            {' '}
+            · this page is addressed by the contract&apos;s id {chainAgentId}, the profile by the
+            marketplace&apos;s.
+          </span>
+        </p>
+      )}
+
+      {isOwner && ownPerson && (
+        <Notice>
+          A person record has no API key: you act with your wallet, signed in.{' '}
+          <Link href="/me" className="underline">
+            Back to your account
+          </Link>
+          .
+        </Notice>
+      )}
+
+      {isOwner && !ownPerson && (
         <section aria-labelledby="credentials" className="space-y-4">
           <h2 id="credentials" className="text-lg font-semibold tracking-tight">
             Credentials and record
@@ -431,7 +501,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
           <div className="grid gap-4 md:grid-cols-2">
             <ReissueCard chainAgentId={chainAgentId} suggestedAgentId={apiAgentId} />
             <KeyCard />
-            <AgentEditCard agentId={apiAgentId ?? chainAgentId} decimals={decimals} symbol={symbol} />
+            <AgentEditCard suggestedAgentId={apiAgentId} decimals={decimals} symbol={symbol} />
             <WebhooksCard />
           </div>
         </section>

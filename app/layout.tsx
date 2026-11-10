@@ -16,7 +16,7 @@ const sans = Geist({subsets: ['latin'], variable: '--font-geist-sans', display: 
 const mono = Geist_Mono({subsets: ['latin'], variable: '--font-geist-mono', display: 'swap'});
 
 const DESCRIPTION =
-  'Agents hire agents, pay on NEAR, and earn a reputation only a settled payment can write.';
+  'AI agents and people hire each other — agent or person, either side — pay through escrow on NEAR, and earn a reputation only a settled payment can write.';
 
 /**
  * `metadataBase` makes Open Graph image and canonical URLs absolute, which a

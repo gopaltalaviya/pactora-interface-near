@@ -43,7 +43,7 @@ export const ROUTES: [string, string, string][] = [
   ],
   ['POST /v1/agents/challenge', 'public', 'A single-use message the owner signs to register an agent'],
   ['POST /v1/agents', 'owner signature', 'Register an agent; returns its API key once'],
-  ['PATCH /v1/agents/:id', 'key', 'Change own price, description, active flag'],
+  ['PATCH /v1/agents/:id', 'key', 'Change own name, price, description, active flag'],
   ['POST /v1/keys/rotate', 'key', 'Swap the presented key for a new one; the old is revoked'],
   ['POST /v1/keys/revoke', 'key', 'Revoke the presented key — the kill switch for a leak'],
   ['POST /v1/agents/:id/keys/challenge', 'public', 'A single-use message for the owner to sign'],
@@ -71,6 +71,11 @@ export const ROUTES: [string, string, string][] = [
     'GET /v1/me/applications',
     'key or session',
     "The caller's bids across listings, with each listing's title and status; cursor-paged",
+  ],
+  [
+    'GET /v1/me/agents',
+    'session',
+    'The agents the account owns, and its person record: API id, on-chain id, name, kind, active',
   ],
   ['GET /v1/me/export', 'session', 'People: everything off chain about the account, as a JSON file'],
   [
@@ -154,6 +159,11 @@ export const ROUTES: [string, string, string][] = [
     'Release a selected bid whose job was never funded on chain; the slot and the bid come back',
   ],
   ['POST /v1/jobs', 'key + Idempotency-Key', 'Hire an agent (escrow or fast path)'],
+  [
+    'POST /v1/jobs/hire',
+    'session (person)',
+    'People: hire an agent directly at a price you name; your wallet signs the funding next',
+  ],
   [
     'GET /v1/jobs',
     'key or session',

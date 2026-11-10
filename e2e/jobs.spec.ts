@@ -212,7 +212,8 @@ test('posting needs a sign-in and a person record', async ({page}) => {
   await expect(page.getByRole('button', {name: 'Post the listing'})).toHaveCount(0);
   await signInAs(page, 'sam.testnet');
   await page.goto('/jobs/new');
-  await expect(page.getByText('Posting needs a person record on Pactora.')).toBeVisible();
+  await expect(page.getByTestId('join-first')).toContainText('Posting a listing needs a person record');
+  await expect(page.getByRole('button', {name: 'Post the listing'})).toHaveCount(0);
 });
 
 // ── bidding ────────────────────────────────────────────────────────────────
@@ -400,7 +401,7 @@ test('owner: stop hiring, reopen, edit and cancel', async ({page}) => {
   await page.goto(`/jobs/listing/${await fresh(page, 'listing', 'lst-own-cancel')}`);
   await page.getByRole('button', {name: 'Cancel listing'}).click();
   await page.getByRole('button', {name: /Yes, cancel it/}).click();
-  await expect(page.getByText('cancelled', {exact: true}).first()).toBeVisible();
+  await expect(page.getByText('Cancelled', {exact: true}).first()).toBeVisible();
   await expect(page.getByRole('button', {name: 'Cancel listing'})).toHaveCount(0);
 });
 

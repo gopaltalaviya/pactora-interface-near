@@ -10,6 +10,7 @@ import {SearchPalette} from './search/SearchPalette';
 import {NotificationsBell} from '@/components/market/NotificationsBell';
 import {useAdminRoles} from '@/lib/admin-roles';
 import {useSession} from '@/lib/session';
+import {SessionProblem} from '@/components/market/SessionProblem';
 import {displayAccount} from '@/lib/near';
 import {Icon} from './ui/Icon';
 
@@ -163,7 +164,7 @@ function AccountMenu() {
 
 export function SiteHeader() {
   const pathname = usePathname() ?? '/';
-  const {status, person} = useSession();
+  const {status, person, personError} = useSession();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -225,108 +226,117 @@ export function SiteHeader() {
   ];
 
   return (
-    <header
-      className={
-        'sticky top-0 z-40 border-b backdrop-blur-xl backdrop-saturate-150 transition-[background-color,border-color,box-shadow] duration-300 ' +
-        (scrolled
-          ? 'border-edge/80 bg-ink/75 shadow-[0_8px_24px_-16px_rgb(0_0_0/0.8)]'
-          : 'border-transparent bg-ink/30')
-      }
-    >
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 lg:gap-4 xl:gap-6">
-        <Link href="/" aria-label="Pactora home" className="group flex shrink-0 items-center">
-          <Logo />
-        </Link>
-
-        <nav aria-label="Main" className="hidden items-center gap-0.5 text-[0.875rem] lg:flex xl:gap-1">
-          {LINKS.map((link) => {
-            const active = link.match(pathname);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? 'page' : undefined}
-                className={
-                  'relative inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2 py-1.5 transition-colors duration-200 xl:px-3 ' +
-                  (active ? 'bg-white/[0.06] text-text' : 'text-muted hover:bg-white/[0.04] hover:text-text')
-                }
-              >
-                {link.label}
-                {active && (
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-3 -bottom-[17px] h-px bg-gradient-to-r from-transparent via-accent to-transparent"
-                  />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Which chain, and whether the money is real — on every page,
-            because it is the one fact a viewer must never have to guess. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <SearchButton />
-          <NetworkBadge />
-          <NotificationsBell />
-          <AccountMenu />
-          <Link
-            href="/register"
-            aria-label="Register an agent"
-            // Signed in, the account chip takes the room (NEAR account ids are
-            // long): the button waits for 2xl, and the menu still offers it.
-            className={`group/cta hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_6px_18px_-8px_rgb(233_237_245/0.45)] transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] ${status === 'in' ? '2xl:inline-flex' : 'xl:inline-flex'}`}
-          >
-            <span className="2xl:hidden">Register</span>
-            <span className="hidden 2xl:inline">Register an agent</span>
-            <Icon
-              name="arrowRight"
-              className="size-3 transition-transform duration-200 group-hover/cta:translate-x-0.5"
-            />
-          </Link>
-          <button
-            ref={toggle}
-            type="button"
-            aria-expanded={open}
-            aria-controls="mobile-nav"
-            aria-label={open ? 'Close menu' : 'Open menu'}
-            onClick={() => setOpen((o) => !o)}
-            className="grid size-10 shrink-0 place-items-center rounded-lg border border-edge bg-surface/60 text-muted transition-colors hover:border-edge-strong hover:bg-raised hover:text-text aria-expanded:bg-raised aria-expanded:text-text lg:hidden"
-          >
-            <Icon name={open ? 'x' : 'menu'} />
-          </button>
-        </div>
-      </div>
-
-      <div
-        id="mobile-nav"
-        ref={menu}
-        hidden={!open}
-        className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-edge bg-ink/95 shadow-[0_24px_48px_-16px_rgb(0_0_0/0.8)] backdrop-blur-xl lg:hidden"
+    <>
+      <header
+        className={
+          'sticky top-0 z-40 border-b backdrop-blur-xl backdrop-saturate-150 transition-[background-color,border-color,box-shadow] duration-300 ' +
+          (scrolled
+            ? 'border-edge/80 bg-ink/75 shadow-[0_8px_24px_-16px_rgb(0_0_0/0.8)]'
+            : 'border-transparent bg-ink/30')
+        }
       >
-        <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-1 px-4 py-3 animate-enter sm:px-6">
-          {menuLinks.map((link) => {
-            const active = link.match(pathname);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? 'page' : undefined}
-                className={
-                  'flex min-h-11 items-center justify-between rounded-xl px-3.5 py-3 text-[0.9375rem] transition-colors ' +
-                  (active
-                    ? 'bg-raised font-medium text-text shadow-[inset_2px_0_0_var(--color-accent)]'
-                    : 'text-muted hover:bg-raised/70 hover:text-text')
-                }
-              >
-                {link.label}
-                <Icon name="arrowRight" className="size-3.5 opacity-60" />
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-      <SearchPalette />
-    </header>
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6 lg:gap-4 xl:gap-6">
+          <Link href="/" aria-label="Pactora home" className="group flex shrink-0 items-center">
+            <Logo />
+          </Link>
+
+          <nav aria-label="Main" className="hidden items-center gap-0.5 text-[0.875rem] lg:flex xl:gap-1">
+            {LINKS.map((link) => {
+              const active = link.match(pathname);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={
+                    'relative inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2 py-1.5 transition-colors duration-200 xl:px-3 ' +
+                    (active
+                      ? 'bg-white/[0.06] text-text'
+                      : 'text-muted hover:bg-white/[0.04] hover:text-text')
+                  }
+                >
+                  {link.label}
+                  {active && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-3 -bottom-[17px] h-px bg-gradient-to-r from-transparent via-accent to-transparent"
+                    />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Which chain, and whether the money is real — on every page,
+            because it is the one fact a viewer must never have to guess. */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <SearchButton />
+            <NetworkBadge />
+            <NotificationsBell />
+            <AccountMenu />
+            <Link
+              href="/register"
+              aria-label="Register an agent"
+              // Signed in, the account chip takes the room (NEAR account ids are
+              // long): the button waits for 2xl, and the menu still offers it.
+              className={`group/cta hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_6px_18px_-8px_rgb(233_237_245/0.45)] transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] ${status === 'in' ? '2xl:inline-flex' : 'xl:inline-flex'}`}
+            >
+              <span className="2xl:hidden">Register</span>
+              <span className="hidden 2xl:inline">Register an agent</span>
+              <Icon
+                name="arrowRight"
+                className="size-3 transition-transform duration-200 group-hover/cta:translate-x-0.5"
+              />
+            </Link>
+            <button
+              ref={toggle}
+              type="button"
+              aria-expanded={open}
+              aria-controls="mobile-nav"
+              aria-label={open ? 'Close menu' : 'Open menu'}
+              onClick={() => setOpen((o) => !o)}
+              className="grid size-10 shrink-0 place-items-center rounded-lg border border-edge bg-surface/60 text-muted transition-colors hover:border-edge-strong hover:bg-raised hover:text-text aria-expanded:bg-raised aria-expanded:text-text lg:hidden"
+            >
+              <Icon name={open ? 'x' : 'menu'} />
+            </button>
+          </div>
+        </div>
+
+        <div
+          id="mobile-nav"
+          ref={menu}
+          hidden={!open}
+          className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-edge bg-ink/95 shadow-[0_24px_48px_-16px_rgb(0_0_0/0.8)] backdrop-blur-xl lg:hidden"
+        >
+          <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-1 px-4 py-3 animate-enter sm:px-6">
+            {menuLinks.map((link) => {
+              const active = link.match(pathname);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={
+                    'flex min-h-11 items-center justify-between rounded-xl px-3.5 py-3 text-[0.9375rem] transition-colors ' +
+                    (active
+                      ? 'bg-raised font-medium text-text shadow-[inset_2px_0_0_var(--color-accent)]'
+                      : 'text-muted hover:bg-raised/70 hover:text-text')
+                  }
+                >
+                  {link.label}
+                  <Icon name="arrowRight" className="size-3.5 opacity-60" />
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+        <SearchPalette />
+      </header>
+      {status === 'in' && personError && (
+        <div className="mx-auto mt-4 w-full max-w-6xl px-4 sm:px-6">
+          <SessionProblem />
+        </div>
+      )}
+    </>
   );
 }

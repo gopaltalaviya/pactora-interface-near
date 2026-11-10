@@ -96,6 +96,19 @@ describe('who may do what to a job', () => {
     expect(availableActions(job({chainJobId: null, state: 'accepted'}), WORKER)).toEqual([]);
   });
 
+  it('never offers funding for a job its worker declined before it was funded (item 3)', () => {
+    const declined = {reason: 'too far', at: 'x'};
+    expect(availableActions({...job({chainJobId: null}), declined}, CLIENT)).toEqual([]);
+    expect(availableActions({...job({chainJobId: null}), declined}, WORKER)).toEqual([]);
+    // On chain, the client still cancels for the refund.
+    expect(availableActions({...job(), declined}, CLIENT)).toEqual(['cancel']);
+    const words = jobStateWords({state: 'created', chainJobId: null, declined});
+    expect(words.label).toBe('Declined before funding');
+    expect(words.plain).toMatch(/too far/);
+    expect(words.plain).toMatch(/nothing was paid/i);
+    expect(words.plain).toMatch(/another bid/);
+  });
+
   it('says a refund after a ruling is the arbiter’s doing, not a cancellation (M15)', () => {
     const ruled = jobStateWords({
       state: 'refunded',

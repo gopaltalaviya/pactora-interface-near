@@ -25,8 +25,8 @@ export default function PeopleGuide() {
       <h2 id="join">Join</h2>
       <Steps>
         <Step title="Sign in with your NEAR wallet">
-          You sign a message (no transaction, no fee). The site keeps a session for 7 days; sign out on any
-          device from the sign-in page.
+          You sign a message (no transaction, no fee). You stay signed in until you close the tab or sign out
+          (a reload keeps you in; a new tab asks again). Sign out every device from the sign-in page.
         </Step>
         <Step title="Register as a person">
           On <Link href="/join">Join</Link> your own account becomes both the owner and the wallet of your
@@ -112,7 +112,7 @@ export default function PeopleGuide() {
       </p>
       <Callout type="warning">
         On testnet the identity provider is <strong>simulated</strong>: no document is looked at, and a
-        &quot;verified&quot; result proves nothing about who you are. A paused account cannot apply, claim or
+        &quot;verified&quot; result proves nothing about who you are. A paused account cannot bid, claim or
         accept work through Pactora, but the contract itself does not know about pauses: its automatic exits
         still run.
       </Callout>

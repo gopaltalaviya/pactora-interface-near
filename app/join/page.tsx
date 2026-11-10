@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {Button, ButtonLink} from '@/components/ui/Button';
+import {manageHref} from '@/lib/links';
 import {Card} from '@/components/ui/Card';
 import {Field, TextInput} from '@/components/ui/Field';
 import {PageHeader} from '@/components/ui/PageHeader';
@@ -155,8 +156,9 @@ export default function JoinPage() {
         <Card title="You are on Pactora" labelledBy="joined">
           <p className="text-sm text-muted">
             Your account is registered on chain as agent{' '}
-            <span className="tabular text-text">#{created.chainAgentId}</span>. People cannot be hired yet, so
-            your record is not listed on the marketplace.
+            <span className="tabular text-text">#{created.chainAgentId}</span>. You can now be hired: bid on a
+            listing or claim an instant slot, once you have staked. Publish a profile from your account page
+            to appear in the people directory.
           </p>
           <p className="mt-3 text-sm text-muted">
             Next, stake at least{' '}
@@ -166,7 +168,7 @@ export default function JoinPage() {
             so that you can be hired as a worker.
           </p>
           <div className="mt-4">
-            <ButtonLink href={`/agents/${created.chainAgentId}/manage`}>Fund and stake</ButtonLink>
+            <ButtonLink href={manageHref(created.chainAgentId)}>Fund and stake</ButtonLink>
           </div>
         </Card>
       </div>
@@ -206,7 +208,7 @@ export default function JoinPage() {
             <ButtonLink href={signInHref('/join')}>Sign in</ButtonLink>
           </div>
         </Card>
-      ) : already ? (
+      ) : session.personError ? null : already ? (
         <Card title="You have already joined" labelledBy="already">
           <p className="text-sm text-muted">
             {displayAccount(session.account)} is registered as{' '}
@@ -214,7 +216,7 @@ export default function JoinPage() {
             <span className="tabular">#{already.chainAgentId}</span>).
           </p>
           <div className="mt-4">
-            <ButtonLink href={`/agents/${already.chainAgentId}/manage`}>Fund and stake</ButtonLink>
+            <ButtonLink href={manageHref(already.chainAgentId)}>Fund and stake</ButtonLink>
           </div>
         </Card>
       ) : (

@@ -20,6 +20,7 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import {
   admin,
+  adminTabs,
   rulingWords,
   tally,
   type AdminMe,
@@ -27,8 +28,11 @@ import {
   type BuiltCall,
   type ComplianceCase,
   type Dispute,
+  type AdminTab,
   type Proposal,
 } from '@/lib/admin';
+import {ApiError} from '@/lib/api';
+import {agentHref} from '@/lib/links';
 import {useSession} from '@/lib/session';
 import {auditFilename, auditRange, defaultAuditDates} from '@/lib/audit-export';
 import {functionCall} from '@/lib/wallet';
@@ -54,29 +58,54 @@ export function AdminView() {
   );
 }
 
+/** A refusal (401/403) means no access; anything else is a failure worth retrying. */
+const isRefusal = (err: unknown) =>
+  err instanceof ApiError &&
+  (err.code === 'FORBIDDEN' || err.code === 'UNAUTHORIZED' || err.status === 401 || err.status === 403);
+
+function Retry({onClick}: {onClick: () => void}) {
+  return (
+    <Button variant="secondary" size="sm" onClick={onClick}>
+      Retry
+    </Button>
+  );
+}
+
 function Console() {
   const {authed} = useSession();
   const [me, setMe] = useState<AdminMe | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'disputes' | 'moderation' | 'compliance' | 'reports'>('disputes');
+  const [error, setError] = useState<{text: string; refused: boolean} | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [tab, setTab] = useState<AdminTab>('disputes');
 
   useEffect(() => {
+    setError(null);
     authed((t) => admin.me(t))
       .then((m) => {
         setMe(m);
         setTab(m.roles.includes('council') ? 'disputes' : 'compliance');
       })
-      .catch((err: unknown) => setError(describeError(err).text));
-  }, [authed]);
+      .catch((err: unknown) => setError({text: describeError(err).text, refused: isRefusal(err)}));
+  }, [authed, attempt]);
 
-  if (error) return <ErrorState title="No admin access">{error}</ErrorState>;
+  if (error?.refused) return <ErrorState title="No admin access">{error.text}</ErrorState>;
+  if (error)
+    return (
+      <ErrorState
+        title="Could not load the admin console"
+        action={<Retry onClick={() => setAttempt((n) => n + 1)} />}
+      >
+        {error.text}
+      </ErrorState>
+    );
   if (!me) return <Skeleton className="h-40 w-full" />;
-  const tabs = [
-    ...(me.roles.includes('council') ? [['disputes', 'Dispute desk'] as const] : []),
-    ['moderation', 'Moderation'] as const,
-    ...(me.roles.includes('reviewer') ? [['reports', 'Reports'] as const] : []),
-    ...(me.roles.includes('reviewer') ? [['compliance', 'Compliance'] as const] : []),
-  ];
+  const tabs = adminTabs(me.roles);
+  if (tabs.length === 0)
+    return (
+      <ErrorState title="No admin access">
+        This account is neither on the arbiter council nor a compliance reviewer.
+      </ErrorState>
+    );
   return (
     <div className="space-y-4">
       <p className="text-sm" data-testid="admin-roles">
@@ -88,7 +117,7 @@ function Console() {
         ))}
         {me.arbiterDao && <span className="ml-2 text-muted">DAO {me.arbiterDao}</span>}
       </p>
-      <div role="tablist" aria-label="Admin sections" className="flex gap-2">
+      <div role="tablist" aria-label="Admin sections" className="flex flex-wrap gap-2">
         {tabs.map(([id, label]) => (
           <button
             key={id}
@@ -155,12 +184,24 @@ function Disputes({dao}: {dao: string | null}) {
   const {authed} = useSession();
   const token = useNetwork();
   const [list, setList] = useState<{jobId: string; chainJobId: string | null; amount: string}[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
+    setProblem(null);
     authed((t) => admin.disputes(t))
       .then((d) => setList(d.disputes))
-      .catch(() => setList([]));
-  }, [authed]);
+      .catch((err: unknown) => setProblem(errorText(err)));
+  }, [authed, attempt]);
+  if (problem && !list)
+    return (
+      <ErrorState
+        title="Could not load the disputes"
+        action={<Retry onClick={() => setAttempt((n) => n + 1)} />}
+      >
+        {problem}
+      </ErrorState>
+    );
   if (!list) return <Skeleton className="h-24 w-full" />;
   if (list.length === 0) return <p className="text-sm text-muted">No open disputes.</p>;
   return (
@@ -192,7 +233,10 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
   const send = useSendBuilt(dao);
   const [d, setD] = useState<Dispute | null>(null);
   const [proposals, setProposals] = useState<{council: string[]; proposals: Proposal[]} | null>(null);
+  const [proposalsError, setProposalsError] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // One wallet call at a time: the button that started it shows busy, the others wait.
+  const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   // A Reject vote is asked twice: it is a ruling against one party, signed on chain.
@@ -203,13 +247,17 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
       .then(setD)
       .catch((err: unknown) => setProblem(errorText(err)));
     authed((t) => admin.proposals(t, jobId))
-      .then((p) => setProposals({council: p.council ?? [], proposals: p.proposals}))
-      .catch(() => setProposals({council: [], proposals: []}));
+      .then((p) => {
+        setProposals({council: p.council ?? [], proposals: p.proposals});
+        setProposalsError(null);
+      })
+      .catch((err: unknown) => setProposalsError(errorText(err)));
   }, [authed, jobId, attempt]);
 
   async function propose(forWorker: boolean) {
-    if (!d) return;
+    if (!d || busy) return;
     setProblem(null);
+    setBusy(forWorker ? 'propose-worker' : 'propose-client');
     try {
       const built = await authed((t) => admin.propose(t, jobId, forWorker, d.evidenceHash));
       await send(built.functionCall, {kind: 'propose'});
@@ -217,11 +265,15 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
       setAttempt((n) => n + 1);
     } catch (err) {
       setProblem(errorText(err));
+    } finally {
+      setBusy(null);
     }
   }
   async function vote(p: Proposal, action: 'VoteApprove' | 'VoteReject') {
+    if (busy) return;
     setProblem(null);
     setConfirmReject(null);
+    setBusy(`${action}-${p.id}`);
     try {
       const built = await authed((t) => admin.vote(t, jobId, p.id, action));
       await send(built.functionCall, {kind: 'vote', proposalId: p.id, action});
@@ -229,6 +281,8 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
       setAttempt((n) => n + 1);
     } catch (err) {
       setProblem(errorText(err));
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -249,11 +303,11 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
         </p>
         <p>
           Client:{' '}
-          <Link href={`/agents/${d.client.agentId}`} className="text-accent underline">
+          <Link href={agentHref(d.client.agentId)} className="text-accent underline">
             {d.client.name ?? `agent #${d.client.agentId}`}
           </Link>{' '}
           · Worker:{' '}
-          <Link href={`/agents/${d.worker.agentId}`} className="text-accent underline">
+          <Link href={agentHref(d.worker.agentId)} className="text-accent underline">
             {d.worker.name ?? `agent #${d.worker.agentId}`}
           </Link>{' '}
           · Amount{' '}
@@ -339,39 +393,85 @@ function DisputeDetail({jobId, dao}: {jobId: string; dao: string | null}) {
           it.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void propose(true)}>Propose: pay the worker</Button>
-          <Button variant="danger" onClick={() => void propose(false)}>
+          <Button
+            loading={busy === 'propose-worker'}
+            disabled={busy !== null}
+            onClick={() => void propose(true)}
+          >
+            Propose: pay the worker
+          </Button>
+          <Button
+            variant="danger"
+            loading={busy === 'propose-client'}
+            disabled={busy !== null}
+            onClick={() => void propose(false)}
+          >
             Propose: refund the client
           </Button>
         </div>
+        {proposalsError && (
+          <ErrorState
+            title="Could not load the proposals"
+            action={<Retry onClick={() => setAttempt((n) => n + 1)} />}
+          >
+            {proposalsError}
+          </ErrorState>
+        )}
         {proposals && proposals.proposals.length > 0 && (
           <ul aria-label="Proposals" className="space-y-2">
             {proposals.proposals.map((p) => (
-              <li key={p.id} className="rounded-lg border border-edge p-2" data-testid={`proposal-${p.id}`}>
-                Proposal {p.id}: {rulingWords(p.forWorker)} — {statusWords(p.status)} —{' '}
-                {tally(p, proposals.council.length || 3)}
+              <li
+                key={p.id}
+                className="flex flex-col gap-2 rounded-lg border border-edge p-2 sm:flex-row sm:flex-wrap sm:items-center"
+                data-testid={`proposal-${p.id}`}
+              >
+                <span className="min-w-0 break-words">
+                  Proposal {p.id}: {rulingWords(p.forWorker)} — {statusWords(p.status)} —{' '}
+                  {tally(p, proposals.council.length || 3)}
+                </span>
                 {p.status === 'InProgress' && !p.youVoted && confirmReject !== p.id && (
-                  <span className="ml-2 inline-flex gap-2">
-                    <Button size="sm" onClick={() => void vote(p, 'VoteApprove')}>
+                  <span className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      loading={busy === `VoteApprove-${p.id}`}
+                      disabled={busy !== null}
+                      onClick={() => void vote(p, 'VoteApprove')}
+                    >
                       Approve
                     </Button>
-                    <Button size="sm" variant="secondary" onClick={() => setConfirmReject(p.id)}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() => setConfirmReject(p.id)}
+                    >
                       Reject
                     </Button>
                   </span>
                 )}
                 {p.status === 'InProgress' && !p.youVoted && confirmReject === p.id && (
-                  <span className="ml-2 inline-flex flex-wrap items-center gap-2">
+                  <span className="flex flex-wrap items-center gap-2">
                     <span className="text-muted">Your wallet signs a Reject vote on proposal {p.id}.</span>
-                    <Button size="sm" variant="danger" onClick={() => void vote(p, 'VoteReject')}>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      loading={busy === `VoteReject-${p.id}`}
+                      disabled={busy !== null}
+                      onClick={() => void vote(p, 'VoteReject')}
+                    >
                       Confirm the Reject vote
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmReject(null)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy !== null}
+                      onClick={() => setConfirmReject(null)}
+                    >
                       Not now
                     </Button>
                   </span>
                 )}
-                {p.youVoted && <span className="ml-2 text-muted">You voted {p.youVoted}.</span>}
+                {p.youVoted && <span className="text-muted">You voted {p.youVoted}.</span>}
               </li>
             ))}
           </ul>

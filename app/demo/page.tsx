@@ -13,6 +13,7 @@ import {Field, SecretInput, TextArea} from '@/components/ui/Field';
 import {Icon, type IconName} from '@/components/ui/Icon';
 import {CountUp, Reveal} from '@/components/ui/Motion';
 import {ErrorState} from '@/components/ui/States';
+import {TourVideo, tourVideoEnabled} from '@/components/TourVideo';
 import {
   ApiError,
   api,
@@ -45,11 +46,23 @@ import {shortId} from '@/lib/links';
  *   first question anyone asks.
  */
 
+/**
+ * The goals the API holds a recording for (pactora-backend-near
+ * .agent-cache/orchestrator.json). Under AGENT_MODE=cached the API replays
+ * recorded model answers keyed by the exact prompt, so any other sentence
+ * fails at its first model call: in cached mode these are the only examples.
+ */
+const RECORDED_GOALS = ['Research ETH/USDC liquidity on NEAR and tell me whether to open a position.'];
+
 const EXAMPLES = [
-  'Research NEAR/USDC liquidity on NEAR and tell me whether to open a position.',
+  ...RECORDED_GOALS,
   'Find the cheapest agent that can summarise a protocol, and have it summarise NEAR.',
   'Analyse the risk of providing liquidity to a new pool, then plan the entry.',
 ];
+
+/** The examples this API can run: recorded goals only when it replays recordings; all of them otherwise, or when an older API does not say. */
+const examplesFor = (network: NetworkInfo | null) =>
+  network?.agentMode === 'cached' ? RECORDED_GOALS : EXAMPLES;
 
 const GUIDE: {icon: IconName; title: string; body: string; link?: {href: string; label: string}}[] = [
   {
@@ -99,6 +112,8 @@ export default function DemoPage() {
   const [model, setModel] = useState<ModelStatus | null>(null);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const token: TraceToken | null = network?.paymentToken ?? null;
+  const examples = examplesFor(network);
+  const cached = network?.agentMode === 'cached';
   const ids = {goal: useId(), key: useId(), keyNote: useId()};
   const results = useRef<HTMLElement>(null);
 
@@ -301,8 +316,14 @@ export default function DemoPage() {
 
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted">Or start from an example</p>
+              {cached && (
+                <p className="text-xs text-muted" data-testid="cached-note">
+                  This server replays recorded model answers (no AI quota is spent), so it offers only the
+                  goal it has a recording for. Any other sentence needs a server running a live model.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
-                {EXAMPLES.map((example) => (
+                {examples.map((example) => (
                   <button
                     key={example}
                     type="button"
@@ -376,6 +397,32 @@ export default function DemoPage() {
           </form>
         </Card>
       </Reveal>
+
+      {/* ── No key: the walkthrough instead ─────────────────────────────── */}
+      {!runId && (
+        <section aria-labelledby="watch-heading" className="space-y-4">
+          <h2 id="watch-heading" className="text-lg font-semibold">
+            No key? Watch instead
+          </h2>
+          {tourVideoEnabled() ? (
+            <>
+              <p className="text-sm text-muted">
+                A narrated run, start to settlement, with every transaction on screen.
+              </p>
+              <TourVideo which="demo" />
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              A run needs an orchestrator&apos;s API key, because it spends from that agent&apos;s wallet.
+              Without one, open one of the{' '}
+              <Link href="/runs" className="text-accent hover:underline">
+                past runs
+              </Link>
+              : each keeps its full trace, the verdicts and a transaction link for every payment.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* ── A run in progress, or its result ─────────────────────────────── */}
       {runId && (

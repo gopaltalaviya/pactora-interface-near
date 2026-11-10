@@ -25,7 +25,8 @@ import {describeError, type ErrorView} from '@/lib/errors';
 import {gateForDrafts, listingTermsOf, type DraftPhase} from '@/lib/evidence';
 import {subscribeToJob} from '@/lib/job-stream';
 import {LIMITS, validateReason} from '@/lib/listing-form';
-import {safeHref} from '@/lib/links';
+import {KEEPER_LINE, deadlineRows, windowsText} from '@/lib/job-deadlines';
+import {manageHref, safeHref} from '@/lib/links';
 import {
   amountDisplay,
   availableActions,
@@ -36,6 +37,7 @@ import {
   market,
   partyOf,
   type JobDetail,
+  type MyAgent,
   type PersonAction,
 } from '@/lib/market';
 import {PERSON_METHODS} from '@/lib/wallet-guard';
@@ -104,6 +106,34 @@ export function JobView({jobId}: {jobId: string}) {
   const party = job ? partyOf(job, myAgentId) : null;
   const terms = job ? listingTermsOf(job) : null;
   const delivery = useDelivery(jobId, terms && session.status === 'in' ? party : null, attempt);
+
+  // An agent the viewer owns may be a party: it acts with its API key, not from this page,
+  // but its owner should be told so rather than "you are not a party" (GET /v1/me/agents).
+  const [owned, setOwned] = useState<MyAgent[] | null>(null);
+  const {status, authed} = session;
+  useEffect(() => {
+    if (status !== 'in') {
+      setOwned(null);
+      return;
+    }
+    const controller = new AbortController();
+    authed((t) => market.myAgents(t, controller.signal))
+      .then((r) => setOwned(r.agents))
+      .catch(() => setOwned([]));
+    return () => controller.abort();
+  }, [status, authed]);
+  const ownedParty: OwnedParty | null =
+    job && !party && owned
+      ? (() => {
+          const asWorker = owned.find((a) => a.kind === 'agent' && a.agentId === job.workerAgentId);
+          const asClient = owned.find((a) => a.kind === 'agent' && a.agentId === job.clientAgentId);
+          return asWorker
+            ? {agent: asWorker, side: 'worker'}
+            : asClient
+              ? {agent: asClient, side: 'client'}
+              : null;
+        })()
+      : null;
 
   // Signed in, the way back is the account's jobs; a visitor goes to the public board.
   const back = session.status === 'in' ? {href: '/me', label: 'My account'} : {href: '/jobs', label: 'Jobs'};
@@ -203,6 +233,7 @@ export function JobView({jobId}: {jobId: string}) {
       )}
 
       <Facts job={job} token={token} />
+      <Deadlines job={job} token={token} />
 
       <Actions
         job={job}
@@ -211,6 +242,7 @@ export function JobView({jobId}: {jobId: string}) {
         party={party}
         signedIn={session.status === 'in'}
         ready={session.status !== 'loading' && (session.status !== 'in' || me !== null || meError !== null)}
+        ownedParty={ownedParty}
         fromDraft={terms !== null}
         draftPhase={terms ? delivery.drafts?.phase : undefined}
         onDone={reload}
@@ -324,6 +356,42 @@ function Facts({job, token}: {job: JobDetail; token: TokenInfo | null}) {
   );
 }
 
+/**
+ * The deadlines the job runs against (GET /v1/jobs/:id `deadlines`), and who
+ * closes it when one passes. Before the API says (a job not on chain yet, or
+ * an API that predates the field), the network's windows in words.
+ */
+function Deadlines({job, token}: {job: JobDetail; token: TokenInfo | null}) {
+  const [now] = useState(() => Date.now());
+  if (job.state === 'settled' || job.state === 'refunded') return null;
+  const rows = deadlineRows(job, now);
+  const windows = rows.length === 0 ? windowsText(token?.network.windows) : null;
+  return (
+    <Card title="Deadlines" labelledBy="deadlines">
+      <div className="space-y-3 text-sm" data-testid="job-deadlines">
+        {rows.length > 0 ? (
+          <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+            {rows.map((r) => (
+              <div key={r.key} className="flex justify-between gap-4">
+                <dt className={r.current ? 'font-medium' : 'text-muted'}>{r.label}</dt>
+                <dd className="tabular text-right" data-testid={`deadline-${r.key}`}>
+                  {utc(r.at)}
+                  {r.passed ? ' (passed)' : ''}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p>{windows ?? 'The deadlines are set when the job is funded on chain.'}</p>
+        )}
+        <p className="text-xs text-muted">{KEEPER_LINE}</p>
+      </div>
+    </Card>
+  );
+}
+
+type OwnedParty = {agent: MyAgent; side: 'client' | 'worker'};
+
 function Timeline({job, stream}: {job: JobDetail; stream: StreamState | 'connecting'}) {
   return (
     <Card
@@ -421,6 +489,7 @@ function Actions({
   party,
   signedIn,
   ready,
+  ownedParty,
   fromDraft,
   draftPhase,
   onDone,
@@ -432,6 +501,8 @@ function Actions({
   signedIn: boolean;
   /** The session and the person record are known, so "you are not a party" is true, not just early. */
   ready: boolean;
+  /** An agent the viewer owns is a party (it acts with its API key, not from this page). */
+  ownedParty: OwnedParty | null;
   /** A listing job: the submission is the accepted draft, so there is nothing to type. */
   fromDraft: boolean;
   /** A listing job's delivery phase, so "nothing to do" is never said while a draft waits for this party. */
@@ -743,7 +814,21 @@ function Actions({
             : ''}
         </p>
       )}
-      {!party && (
+      {!party && ownedParty && (
+        <Notice tone="live">
+          <p data-testid="agent-party">
+            Your agent {ownedParty.agent.name} is the {ownedParty.side} on this job. An agent acts with its
+            API key (the SDK, the API or MCP), not from this page: its runtime{' '}
+            {ownedParty.side === 'worker' ? 'accepts and delivers' : 'reviews and pays'}.{' '}
+            {ownedParty.agent.chainAgentId && (
+              <Link href={manageHref(ownedParty.agent.chainAgentId)} className="underline">
+                Manage {ownedParty.agent.name}
+              </Link>
+            )}
+          </p>
+        </Notice>
+      )}
+      {!party && !ownedParty && (
         <p className="text-sm text-muted" data-testid="not-a-party">
           You are not the client or the worker on this job, so you can only watch it.{' '}
           <ButtonLink href="/jobs" size="sm" variant="ghost">

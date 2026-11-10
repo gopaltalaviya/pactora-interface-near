@@ -10,7 +10,18 @@ import {CopyButton} from '@/components/ui/CopyButton';
 import {Field, SecretInput, Select, TextInput} from '@/components/ui/Field';
 import {Notice} from '@/components/ui/States';
 import {formatUnits} from '@/lib/api';
-import {keys, SCOPES, validateApiKey, type IssuedKey, type Scope, type Webhook} from '@/lib/keys';
+import {
+  deliveryLine,
+  keys,
+  parseKinds,
+  savedSummary,
+  SCOPES,
+  validateApiKey,
+  type Delivery,
+  type IssuedKey,
+  type Scope,
+  type Webhook,
+} from '@/lib/keys';
 import {useSession} from '@/lib/session';
 import {signChallenge} from '@/lib/wallet';
 
@@ -264,14 +275,19 @@ export function KeyCard() {
 
 /** The agent's record: name, description, price, active — by its key. */
 export function AgentEditCard({
-  agentId,
+  suggestedAgentId,
   decimals,
   symbol,
 }: {
-  agentId: string;
+  /** The API's id when the page found it; never the chain's id, which names another agent there. */
+  suggestedAgentId: string | null;
   decimals: number;
   symbol: string;
 }) {
+  const [agentId, setAgentId] = useState(suggestedAgentId ?? '');
+  useEffect(() => {
+    if (suggestedAgentId) setAgentId(suggestedAgentId);
+  }, [suggestedAgentId]);
   const [apiKey, setApiKey] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -300,12 +316,14 @@ export function AgentEditCard({
       setProblem('Change at least one field.');
       return;
     }
+    if (!/^\d{1,15}$/.test(agentId.trim())) {
+      setProblem('Give the agent’s Pactora id: the number on its marketplace page.');
+      return;
+    }
     setBusy(true);
     try {
-      const a = await keys.patchAgent(apiKey.trim(), agentId, patch);
-      setSaved(
-        `Saved: ${a.name}, ${formatUnits(a.pricePerTask, decimals)} ${symbol} a task, ${a.active ? 'accepting work' : 'not accepting work'}.`,
-      );
+      const a = await keys.patchAgent(apiKey.trim(), agentId.trim(), patch);
+      setSaved(savedSummary(a, patch.name, (base) => `${formatUnits(base, decimals)} ${symbol}`.trim()));
       setApiKey('');
     } catch (err) {
       setProblem(errorText(err));
@@ -329,6 +347,21 @@ export function AgentEditCard({
       >
         <Field label="Agent API key" htmlFor="edit-key" error={problem}>
           <SecretInput id="edit-key" value={apiKey} onChange={setApiKey} />
+        </Field>
+        <Field
+          label="Pactora agent id"
+          htmlFor="edit-agent-id"
+          hint="The # on its marketplace page (not the on-chain id)."
+        >
+          <TextInput
+            id="edit-agent-id"
+            mono
+            inputMode="numeric"
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value.replace(/\D/g, ''))}
+            autoComplete="off"
+            className="max-w-40"
+          />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Name" htmlFor="edit-name">
@@ -389,20 +422,11 @@ export function WebhooksCard() {
   const [apiKey, setApiKey] = useState('');
   const [list, setList] = useState<Webhook[] | null>(null);
   const [url, setUrl] = useState('');
+  const [kindsText, setKindsText] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [secret, setSecret] = useState<{id: string; secret: string} | null>(null);
-  const [deliveries, setDeliveries] = useState<{
-    id: string;
-    rows: {
-      deliveryId: string;
-      event: string;
-      status: number | null;
-      at: string;
-      attempts: number;
-      error: string | null;
-    }[];
-  } | null>(null);
+  const [deliveries, setDeliveries] = useState<{id: string; rows: Delivery[]} | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   async function withKey<T>(label: string, run: (k: string) => Promise<T>): Promise<T | undefined> {
@@ -460,9 +484,15 @@ export function WebhooksCard() {
                     <p className="break-all">
                       <code className="text-xs">{w.url}</code>{' '}
                       <span className="text-xs text-muted">
-                        · {w.events.join(', ')} · since {utc(w.createdAt)}
+                        · {w.kinds.length > 0 ? w.kinds.join(', ') : 'every event'} · since {utc(w.createdAt)}
                       </span>
                     </p>
+                    {!w.active && (
+                      <p className="text-xs text-refused" data-testid="webhook-disabled">
+                        Paused{w.disabledReason ? `: ${w.disabledReason}` : ''}
+                        {w.consecutiveFailures > 0 ? ` (${w.consecutiveFailures} failures in a row)` : ''}.
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-1.5">
                       <Button
                         size="sm"
@@ -528,11 +558,7 @@ export function WebhooksCard() {
                       <ul aria-label="Deliveries" className="text-xs text-muted">
                         {deliveries.rows.length === 0 && <li>No deliveries yet.</li>}
                         {deliveries.rows.map((d) => (
-                          <li key={d.deliveryId}>
-                            {d.event} · {d.status ?? 'no answer'} · {d.attempts} attempt
-                            {d.attempts === 1 ? '' : 's'} · {utc(d.at)}
-                            {d.error ? ` · ${d.error}` : ''}
-                          </li>
+                          <li key={d.deliveryId}>{deliveryLine(d, utc)}</li>
                         ))}
                       </ul>
                     )}
@@ -544,11 +570,17 @@ export function WebhooksCard() {
               className="flex flex-wrap items-end gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                void withKey('add', (k) => keys.addWebhook(k, url.trim())).then((r) => {
+                const parsed = parseKinds(kindsText);
+                if (parsed.problem) {
+                  setProblem(parsed.problem);
+                  return;
+                }
+                void withKey('add', (k) => keys.addWebhook(k, url.trim(), parsed.kinds)).then((r) => {
                   if (!r) return;
                   setList((xs) => [...(xs ?? []), r]);
                   setSecret({id: r.webhookId, secret: r.secret});
                   setUrl('');
+                  setKindsText('');
                 });
               }}
             >
@@ -561,6 +593,20 @@ export function WebhooksCard() {
                     autoComplete="off"
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://example.com/pactora"
+                  />
+                </Field>
+              </div>
+              <div className="min-w-0 flex-1">
+                <Field
+                  label="Event kinds (optional)"
+                  htmlFor="wh-kinds"
+                  hint="Comma separated, like job.settled, job.message. Empty: every event."
+                >
+                  <TextInput
+                    id="wh-kinds"
+                    value={kindsText}
+                    autoComplete="off"
+                    onChange={(e) => setKindsText(e.target.value)}
                   />
                 </Field>
               </div>

@@ -20,6 +20,8 @@ const network = {
   name: 'NEAR Testnet',
   shortName: 'near-testnet',
   testnet: true,
+  // The API's AGENT_MODE: cached replays recordings (backend .agent-cache).
+  agentMode: 'cached',
   paymentToken: {symbol: 'USDC', decimals: 6, accountId: 'musdc.pactora.testnet'},
   contracts: {
     Pactora: 'pactora.testnet',
@@ -540,6 +542,17 @@ const filled = twoBids('lst-own-filled', {status: 'open'});
 filled.slots.push({slot: 1, jobId: 'bbbbbbbb-0000-4000-8000-00000000f001'});
 filled.applications[0].status = 'selected';
 filled.applications[0].jobId = 'bbbbbbbb-0000-4000-8000-00000000f001';
+// Item 7: one bidder the chain reports as not hireable, one on hold.
+const flagged = twoBids('lst-own-flags');
+flagged.applications[0].hireable = false;
+flagged.applications[1].clear = false;
+// Item 8: hiring stopped and the deadline passed — it cannot be reopened.
+twoBids('lst-own-expired', {status: 'closed', deadline: '2026-01-01T00:00:00.000Z'});
+// Item 8: every slot taken — the copy must not offer "stop hiring".
+const allFilled = twoBids('lst-own-allfilled', {status: 'filled'});
+allFilled.slots.push({slot: 1, jobId: 'bbbbbbbb-0000-4000-8000-00000000f002'});
+allFilled.applications[0].status = 'selected';
+allFilled.applications[0].jobId = 'bbbbbbbb-0000-4000-8000-00000000f002';
 // Someone else's listing whose every slot is taken: no longer taking bids.
 own('lst-closed-filled', {client: clientOf('mia.testnet'), title: 'A filled listing', status: 'filled'});
 for (let i = 1; i <= 2; i++) {
@@ -681,6 +694,12 @@ addJob(JOB(13), {state: 'accepted', chainJobId: '5013'});
 addJob(JOB(14), {state: 'created', chainJobId: '5014'});
 addJob(JOB(15), {state: 'submitted', chainJobId: '5015', result: {answer: 'x'}});
 addJob(JOB(17), {state: 'submitted', chainJobId: '5017', result: {answer: 'y'}});
+// Item 3: the worker said no before the client funded it.
+addJob(JOB(18), {
+  state: 'created',
+  chainJobId: null,
+  declined: {reason: 'I cannot get there in time.', at: '2026-11-02T09:30:00.000Z'},
+});
 addJob(JOB(16), {
   state: 'created',
   chainJobId: '5016',
@@ -728,6 +747,19 @@ listingJob(41, {state: 'created'}); // not accepted: chat and drafts closed
 listingJob(42); // filled below: a round awaiting review, with a photo and a message
 listingJob(43); // filled below: an accepted draft, ready to submit
 addJob(JOB(50), {state: 'disputed', chainJobId: '7050'}); // the admin desk's dispute
+// The job page's deadlines (2026-11-10): one due in the future, one from an API without the field,
+// whose worker is the marketplace agent 1 (owned by `owner-…` accounts, GET /v1/me/agents).
+addJob(JOB(70), {
+  state: 'accepted',
+  chainJobId: '5070',
+  deadlines: {
+    acceptBy: '2026-11-02T09:10:00.000Z',
+    workBy: '2099-01-01T12:00:00.000Z',
+    reviewBy: null,
+    disputeBy: null,
+  },
+});
+addJob(JOB(71), {state: 'created', chainJobId: '5071', worker: '1', noDeadlines: true});
 
 const titleOf = (j) => {
   const listing = j.spec?.input?.listing;
@@ -768,7 +800,29 @@ const jobView = (j) => ({
   })),
   declined: j.declined,
   dispute: j.dispute,
+  deadlines: deadlinesOf(j),
 });
+/**
+ * GET /v1/jobs/:id `deadlines` (2026-11-10): the contract's deadlines as ISO
+ * times, null until the job is on chain or the phase has started. Here they
+ * are counted from createdAt with the network's windows; a fixture may set
+ * its own (`j.deadlines`), or `noDeadlines` for an API that predates the field.
+ */
+function deadlinesOf(j) {
+  if (j.noDeadlines) return undefined;
+  if (j.deadlines) return j.deadlines;
+  if (!j.chainJobId) return {acceptBy: null, workBy: null, reviewBy: null, disputeBy: null};
+  const t0 = Date.parse(j.createdAt);
+  const at = (s) => new Date(t0 + s * 1000).toISOString();
+  const w = network.windows;
+  const reviewed = ['submitted', 'disputed', 'settled'].includes(j.state) || j.result;
+  return {
+    acceptBy: at(w.accept),
+    workBy: at(w.accept + w.work),
+    reviewBy: reviewed ? at(w.accept + w.work + w.review) : null,
+    disputeBy: j.state === 'disputed' ? at(w.accept + w.work + w.review + w.dispute) : null,
+  };
+}
 const jobRow = (j, agentId) => ({
   jobId: j.jobId,
   chainJobId: j.chainJobId,
@@ -979,6 +1033,114 @@ const jobSummary = (j) => ({
   spec: {capability: 'photo-capture'},
 });
 
+// ── 2026-11-10: a person hires an agent directly; the agents an account owns ──
+// POST /v1/jobs/hire answers like /decide for a person client: the job, not on
+// chain yet, and the create_job call the person's wallet signs (routes/jobs.ts).
+// GET /v1/me/agents: the account's agents and its person record (routes/me.ts).
+const OWNED = {
+  // The mock marketplace's two agents belong to owner.testnet (their wallets are its sub-accounts).
+  'owner.testnet': [1, 2],
+};
+const hires = new Map(); // idempotencyKey -> {json, reply}
+
+async function hireRoutes(req, res, path, account, me) {
+  if (path === '/v1/me/agents' && req.method === 'GET') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+    const rows = (OWNED[account] ?? [])
+      .map((id) => agents.find((a) => a.agentId === id))
+      .filter(Boolean)
+      .map((a) => ({
+        agentId: String(a.agentId),
+        chainAgentId: a.chainAgentId ?? null,
+        name: a.name,
+        kind: 'agent',
+        active: a.active,
+        capabilities: a.capabilities,
+        pricePerTask: a.pricePerTask,
+      }));
+    const p = PEOPLE[account];
+    if (p)
+      rows.unshift({
+        agentId: p.agentId,
+        chainAgentId: p.chainAgentId,
+        name: p.name,
+        kind: 'person',
+        active: true,
+        capabilities: p.capabilities ?? [],
+        pricePerTask: '0',
+      });
+    return send(res, 200, {agents: rows});
+  }
+  if (path !== '/v1/jobs/hire' || req.method !== 'POST') return null;
+  if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
+  if (!me) return problem(res, 403, 'FORBIDDEN', 'only a person may hire with a session');
+  const standing = standingOf.get(account);
+  if (standing) return problem(res, 403, 'COUNTERPARTY_BLOCKED', `your account is on ${standing}`);
+  const b = await readBody(req);
+  const bad =
+    typeof b.workerAgentId !== 'string' ||
+    !/^\d{1,15}$/.test(b.workerAgentId) ||
+    typeof b.amount !== 'string' ||
+    !/^\d{1,39}$/.test(b.amount) ||
+    typeof b.task !== 'string' ||
+    b.task.trim().length < 1 ||
+    b.task.length > 2000 ||
+    typeof b.idempotencyKey !== 'string' ||
+    b.idempotencyKey.length < 8 ||
+    (b.capability !== undefined && typeof b.capability !== 'string');
+  if (bad)
+    return problem(res, 422, 'SCHEMA_MISMATCH', 'workerAgentId, amount, task (1-2000) and idempotencyKey');
+  const json = JSON.stringify({...b, account});
+  const seen = hires.get(b.idempotencyKey);
+  if (seen) {
+    if (seen.json !== json)
+      return problem(res, 409, 'IDEMPOTENCY_CONFLICT', 'this key was used for a different hire');
+    return send(res, 201, seen.reply);
+  }
+  const worker = agents.find((a) => a.agentId === Number(b.workerAgentId));
+  if (!worker) return problem(res, 404, 'NOT_FOUND', `no agent ${b.workerAgentId}`);
+  if ((OWNED[account] ?? []).includes(worker.agentId))
+    return problem(res, 403, 'FORBIDDEN', 'an agent may not be hired by its own owner');
+  if (!worker.active || !worker.chainAgentId)
+    return problem(res, 409, 'AGENT_NOT_HIREABLE', `${worker.name} cannot be hired now`);
+  if (BigInt(b.amount) < BigInt(network.minJobAmount))
+    return problem(
+      res,
+      422,
+      'SCHEMA_MISMATCH',
+      `amount: below the minimum job amount ${network.minJobAmount}`,
+    );
+  if (BigInt(b.amount) > BigInt(network.maxJobAmount))
+    return problem(res, 402, 'BUDGET_EXCEEDED', `amount: above the most one job may hold`);
+  const j = addJob(jobUuid(), {
+    chainJobId: null,
+    client: me,
+    worker: String(worker.agentId),
+    amount: b.amount,
+    spec: {capability: b.capability ?? worker.capabilities[0], input: {task: b.task}},
+    createdAt: new Date().toISOString(),
+    events: [{kind: 'job.created', txHash: null, occurredAt: new Date().toISOString()}],
+  });
+  const reply = {
+    job: {...jobSummary(j), spec: j.spec},
+    funding: {
+      by: 'person',
+      done: false,
+      signerId: account,
+      functionCall: {
+        receiverId: 'pactora.testnet',
+        methodName: 'create_job',
+        args: {},
+        gas: '100000000000000',
+        deposit: '0',
+      },
+      confirm: `/v1/jobs/${j.jobId}/person-actions/confirm`,
+    },
+  };
+  hires.set(b.idempotencyKey, {json, reply});
+  return send(res, 201, reply);
+}
+
 async function market(req, res, url) {
   const account = sessionAccount(req);
   const me = account ? agentOfAccount(account) : null;
@@ -1045,6 +1207,7 @@ async function market(req, res, url) {
     });
   }
 
+  if ((await hireRoutes(req, res, path, account, me)) !== null) return;
   if ((await roundRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await channelRoutes(req, res, path, account, me)) !== null) return;
   if ((await adminRoutes(req, res, path, account, url)) !== null) return;
@@ -1156,7 +1319,7 @@ async function market(req, res, url) {
     return send(res, 201, listingView(l));
   }
 
-  const lm = /^\/v1\/listings\/([^/]+)(?:\/(applications|decide|close|reopen|claim))?$/.exec(path);
+  const lm = /^\/v1\/listings\/([^/]+)(?:\/(applications|decide|close|reopen|claim|unselect))?$/.exec(path);
   if (lm) {
     const l = listings.get(lm[1]);
     if (!l) return problem(res, 404, 'NOT_FOUND', 'no such listing');
@@ -1196,7 +1359,12 @@ async function market(req, res, url) {
         sort,
         applications: rows
           .slice((page - 1) * 20, page * 20)
-          .map((a) => ({...application(a), applicant: a.applicant})),
+          // As listings.ts: the chain's word on hireability, and standing as a yes/no.
+          .map((a) => ({
+            ...application(a),
+            hireable: a.hireable ?? true,
+            applicant: {...a.applicant, counterpartyClear: a.clear ?? true},
+          })),
       });
     }
 
@@ -1296,6 +1464,38 @@ async function market(req, res, url) {
             };
       if (l.funding === 'signer') j.chainJobId = '7000';
       return send(res, 200, {application: application(a), job: jobSummary(j), funding, replayed: false});
+    }
+
+    // POST /v1/listings/:id/unselect (listings.ts): release a selection the chain never funded.
+    if (sub === 'unselect' && req.method === 'POST') {
+      const body = await readBody(req);
+      const a = l.applications.find((x) => x.applicationId === body.applicationId);
+      if (!a) return problem(res, 404, 'NOT_FOUND', `no application ${body.applicationId} on this listing`);
+      if (a.status !== 'selected')
+        return problem(res, 409, 'INVALID_STATE', `this application is ${a.status}, not selected`);
+      const j = a.jobId ? jobs.get(a.jobId) : undefined;
+      if (j?.chainJobId)
+        return problem(
+          res,
+          409,
+          'INVALID_STATE',
+          `job ${j.jobId} is funded on chain (${j.chainJobId}); cancel the job instead`,
+        );
+      a.status = 'rejected';
+      a.reason = 'The client released the selection before the job was funded.';
+      a.reopenable = false;
+      a.decidedAt = new Date().toISOString();
+      l.slots = l.slots.filter((x) => x.jobId !== a.jobId);
+      if (j) jobs.delete(j.jobId);
+      a.jobId = null;
+      let reopened = false;
+      if (l.status === 'filled' && new Date(l.deadline).getTime() > Date.now()) {
+        l.status = 'open';
+        for (const x of l.applications) x.reopenable = false;
+        reopened = true;
+      }
+      l.updatedAt = new Date().toISOString();
+      return send(res, 200, {application: application(a), released: true, reopened});
     }
 
     if (sub === 'close') {
@@ -2427,6 +2627,7 @@ async function delivery(req, res, path, me) {
 // ── the 2026-11-09 round: my bids, dispute evidence, reports, GDPR, standing, keys, webhooks ──
 const applicationRow = (l, a) => ({
   ...application(a),
+  hireable: a.hireable ?? null,
   listing: {
     listingId: l.listingId,
     title: l.title,
@@ -2444,7 +2645,7 @@ const deletedAccounts = new Set();
 const noOpenJobs = new Set();
 const standingOf = new Map(); // account -> 'hold' | 'blocked'
 const myKeys = new Map(); // keyId -> {agentId, revoked}
-const webhooks = new Map(); // account -> [{webhookId, url, events, createdAt}]
+const webhooks = new Map(); // auth -> [hookView of routes/webhooks.ts]
 const agentPatches = new Map(); // chainAgentId -> patch
 
 async function roundRoutes(req, res, path, account, me, url) {
@@ -2870,7 +3071,14 @@ createServer(async (req, res) => {
     agentPatches.set(agentPatch[1], {...(agentPatches.get(agentPatch[1]) ?? {}), ...b});
     const found =
       agents.find((a) => a.agentId === Number(agentPatch[1])) ?? agent(Number(agentPatch[1]), 'Patched');
-    return send(res, 200, {...found, ...agentPatches.get(agentPatch[1])});
+    const now = {...found, ...agentPatches.get(agentPatch[1])};
+    // The API's reply (routes/agents.ts): these four fields, not the whole profile.
+    return send(res, 200, {
+      agentId: now.agentId,
+      name: now.name,
+      pricePerTask: now.pricePerTask,
+      active: now.active,
+    });
   }
   if (url.pathname.startsWith('/v1/webhooks')) {
     const auth = req.headers.authorization ?? '';
@@ -2883,14 +3091,23 @@ createServer(async (req, res) => {
       const b = await readBody(req);
       if (!/^https:\/\//.test(String(b.url ?? '')))
         return problem(res, 422, 'SCHEMA_MISMATCH', 'url must be https');
+      if (b.events !== undefined) return problem(res, 422, 'SCHEMA_MISMATCH', 'unknown field events');
+      // The API's hookView (routes/webhooks.ts): `kinds`, [] meaning every kind.
       const w = {
         webhookId: randomUUID(),
         url: b.url,
-        events: b.events ?? ['*'],
+        kinds: [...new Set(Array.isArray(b.kinds) ? b.kinds : [])],
+        active: true,
+        consecutiveFailures: 0,
+        disabledReason: null,
         createdAt: new Date().toISOString(),
       };
       list.push(w);
-      return send(res, 201, {...w, secret: `whsec_${'5'.repeat(32)}`});
+      return send(res, 201, {
+        ...w,
+        secret: `whsec_${'5'.repeat(32)}`,
+        note: 'The secret is shown only now. Verify Pactora-Signature with it (docs/15).',
+      });
     }
     const wm = /^\/v1\/webhooks\/([^/]+)(\/deliveries|\/rotate)?$/.exec(url.pathname);
     if (wm) {
@@ -2901,23 +3118,40 @@ createServer(async (req, res) => {
           auth,
           list.filter((x) => x !== w),
         );
-        return send(res, 204, null);
+        return send(res, 200, {webhookId: w.webhookId, deleted: true});
       }
       if (wm[2] === '/deliveries')
         return send(res, 200, {
+          webhookId: w.webhookId,
           deliveries: [
             {
-              deliveryId: 'd1',
-              event: 'job.settled',
-              status: 200,
-              at: new Date().toISOString(),
+              deliveryId: randomUUID(),
+              seq: 2,
+              status: 'pending',
+              attempts: 2,
+              lastStatus: 503,
+              lastError: 'HTTP 503',
+              nextAttemptAt: new Date(Date.now() + 60_000).toISOString(),
+              deliveredAt: null,
+            },
+            {
+              deliveryId: randomUUID(),
+              seq: 1,
+              status: 'delivered',
               attempts: 1,
-              error: null,
+              lastStatus: 200,
+              lastError: null,
+              nextAttemptAt: null,
+              deliveredAt: new Date().toISOString(),
             },
           ],
         });
       if (wm[2] === '/rotate' && req.method === 'POST')
-        return send(res, 200, {webhookId: w.webhookId, secret: `whsec_${'6'.repeat(32)}`});
+        return send(res, 200, {
+          ...w,
+          secret: `whsec_${'6'.repeat(32)}`,
+          note: 'The new secret is shown only now; deliveries from here on are signed with it.',
+        });
     }
     return problem(res, 404, 'NOT_FOUND', 'not found');
   }
@@ -2943,8 +3177,10 @@ createServer(async (req, res) => {
     });
   }
   if (url.pathname === '/v1/agents') {
+    // The API clamps limit to 100 (routes/agents.ts DiscoverQuery).
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 20) || 20));
     const capability = url.searchParams.get('capability');
-    if (!capability) return send(res, 200, {agents});
+    if (!capability) return send(res, 200, {agents: agents.slice(0, limit)});
     if (capability !== 'market-research') return send(res, 200, {agents: []});
     // Filtered by a skill, as the API does: each agent carries its record in it.
     return send(res, 200, {

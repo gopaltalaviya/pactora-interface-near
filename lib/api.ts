@@ -36,6 +36,12 @@ export interface NetworkInfo {
   name: string;
   shortName?: string;
   testnet: boolean;
+  /**
+   * How the hosted runs think (2026-11-10): `cached` replays recorded model
+   * answers, so only a recorded goal can run; `live` calls a model. Absent on
+   * an older API.
+   */
+  agentMode?: 'cached' | 'live';
   /** `accountId` is the token contract; null until it is deployed. */
   paymentToken: {symbol: string; decimals: number; accountId: string | null};
   contracts: {Pactora: string; PaymentToken: string; Arbiter: string};

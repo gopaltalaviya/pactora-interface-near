@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {errorText} from '@/components/market/hooks';
+import {Button} from '@/components/ui/Button';
 import {utc} from '@/components/market/ListingCard';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Card} from '@/components/ui/Card';
@@ -10,31 +11,65 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Skeleton} from '@/components/ui/States';
 import {ReportButton} from '@/components/market/Report';
 import {RecordOverTime} from '@/components/market/RecordOverTime';
+import {ApiError, api} from '@/lib/api';
+import {agentHref, manageHref} from '@/lib/links';
 import {displayAccount} from '@/lib/near';
 import {authorText, profiles, ratingText, starsOf, type ProfileDetail} from '@/lib/profiles';
 
 /** One published profile: what its owner chose to show, and what the other side of their jobs wrote. */
 export function ProfileView({profileId}: {profileId: string}) {
   const [p, setP] = useState<ProfileDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{text: string; missing: boolean} | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  // An agent's profile names its CONTRACT id; its marketplace page is keyed by the API's id.
+  const [marketId, setMarketId] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    setError(null);
     profiles
       .get(profileId, controller.signal)
       .then(setP)
       .catch((err: unknown) => {
-        if (!controller.signal.aborted) setError(errorText(err));
+        if (controller.signal.aborted) return;
+        setError({text: errorText(err), missing: err instanceof ApiError && err.code === 'NOT_FOUND'});
       });
     return () => controller.abort();
-  }, [profileId]);
+  }, [profileId, attempt]);
+
+  const chainAgentId = p?.kind === 'agent' ? p.chainAgentId : null;
+  useEffect(() => {
+    if (!chainAgentId) return;
+    const controller = new AbortController();
+    api
+      .agents({limit: 100}, controller.signal)
+      .then((list) => {
+        const found = list.find((a) => String(a.chainAgentId ?? '') === chainAgentId);
+        if (found) setMarketId(found.agentId);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [chainAgentId]);
 
   const back = {href: '/people', label: 'Directory'};
   if (error && !p) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title="Profile not found" />
-        <ErrorState title="This profile is not published, or does not exist">{error}</ErrorState>
+        <PageHeader back={back} title={error.missing ? 'Profile not found' : 'Could not load this profile'} />
+        {error.missing ? (
+          <ErrorState title="This profile is not published, or does not exist">{error.text}</ErrorState>
+        ) : (
+          <ErrorState
+            title="The profile could not be loaded"
+            action={
+              <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+                Retry
+              </Button>
+            }
+          >
+            {error.text}
+          </ErrorState>
+        )}
       </div>
     );
   }
@@ -127,9 +162,14 @@ export function ProfileView({profileId}: {profileId: string}) {
             <ReportButton targetType="person" targetId={p.profileId} what="this profile" />
           </div>
           {p.kind === 'agent' && p.chainAgentId && (
-            <p>
-              <Link href={`/agents/${p.chainAgentId}`} className="text-accent underline">
-                Its marketplace page and on-chain record
+            <p className="flex flex-wrap gap-x-4 gap-y-1">
+              {marketId !== null && (
+                <Link href={agentHref(marketId)} className="text-accent underline">
+                  Its marketplace page
+                </Link>
+              )}
+              <Link href={manageHref(p.chainAgentId)} className="text-accent underline">
+                Its on-chain record (#{p.chainAgentId})
               </Link>
             </p>
           )}

@@ -31,7 +31,9 @@ export function Card({
                 {title}
               </h2>
             )}
-            {description && <p className="text-xs leading-relaxed text-muted">{description}</p>}
+            {description && (
+              <p className="text-xs leading-relaxed text-muted [overflow-wrap:anywhere]">{description}</p>
+            )}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>

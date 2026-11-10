@@ -10,7 +10,15 @@ import {
   useSignInHref,
   type TokenInfo,
 } from '@/components/market/hooks';
-import {PriceLine, STATUS_TONE, utc} from '@/components/market/ListingCard';
+import {
+  CATEGORY_WORDS,
+  MODE_WORDS,
+  PriceLine,
+  STATUS_TONE,
+  STATUS_WORDS,
+  utc,
+} from '@/components/market/ListingCard';
+import {NotReady, useBidReadiness} from '@/components/market/Readiness';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -140,10 +148,10 @@ export function ListingView({listingId}: {listingId: string}) {
         titleClassName="text-2xl sm:text-3xl"
         actions={
           <>
-            <Badge tone={STATUS_TONE[listing.status]}>{listing.status}</Badge>
-            <Badge tone="chain">{listing.category}</Badge>
-            <Badge>{listing.interactionMode}</Badge>
-            {listing.hiringMode === 'instant' && <Badge tone="live">instant hiring</Badge>}
+            <Badge tone={STATUS_TONE[listing.status]}>{STATUS_WORDS[listing.status] ?? listing.status}</Badge>
+            <Badge tone="chain">{CATEGORY_WORDS[listing.category] ?? listing.category}</Badge>
+            <Badge>{MODE_WORDS[listing.interactionMode] ?? listing.interactionMode}</Badge>
+            {listing.hiringMode === 'instant' && <Badge tone="live">Instant hiring</Badge>}
             {listing.hidden && <Badge tone="refused">hidden by moderation</Badge>}
           </>
         }
@@ -242,8 +250,12 @@ function ApplicantPanel({
   const [confirmWithdraw, setConfirmWithdraw] = useState<string | null>(null);
   const decimals = token?.decimals ?? 6;
   const signIn = useSignInHref();
+  const readiness = useBidReadiness(token);
+  const notReady = readiness.reason !== null;
 
   if (session.status === 'loading') return null;
+  // The person record is unknown (the API failed): the banner under the header says so, with a retry.
+  if (session.status === 'in' && !session.person && session.personError) return null;
   // A listing that is not open takes no bids from anyone: say that, rather
   // than asking a visitor to sign in (or join) for a bid they cannot send.
   if (listing.status !== 'open' && (session.status === 'out' || !session.person)) {
@@ -425,7 +437,13 @@ function ApplicantPanel({
             </p>
           ) : (
             <div className="mt-4">
-              <Button loading={busy === 'claim'} disabled={busy !== null} onClick={() => void claim()}>
+              <NotReady readiness={readiness} />
+              <Button
+                className={notReady ? 'mt-3' : ''}
+                loading={busy === 'claim'}
+                disabled={busy !== null || notReady}
+                onClick={() => void claim()}
+              >
                 Claim a slot
               </Button>
             </div>
@@ -434,6 +452,7 @@ function ApplicantPanel({
       ) : standing.canApply ? (
         <Card title="Bid on this work" labelledBy="bid">
           <form onSubmit={(e) => void apply(e)} noValidate className="space-y-4">
+            <NotReady readiness={readiness} />
             <Field
               label={`Your price${token?.symbol ? ` (${token.symbol})` : ''}`}
               htmlFor="bid-price"
@@ -468,7 +487,7 @@ function ApplicantPanel({
                 aria-invalid={Boolean(errors.proposal) || undefined}
               />
             </Field>
-            <Button type="submit" loading={busy === 'apply'} disabled={busy !== null}>
+            <Button type="submit" loading={busy === 'apply'} disabled={busy !== null || notReady}>
               Send my bid
             </Button>
           </form>
@@ -493,6 +512,69 @@ const SORTS: {value: ApplicationSort; label: string}[] = [
   {value: 'price_high', label: 'Price, high to low'},
   {value: 'rating', label: 'Best rated'},
 ];
+
+/** A slot whose job was chosen but never reached the chain: it can be funded, or released. */
+interface UnfundedSlot {
+  jobId: string;
+  amount: string;
+  amountDisplay: string;
+  /** The selected bid behind it, which `unselect` names; null when it is not on the first page of bids. */
+  applicationId: string | null;
+}
+
+/**
+ * Which filled slots still need funding (item 8): a selection survives a
+ * reload, the "Fund the job" card does not, so it is worked out again from
+ * each slot's job (not on chain, not declined) and the selected bids.
+ */
+function useUnfunded(
+  slots: {slot: number; jobId: string | null}[],
+  listing: ListingDetail,
+): {rows: Map<string, UnfundedSlot>; refresh: () => void} {
+  const {authed} = useSession();
+  const [rows, setRows] = useState<Map<string, UnfundedSlot>>(new Map());
+  const [attempt, setAttempt] = useState(0);
+  const jobIds = slots.map((s) => s.jobId).filter((j): j is string => Boolean(j));
+  const key = jobIds.join(',');
+  useEffect(() => {
+    if (!key) {
+      setRows(new Map());
+      return;
+    }
+    const controller = new AbortController();
+    const ids = key.split(',');
+    Promise.all(ids.map((id) => market.job(id, controller.signal).catch(() => null)))
+      .then(async (found) => {
+        const open = found.filter(
+          (j): j is NonNullable<typeof j> =>
+            j !== null && j.state === 'created' && !j.chainJobId && !j.declined,
+        );
+        if (open.length === 0) return new Map<string, UnfundedSlot>();
+        const selected = await authed((t) =>
+          market.applications(t, listing.listingId, {status: 'selected'}),
+        ).catch(() => null);
+        return new Map(
+          open.map((j) => [
+            j.jobId,
+            {
+              jobId: j.jobId,
+              amount: j.amount,
+              amountDisplay: j.amountDisplay,
+              applicationId:
+                selected?.applications.find((a) => a.status === 'selected' && a.jobId === j.jobId)
+                  ?.applicationId ?? null,
+            },
+          ]),
+        );
+      })
+      .then((m) => {
+        if (!controller.signal.aborted) setRows(m);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [key, authed, listing.listingId, listing.updatedAt, attempt]);
+  return {rows, refresh: useCallback(() => setAttempt((n) => n + 1), [])};
+}
 
 function OwnerPanel({
   listing,
@@ -547,6 +629,26 @@ function OwnerPanel({
   }
 
   const untouched = listing.slotsFilled === 0;
+  const pastDeadline = new Date(listing.deadline).getTime() <= Date.now();
+  const unfunded = useUnfunded(slots, listing);
+  const [released, setReleased] = useState<{slot: number; reopened: boolean} | null>(null);
+
+  async function release(slot: number, applicationId: string) {
+    setBusy(`release-${slot}`);
+    setError(null);
+    setReleased(null);
+    try {
+      const out = await session.authed((t) => market.unselect(t, listing.listingId, applicationId));
+      setReleased({slot, reopened: out.reopened});
+      setFunding(null);
+      unfunded.refresh();
+      reload();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -563,7 +665,7 @@ function OwnerPanel({
               Stop hiring
             </Button>
           )}
-          {listing.status === 'closed' && (
+          {listing.status === 'closed' && !pastDeadline && (
             <Button
               variant="secondary"
               size="sm"
@@ -623,11 +725,15 @@ function OwnerPanel({
         <p className="mt-3 text-xs text-muted" data-testid="manage-help">
           {listing.status === 'cancelled'
             ? 'This listing is cancelled: every pending bid was rejected, and nothing more can be done with it.'
-            : listing.status === 'closed'
-              ? 'Hiring is stopped. Pending bids are set aside (shown as pending, reopenable); reopening before the deadline revives them. Cancelling rejects them instead.'
-              : untouched
-                ? 'Stopping hiring sets pending bids aside; reopening before the deadline revives them. Cancelling rejects every pending bid. Editing and cancelling are possible until you choose someone.'
-                : 'You have chosen a worker, so the listing can no longer be edited or cancelled. You can still stop hiring.'}
+            : listing.status === 'closed' && pastDeadline
+              ? 'Hiring is stopped and the deadline has passed, so the listing cannot be reopened. Post a new listing to hire again.'
+              : listing.status === 'closed'
+                ? 'Hiring is stopped. Pending bids are set aside (shown as pending, reopenable); reopening before the deadline revives them. Cancelling rejects them instead.'
+                : listing.status === 'filled'
+                  ? 'Every slot is taken, so hiring stopped by itself. A selection that was never funded can be released below: its slot opens again and so does the listing, if the deadline has not passed.'
+                  : untouched
+                    ? 'Stopping hiring sets pending bids aside; reopening before the deadline revives them. Cancelling rejects every pending bid. Editing and cancelling are possible until you choose someone.'
+                    : 'You have chosen a worker, so the listing can no longer be edited or cancelled. You can still stop hiring.'}
         </p>
         {error && (
           <div className="mt-3">
@@ -689,6 +795,16 @@ function OwnerPanel({
         </Notice>
       )}
 
+      {released && (
+        <Notice tone="live">
+          <p role="status" data-testid="released">
+            Selection released: slot {released.slot} is open again
+            {released.reopened ? ', and the listing takes bids again' : ''}. Nothing was paid. Pick another
+            bid below.
+          </p>
+        </Notice>
+      )}
+
       {signed && (
         <Notice tone="live">
           <p role="status" data-testid="funded-by-signer">
@@ -728,7 +844,44 @@ function OwnerPanel({
               className="flex items-center justify-between rounded-lg border border-edge px-3 py-2 text-sm"
             >
               <span>Slot {s.slot}</span>
-              {s.jobId ? (
+              {s.jobId && unfunded.rows.get(s.jobId) ? (
+                <span className="flex flex-wrap items-center justify-end gap-2">
+                  <Badge tone="refused">Needs funding</Badge>
+                  {funding?.jobId !== s.jobId && (
+                    <Button
+                      size="sm"
+                      aria-label={`Sign and fund slot ${s.slot}`}
+                      loading={action.state.busy}
+                      disabled={action.state.busy || action.state.pending !== null || busy !== null}
+                      onClick={() =>
+                        void action.run(
+                          s.jobId!,
+                          'create',
+                          {},
+                          {chainJobId: null, amount: unfunded.rows.get(s.jobId!)!.amount},
+                        )
+                      }
+                    >
+                      Sign and fund
+                    </Button>
+                  )}
+                  {unfunded.rows.get(s.jobId)!.applicationId && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      aria-label={`Release slot ${s.slot}`}
+                      loading={busy === `release-${s.slot}`}
+                      disabled={busy !== null || action.state.busy}
+                      onClick={() => void release(s.slot, unfunded.rows.get(s.jobId!)!.applicationId!)}
+                    >
+                      Release
+                    </Button>
+                  )}
+                  <Link href={`/jobs/${s.jobId}`} className="text-accent underline">
+                    Open the job
+                  </Link>
+                </span>
+              ) : s.jobId ? (
                 <Link href={`/jobs/${s.jobId}`} className="text-accent underline">
                   Open the job
                 </Link>
@@ -863,6 +1016,29 @@ function EditForm({
   );
 }
 
+/**
+ * Why a bidder could not be selected now (item 7): the chain reports their
+ * stake below the minimum, or their account is on hold or blocked. Shown only
+ * on a definite "no"; selecting is refused by the API either way.
+ */
+function BidderFlags({application: a}: {application: ApplicantApplication}) {
+  const notHireable = a.hireable === false;
+  const held = a.applicant.counterpartyClear === false;
+  if (!notHireable && !held) return null;
+  return (
+    <p className="mt-1 flex flex-wrap gap-1.5" data-testid="bidder-flags">
+      {notHireable && (
+        <Badge tone="refused">
+          <span title="Their stake is below the network minimum: selecting them is refused until they add stake.">
+            Not hireable yet
+          </span>
+        </Badge>
+      )}
+      {held && <Badge tone="refused">On hold</Badge>}
+    </p>
+  );
+}
+
 function Applications({
   listing,
   token,
@@ -966,7 +1142,7 @@ function Applications({
         label={
           deciding.action === 'select'
             ? 'Why this bid? (the worker sees it)'
-            : 'Why not? (the applicant sees it)'
+            : 'Why not? (the bidder sees it)'
         }
         htmlFor="decide-reason"
         error={reasonError}
@@ -1033,7 +1209,7 @@ function Applications({
       {!data && !error && <Skeleton className="h-24 w-full" />}
       {data && data.rows.length === 0 && (
         <EmptyState icon="users" title="No bids yet">
-          Bids appear here as people send them.
+          Bids appear here as people or agents send them.
         </EmptyState>
       )}
       {data && data.rows.length > 0 && (
@@ -1058,6 +1234,7 @@ function Applications({
                   {a.applicant.location || 'no location'} · score {a.applicant.score} ·{' '}
                   {a.applicant.completed} done
                 </p>
+                <BidderFlags application={a} />
                 <p className="tabular">
                   {a.priceDisplay}
                   <span className="text-xs text-muted">
@@ -1103,7 +1280,7 @@ function Applications({
               <thead className="text-xs text-muted">
                 <tr>
                   <th scope="col" className="py-2 pr-3 font-medium">
-                    Applicant
+                    Bidder
                   </th>
                   <th scope="col" className="py-2 pr-3 font-medium">
                     Price
@@ -1132,6 +1309,7 @@ function Applications({
                         {a.applicant.location || 'no location'} · score {a.applicant.score} ·{' '}
                         {a.applicant.completed} done
                       </div>
+                      <BidderFlags application={a} />
                       <p className="mt-1 max-w-sm whitespace-pre-wrap break-words text-xs text-muted">
                         {a.proposal}
                       </p>
@@ -1189,22 +1367,29 @@ function Applications({
             </table>
             {wide && deciding && <div className="mt-3">{decisionForm}</div>}
           </div>
-          <nav aria-label="Bid pages" className="mt-4 flex items-center justify-between gap-3 text-sm">
-            <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </Button>
-            <span className="text-muted" data-testid="bid-page">
-              Page {page} of {pages}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page >= pages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </nav>
+          {pages > 1 && (
+            <nav aria-label="Bid pages" className="mt-4 flex items-center justify-between gap-3 text-sm">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <span className="text-muted" data-testid="bid-page">
+                Page {page} of {pages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={page >= pages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </nav>
+          )}
         </>
       )}
     </Card>

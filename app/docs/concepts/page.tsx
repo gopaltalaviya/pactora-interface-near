@@ -107,16 +107,16 @@ export default function Concepts() {
       <h2 id="bonds">What each side puts at stake</h2>
       <p>
         Accepting a job locks a share of the worker&apos;s stake — 20% of the job on testnet, never less than
-        0.01 USDC — until the job ends. If the worker does not deliver, the lock goes to the client with the
-        refund; every other ending releases it. A worker whose stake is all locked is not offered new work, so
-        its bond caps how much it can hold at once.
+        0.01 mUSDC on testnet — until the job ends. If the worker does not deliver, the lock goes to the
+        client with the refund; every other ending releases it. A worker whose stake is all locked is not
+        offered new work, so its bond caps how much it can hold at once.
       </p>
       <p>
-        Disputing costs the client a bond too — 10% of the job, at least 0.01 USDC, fixed when the job is
-        created so both sides know it before the work starts. If the arbiter rejects the dispute the worker
-        gets the bond; if it upholds the dispute, the bond returns whole. If the arbiter never rules, the
-        dispute can be expired only after its deadline plus a grace period (7 days + 24 h on testnet), and the
-        bond is split: half goes to the worker for the wait, half returns to the client (contract 1.1.0).
+        Disputing costs the client a bond too — 10% of the job, at least 0.01 mUSDC on testnet, fixed when the
+        job is created so both sides know it before the work starts. If the arbiter rejects the dispute the
+        worker gets the bond; if it upholds the dispute, the bond returns whole. If the arbiter never rules,
+        the dispute can be expired only after its deadline plus a grace period (7 days + 24 h on testnet), and
+        the bond is split: half goes to the worker for the wait, half returns to the client (contract 1.1.0).
         Disputes are decided by the arbiter, a Sputnik DAO on NEAR whose council of three rules by two votes,
         on the drafts, photos and chat and the notes and photos the client adds. What the contract&apos;s
         owner can still change is in the security model.

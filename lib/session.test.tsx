@@ -71,6 +71,38 @@ describe('restoring a session', () => {
     expect(window.sessionStorage.getItem(SESSION_KEY)).not.toBeNull();
   });
 
+  it('an unreachable API leaves the person record unknown, not absent, and retry reads it', async () => {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored));
+    const get = vi.spyOn(api, 'getSession').mockRejectedValueOnce(new ApiError('UNREACHABLE', 'down'));
+    mount();
+    await screen.findByText('in:alice.testnet');
+    // "No person record" and "could not ask" must not look the same to a page.
+    expect(current.person).toBeNull();
+    expect(current.personError).toMatch(/reach/i);
+
+    // Still down: the error stays.
+    get.mockRejectedValueOnce(new ApiError('UNREACHABLE', 'down'));
+    await act(() => current.retry());
+    expect(current.personError).not.toBeNull();
+
+    get.mockResolvedValueOnce({...info, person: {publicId: 'p-1', chainAgentId: '7', name: 'Alice'}});
+    await act(() => current.retry());
+    await waitFor(() => expect(current.personError).toBeNull());
+    expect(current.person?.name).toBe('Alice');
+    expect(current.status).toBe('in');
+  });
+
+  it('a refusal on retry signs the tab out', async () => {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored));
+    const get = vi.spyOn(api, 'getSession').mockRejectedValueOnce(new ApiError('UNREACHABLE', 'down'));
+    mount();
+    await screen.findByText('in:alice.testnet');
+    get.mockRejectedValueOnce(new ApiError('UNAUTHORIZED', 'expired'));
+    await act(() => current.retry());
+    await screen.findByText('out:-');
+    expect(current.personError).toBeNull();
+  });
+
   it('ignores a malformed stored value', async () => {
     window.sessionStorage.setItem(SESSION_KEY, '{not json');
     mount();

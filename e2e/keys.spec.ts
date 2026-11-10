@@ -131,32 +131,76 @@ test('the agent’s record is edited with its key; nothing changed is refused be
   await card.getByLabel('Agent API key').fill(KEY);
   await card.getByRole('button', {name: 'Save the record'}).click();
   await expect(card.getByText('Change at least one field.')).toBeVisible();
+  await card.getByLabel('Pactora agent id').fill('7');
   await card.getByLabel('Name').fill('Renamed Bot');
   await card.getByLabel('Accepting work').selectOption('no');
+  const sent = page.waitForRequest((r) => r.method() === 'PATCH' && /\/v1\/agents\/7$/.test(r.url()));
   await card.getByRole('button', {name: 'Save the record'}).click();
-  await expect(card.getByTestId('agent-saved')).toContainText('Renamed Bot');
+  expect((await sent).postDataJSON()).toMatchObject({name: 'Renamed Bot', active: false});
+  await expect(card.getByTestId('agent-saved')).toContainText('Now named Renamed Bot');
   await expect(card.getByTestId('agent-saved')).toContainText('not accepting work');
+});
+
+test('rename: a reply without a name (an API before 2026-11-10) never reads "undefined"', async ({page}) => {
+  await asOwner(page);
+  await page.route('**/v1/agents/7', (route) =>
+    route.request().method() === 'PATCH'
+      ? route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({agentId: 7, pricePerTask: '30000', active: true}),
+        })
+      : route.fallback(),
+  );
+  const card = page.getByRole('region', {name: 'Edit the agent’s record'});
+  await card.getByLabel('Agent API key').fill(KEY);
+  await card.getByLabel('Pactora agent id').fill('7');
+  await card.getByLabel('Name').fill('Quiet Bot');
+  await card.getByRole('button', {name: 'Save the record'}).click();
+  const saved = card.getByTestId('agent-saved');
+  await expect(saved).toBeVisible();
+  await expect(saved).not.toContainText('undefined');
+  await expect(saved).toContainText('the API did not confirm the name');
 });
 
 test('webhooks: list, add (secret once), deliveries, rotate the secret, delete with a confirmation', async ({
   page,
-}) => {
+}, info) => {
   await asOwner(page);
+  // The mock keeps webhooks per key, and the browsers run at once: each run gets a key of its own.
+  const hookKey = `ax_${info.project.name.replace(/[^a-z0-9]/gi, '')}${Date.now()}_${'2'.repeat(32)}`;
   const card = page.getByRole('region', {name: 'Webhooks'});
-  await card.getByLabel('Agent API key').fill(KEY);
+  await card.getByLabel('Agent API key').fill(hookKey);
   await card.getByRole('button', {name: 'Show webhooks'}).click();
   await expect(card.getByTestId('no-webhooks')).toBeVisible();
   await card.getByLabel('Add a webhook (https URL)').fill('https://example.com/pactora');
+  await card.getByLabel(/Event kinds/).fill('job.settled, job.message');
+  const sent = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/v1/webhooks'));
   await card.getByRole('button', {name: 'Add', exact: true}).click();
+  // The API's field is `kinds` (routes/webhooks.ts); `events` is refused.
+  expect((await sent).postDataJSON()).toEqual({
+    url: 'https://example.com/pactora',
+    kinds: ['job.settled', 'job.message'],
+  });
   const hook = card.getByTestId('webhook');
   await expect(hook).toHaveCount(1);
+  await expect(hook).toContainText('job.settled, job.message');
   await expect(card.getByTestId('webhook-secret')).toContainText('whsec_');
+  // The list, re-read from the API, renders its shape (it crashed on `events` before).
+  await card.getByRole('button', {name: 'Show webhooks'}).click();
+  await expect(hook).toHaveCount(1);
   await hook.getByRole('button', {name: 'Deliveries'}).click();
-  await expect(hook.getByRole('list', {name: 'Deliveries'})).toContainText('job.settled');
+  const rows = hook.getByRole('list', {name: 'Deliveries'});
+  await expect(rows).toContainText('#2 · pending · 2 attempts · last answer 503 · HTTP 503 · next attempt');
+  await expect(rows).toContainText('#1 · delivered · 1 attempt · last answer 200 · delivered');
+  await expect(rows).not.toContainText('undefined');
   await hook.getByRole('button', {name: 'Rotate the secret'}).click();
   await expect(card.getByTestId('webhook-secret')).toContainText('6'.repeat(32));
   await hook.getByRole('button', {name: 'Delete'}).click();
-  await hook.getByRole('button', {name: 'Confirm: delete'}).click();
+  // By keyboard: headless WebKit under parallel load can starve requestAnimationFrame for this
+  // late step (seen 2026-11-10: 1-2 frames a second), and a pointer click waits on frames for
+  // "stable"; a key press does not, and it is the keyboard user's path anyway.
+  await hook.getByRole('button', {name: 'Confirm: delete'}).press('Enter');
   await expect(card.getByTestId('webhook')).toHaveCount(0);
 });
 

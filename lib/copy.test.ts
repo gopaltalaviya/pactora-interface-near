@@ -154,7 +154,7 @@ describe('the MCP tools page', () => {
   it('lists every tool the server has, by name, and no longer says nine', () => {
     const page = read('app/docs/mcp/page.tsx');
     expect(page).not.toMatch(/nine tools/i);
-    expect(MCP_TOOLS.length).toBeGreaterThanOrEqual(25);
+    expect(MCP_TOOLS.length).toBeGreaterThanOrEqual(28);
     const toolsFile = join(BACKEND_DIR, 'apps', 'mcp', 'src', 'tools.ts');
     if (existsSync(toolsFile)) {
       const names = [...readFileSync(toolsFile, 'utf8').matchAll(/^\s+name: '([a-z_]+)',$/gm)].map(
@@ -231,5 +231,47 @@ describe('the HTTP API page', () => {
     const health = ROUTES.find(([r]) => r === 'GET /health')!;
     expect(health[2]).not.toMatch(/escrow address/);
     expect(health[2]).toMatch(/contract/);
+  });
+});
+
+describe('copy that must tell the truth (2026-11-10)', () => {
+  it('the join page does not say people cannot be hired', () => {
+    expect(read('app/join/page.tsx')).not.toMatch(/cannot be hired yet/);
+  });
+
+  it('the people guide says the session ends with the tab, as lib/session.tsx keeps it', () => {
+    const page = read('app/docs/people/page.tsx').replace(/\s+/g, ' ');
+    expect(page).not.toMatch(/session for 7 days/);
+    expect(page).toMatch(/until you close the tab/);
+  });
+
+  it('testnet amounts are in mUSDC, the token the testnet contract deploys', () => {
+    for (const p of ['app/docs/concepts/page.tsx', 'app/risks/page.tsx', 'app/page.tsx']) {
+      const src = read(p).replace(/\s+/g, ' ');
+      expect(src, p).not.toMatch(/\d(\.\d+)? USDC/);
+    }
+  });
+
+  it('a person bids, never applies', () => {
+    expect(read('app/docs/people/page.tsx').replace(/\s+/g, ' ')).not.toMatch(/cannot apply/);
+    expect(read('lib/kyc.ts')).not.toMatch(/applying/);
+  });
+
+  it('the home FAQ names the same four exits the contract has', () => {
+    const page = read('app/page.tsx').replace(/\s+/g, ' ');
+    const answer = page.slice(page.indexOf('takes the money and disappears'));
+    expect(answer.slice(0, 600)).toMatch(/four permissionless exits/);
+    expect(answer.slice(0, 600)).toMatch(/never reviews/);
+  });
+
+  it('the one-sentence answers include people', () => {
+    const home = read('app/page.tsx').replace(/\s+/g, ' ');
+    const sentence = home.slice(home.indexOf('in one sentence?'), home.indexOf('in one sentence?') + 400);
+    expect(sentence).toMatch(/people/);
+    expect(read('app/layout.tsx')).toMatch(/DESCRIPTION =[^;]*people/);
+    const docs = read('app/docs/page.tsx').replace(/\s+/g, ' ');
+    expect(docs.slice(docs.indexOf('lead='), docs.indexOf('lead=') + 400)).toMatch(/people/);
+    const next = docs.slice(docs.indexOf('Where to go next'));
+    expect(next).toMatch(/href: '\/docs\/people'/);
   });
 });

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {NetworkVisual} from '@/components/landing/NetworkVisual';
+import {TourVideo, tourVideoEnabled} from '@/components/TourVideo';
 import {Badge, StatusDot} from '@/components/ui/Badge';
 import {ButtonLink} from '@/components/ui/Button';
 import {CodeTabs} from '@/components/ui/Code';
@@ -41,7 +42,7 @@ if (!best) throw new Error('no agent offers market-research yet');
 // ('auto' may pay small jobs to well-scored agents directly, in one transaction.)
 const job = await pactora.hire({
   workerAgentId: best.agentId,
-  maxPrice: '20000', // 0.02 USDC, base units
+  maxPrice: '20000', // 0.02 mUSDC (testnet), base units
   path: 'escrow',
   spec: {capability: 'market-research', input: {pair: 'NEAR/USDC'}, deadlineSeconds: 120},
 });
@@ -84,7 +85,7 @@ await runWorker({
     }
   }
 }
-// 25 tools: discover, check_trust, hire, approve, dispute; post_listing,
+// 28 tools: discover, check_trust, hire, approve, dispute; post_listing,
 // list_applications, decide_application; get_evidence, review_job,
 // send_message; accept_job, submit_draft, submit_result, decline_job …
 // Remote instead: POST <host>/mcp, Authorization: Bearer ax_… (MCP_HTTP_PORT)`,
@@ -140,7 +141,39 @@ const FEATURES: {icon: IconName; title: string; body: string; span?: string}[] =
   {
     icon: 'link',
     title: 'Plugs into any agent',
-    body: 'A typed TypeScript SDK, a worker runtime, and an MCP server with 25 tools, local over stdio or remote over HTTP with the agent’s API key — so an agent in Claude or Cursor can hire and pay other agents, or people.',
+    body: 'A typed TypeScript SDK, a worker runtime, and an MCP server with 28 tools, local over stdio or remote over HTTP with the agent’s API key — so an agent in Claude or Cursor can hire and pay other agents, or people.',
+  },
+];
+
+/** Who hires whom: every direction goes through the same escrow and writes the same record. */
+const WAYS: {icon: IconName; title: string; body: string; href: string; link: string}[] = [
+  {
+    icon: 'link',
+    title: 'Agent → agent',
+    body: 'An agent discovers another by skill and record and hires it through the API, the SDK or MCP (hire_agent); payment waits in escrow until it approves.',
+    href: '/docs/quickstart',
+    link: 'Hire from code',
+  },
+  {
+    icon: 'sparkle',
+    title: 'Agent → person',
+    body: 'An agent posts a listing (post_listing) with a ceiling and criteria; people bid, and the agent selects one and funds the job.',
+    href: '/jobs',
+    link: 'See open listings',
+  },
+  {
+    icon: 'users',
+    title: 'Person → agent',
+    body: 'Press Hire this agent on an agent’s page and fund it from your wallet; or post a listing that agents find and bid on over MCP (bid_on_listing).',
+    href: '/agents',
+    link: 'Browse agents',
+  },
+  {
+    icon: 'coins',
+    title: 'Person → person',
+    body: 'Post a listing and people bid their price; pick one, fund it from your wallet, and pay on approval.',
+    href: '/jobs/new',
+    link: 'Post a listing',
   },
 ];
 
@@ -180,7 +213,7 @@ const SAFETY: {icon: IconName; title: string; body: string}[] = [
 const FAQ: {q: string; a: ReactNode}[] = [
   {
     q: 'What is Pactora, in one sentence?',
-    a: 'The payment and trust layer for AI agents: agents discover, hire and pay each other through escrow on NEAR, and only a settled payment can write an agent’s reputation.',
+    a: 'The payment and trust layer for AI agents and the people who work with them: agents and people hire and pay each other — agent to agent, agent to person, person to agent, person to person — through escrow on NEAR, and only a settled payment can write a reputation.',
   },
   {
     q: 'What does the name Pactora mean?',
@@ -231,7 +264,7 @@ const FAQ: {q: string; a: ReactNode}[] = [
   },
   {
     q: 'What if a worker takes the money and disappears?',
-    a: 'It cannot: money stays in escrow until the client approves or a deadline passes. A job nobody accepted, work never delivered, or a dispute nobody rules on each has a permissionless exit that refunds or settles it — the contract does not need Pactora to be online.',
+    a: 'It cannot: money stays in escrow until the client approves or a deadline passes. The contract has four permissionless exits, one for each way a job can stall: a job nobody accepted is refunded, work never delivered is refunded with the worker’s bond, a client who never reviews a delivery pays the worker, and a dispute nobody rules on settles to the worker with the bond split. Anyone can call them, and the contract does not need Pactora to be online.',
   },
   {
     q: 'Can my agent join?',
@@ -251,7 +284,7 @@ const FAQ: {q: string; a: ReactNode}[] = [
   },
   {
     q: 'Why NEAR?',
-    a: 'Agent work is many small, unattended payments — ten subtasks are ten settlements, so settling a 0.02 USDC task must not be dominated by its own cost. NEAR adds what an agent needs on top: readable account names, so an agent is bot.alice.testnet rather than a hex string, and function-call keys that can call one contract and nothing else, so an agent can sign for itself without being able to empty its account.',
+    a: 'Agent work is many small, unattended payments — ten subtasks are ten settlements, so settling a 0.02 mUSDC task must not be dominated by its own cost. NEAR adds what an agent needs on top: readable account names, so an agent is bot.alice.testnet rather than a hex string, and function-call keys that can call one contract and nothing else, so an agent can sign for itself without being able to empty its account.',
   },
 ];
 
@@ -298,6 +331,46 @@ export default function LandingPage() {
   return (
     <div className="-mt-8 space-y-28 sm:-mt-10 sm:space-y-36">
       <Hero network={network} />
+
+      {/* ── Four ways to deal ────────────────────────────────────────────── */}
+      <section aria-labelledby="ways" className="space-y-10">
+        <SectionHead
+          id="ways"
+          eyebrow="Who hires whom"
+          title="Four ways to deal"
+          body="Agents and people are both clients and workers here. Every deal, whichever way it goes, is locked in the same escrow and writes the same record when it settles."
+        />
+        <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {WAYS.map((w, i) => (
+            <Reveal as="li" key={w.title} index={i}>
+              <div className="flex h-full flex-col gap-3 rounded-2xl border border-edge bg-surface/70 p-5 backdrop-blur-sm">
+                <span className="grid size-10 place-items-center rounded-xl border border-edge bg-raised text-accent">
+                  <Icon name={w.icon} className="size-5" />
+                </span>
+                <h3 className="font-semibold">{w.title}</h3>
+                <p className="flex-1 text-sm leading-relaxed text-muted">{w.body}</p>
+                <Link
+                  href={w.href}
+                  className="inline-flex min-h-6 items-center gap-1 text-sm text-accent hover:underline"
+                >
+                  {w.link} <Icon name="arrowRight" className="size-3.5" />
+                </Link>
+              </div>
+            </Reveal>
+          ))}
+        </ul>
+      </section>
+
+      {tourVideoEnabled() && (
+        <section
+          id="tour"
+          aria-labelledby="tour-heading"
+          className="mx-auto max-w-4xl scroll-mt-24 space-y-6"
+        >
+          <SectionHead id="tour-heading" eyebrow="Watch" title="Agents paying each other, narrated." />
+          <TourVideo which="overview" />
+        </section>
+      )}
 
       {/* ── Live proof ───────────────────────────────────────────────────── */}
       <section aria-label="Live on NEAR" className="space-y-6">
@@ -560,7 +633,7 @@ export default function LandingPage() {
               ['Idempotent by design', 'a retried hire returns the same job, never a second payment'],
               ['Typed errors', 'RFC 7807 problems with stable codes and a retry hint'],
               ['Live events', 'stream a job or a run over server-sent events, or take signed webhooks'],
-              ['Remote MCP', 'the same 25 tools over HTTP, with the agent’s API key as the bearer token'],
+              ['Remote MCP', 'the same 28 tools over HTTP, with the agent’s API key as the bearer token'],
               [
                 'A swarm on a local NEAR node',
                 'pnpm swarm:local: 20 buyer agents and 5 sellers bid, hire and settle every job on chain',
@@ -734,6 +807,7 @@ export default function LandingPage() {
 
 function Hero({network}: {network: NetworkInfo | null}) {
   const ref = useRef<HTMLElement>(null);
+  const video = tourVideoEnabled();
   // A soft light under the pointer; rAF-throttled, transform-free, and off
   // entirely for touch and reduced motion (the gradient just stays centred).
   useEffect(() => {
@@ -768,7 +842,9 @@ function Hero({network}: {network: NetworkInfo | null}) {
               Live
             </span>
             <span className="text-muted group-hover:text-text">
-              Settling real jobs on {network?.name ?? 'NEAR'} — see status
+              {network?.testnet === false
+                ? `Settling jobs on ${network.name} — see status`
+                : `Running on ${network?.name ?? 'NEAR testnet'} with test tokens, no real money — see status`}
             </span>
             <Icon
               name="arrowRight"
@@ -788,13 +864,18 @@ function Hero({network}: {network: NetworkInfo | null}) {
           </p>
 
           <div className="flex flex-wrap gap-3">
-            <ButtonLink href="/demo" variant="primary" className="h-11 px-5">
+            <ButtonLink href={video ? '#tour' : '/demo'} variant="primary" className="h-11 px-5">
               Watch agents pay each other <Icon name="arrowRight" />
             </ButtonLink>
             <ButtonLink href="/docs" className="h-11 px-5">
               Read the docs
             </ButtonLink>
           </div>
+          <p className="text-xs text-muted" data-testid="hero-cta-note">
+            {video
+              ? 'A narrated run, start to settlement; or try one yourself on the demo page.'
+              : 'The demo page runs one with your own key, or opens a recorded run with every transaction linked.'}
+          </p>
 
           <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted">
             {['Every payment has a transaction you can open', 'Spending caps on chain', 'Open source'].map(

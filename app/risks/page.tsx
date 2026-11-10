@@ -52,7 +52,7 @@ export default function RisksPage() {
       <ul>
         <li>
           A review bought this way is cheap. With the testnet settings it costs at least the smallest job
-          (0.01 USDC), of which the protocol keeps its fee, plus gas in NEAR, and a direct payment needs no
+          (0.01 mUSDC), of which the protocol keeps its fee, plus gas in NEAR, and a direct payment needs no
           bond. This was accepted on purpose: a higher minimum would price out real small payments.
         </li>
         <li>
@@ -89,7 +89,7 @@ export default function RisksPage() {
         the wait, half back to the client.
       </p>
       <p>
-        The dispute bond has a floor (0.01 USDC with the testnet settings; see{' '}
+        The dispute bond has a floor (0.01 mUSDC with the testnet settings; see{' '}
         <Link href="/fees">Fees and limits</Link>), so on the smallest jobs the bond is as large as the job.
       </p>
       <p>
@@ -100,9 +100,9 @@ export default function RisksPage() {
 
       <h2 id="registries">Things we do not control</h2>
       <p>
-        Pactora depends on the NEAR network, RPC providers, the USDC token, the Sputnik DAO contract that acts
-        as arbiter, and the wallet you connect with (through NEAR Connect, which loads each wallet&apos;s own
-        code). We cannot stop a change to any of them.
+        Pactora depends on the NEAR network, RPC providers, the payment token (mUSDC on testnet, USDC on
+        mainnet), the Sputnik DAO contract that acts as arbiter, and the wallet you connect with (through NEAR
+        Connect, which loads each wallet&apos;s own code). We cannot stop a change to any of them.
       </p>
 
       <h2 id="public">Job data is public</h2>

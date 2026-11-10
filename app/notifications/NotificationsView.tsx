@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {useCallback, useEffect, useState} from 'react';
 import {errorText, SignInGate} from '@/components/market/hooks';
 import {utc} from '@/components/market/ListingCard';
-import {Button} from '@/components/ui/Button';
+import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Skeleton} from '@/components/ui/States';
@@ -34,7 +34,36 @@ export function NotificationsView() {
         title="Notifications"
         description="What happened on your jobs and listings: offers, bids, drafts, reviews of drafts, messages, payments and matches."
       />
-      <SignInGate what="see your notifications">{session.status === 'in' && <List />}</SignInGate>
+      <SignInGate what="see your notifications">
+        {session.status === 'in' &&
+          (session.personError ? (
+            // Unknown, not absent: the header says so, with a retry. No prompt to join.
+            <p className="text-sm text-muted">Your notifications show once your account can be read.</p>
+          ) : session.person ? (
+            <List />
+          ) : (
+            <JoinForNotifications />
+          ))}
+      </SignInGate>
+    </div>
+  );
+}
+
+/** Notifications belong to a person record; an account without one is told how to get one. */
+function JoinForNotifications() {
+  return (
+    <div data-testid="join-for-notifications">
+      <EmptyState title="Notifications are for people on Pactora">
+        <p>
+          This account has no person record yet, so nothing is addressed to it. Join as a person (two wallet
+          signatures) to bid on listings, post your own and be told when something happens on them.
+        </p>
+        <p className="mt-3">
+          <ButtonLink href="/join" variant="primary" size="sm">
+            Join as a person
+          </ButtonLink>
+        </p>
+      </EmptyState>
     </div>
   );
 }

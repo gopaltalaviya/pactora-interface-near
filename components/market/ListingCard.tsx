@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Card} from '@/components/ui/Card';
-import {receivesDisplay, type Listing, type ListingStatus} from '@/lib/market';
+import {
+  receivesDisplay,
+  type Category,
+  type InteractionMode,
+  type Listing,
+  type ListingStatus,
+} from '@/lib/market';
 import type {TokenInfo} from './hooks';
 
 export const STATUS_TONE: Record<ListingStatus, 'live' | 'neutral' | 'settled' | 'refused'> = {
@@ -9,6 +15,24 @@ export const STATUS_TONE: Record<ListingStatus, 'live' | 'neutral' | 'settled' |
   closed: 'neutral',
   filled: 'settled',
   cancelled: 'refused',
+};
+
+/** The badges in words a visitor reads, not the API's enum values (2026-11-10). */
+export const STATUS_WORDS: Record<ListingStatus, string> = {
+  open: 'Open',
+  closed: 'Hiring stopped',
+  filled: 'All slots filled',
+  cancelled: 'Cancelled',
+};
+export const CATEGORY_WORDS: Record<Category, string> = {
+  physical: 'Physical work',
+  expertise: 'Expertise',
+  judgment: 'Judgment call',
+};
+export const MODE_WORDS: Record<InteractionMode, string> = {
+  task: 'One-off task',
+  conversation: 'Conversation',
+  capture: 'Photos',
 };
 
 /** `2026-11-09T18:00:00Z` → `9 Nov 2026, 18:00 UTC`, the same wherever it is read. */
@@ -39,10 +63,10 @@ export function ListingCard({listing, token}: {listing: Listing; token: TokenInf
     <Card as="article" className="h-full">
       <div className="flex h-full flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="chain">{listing.category}</Badge>
-          <Badge>{listing.interactionMode}</Badge>
-          <Badge tone={STATUS_TONE[listing.status]}>{listing.status}</Badge>
-          {listing.hiringMode === 'instant' && <Badge tone="live">instant</Badge>}
+          <Badge tone="chain">{CATEGORY_WORDS[listing.category] ?? listing.category}</Badge>
+          <Badge>{MODE_WORDS[listing.interactionMode] ?? listing.interactionMode}</Badge>
+          <Badge tone={STATUS_TONE[listing.status]}>{STATUS_WORDS[listing.status] ?? listing.status}</Badge>
+          {listing.hiringMode === 'instant' && <Badge tone="live">Instant hiring</Badge>}
         </div>
         <h2 className="text-base font-semibold leading-snug">
           <Link

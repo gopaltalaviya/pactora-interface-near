@@ -190,3 +190,21 @@ export function tally(p: Pick<Proposal, 'votes'>, councilSize: number): string {
 
 /** What a ruling does, in words. */
 export const rulingWords = (forWorker: boolean) => (forWorker ? 'Pay the worker' : 'Refund the client');
+
+export type AdminTab = 'disputes' | 'moderation' | 'reports' | 'compliance';
+
+/**
+ * The console's tabs for the roles the API named (routes/admin.ts): the
+ * dispute desk is the council's; reports and compliance are the reviewers';
+ * moderation (GET /v1/admin/reviews) is open to either role, and to nobody
+ * else. An empty list means no access at all.
+ */
+export function adminTabs(roles: readonly string[]): [AdminTab, string][] {
+  const council = roles.includes('council');
+  const reviewer = roles.includes('reviewer');
+  const tabs: [AdminTab, string][] = [];
+  if (council) tabs.push(['disputes', 'Dispute desk']);
+  if (council || reviewer) tabs.push(['moderation', 'Moderation']);
+  if (reviewer) tabs.push(['reports', 'Reports'], ['compliance', 'Compliance']);
+  return tabs;
+}

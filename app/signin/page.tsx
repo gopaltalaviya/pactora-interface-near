@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {Suspense, useState} from 'react';
 import {Button, ButtonLink} from '@/components/ui/Button';
+import {manageHref} from '@/lib/links';
 import {Card} from '@/components/ui/Card';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
@@ -84,7 +85,13 @@ function SignIn() {
             )}
             <div>
               <dt className="text-muted">Person record</dt>
-              <dd>{session.person ? session.person.name : 'None yet'}</dd>
+              <dd>
+                {session.person
+                  ? session.person.name
+                  : session.personError
+                    ? 'Unknown: the API could not be reached'
+                    : 'None yet'}
+              </dd>
             </div>
           </dl>
           <div className="mt-5 flex flex-wrap gap-2">
@@ -94,10 +101,10 @@ function SignIn() {
               </ButtonLink>
             )}
             {session.person ? (
-              <ButtonLink href={`/agents/${session.person.chainAgentId}/manage`} size="sm">
+              <ButtonLink href={manageHref(session.person.chainAgentId)} size="sm">
                 Fund and stake
               </ButtonLink>
-            ) : (
+            ) : session.personError ? null : (
               <ButtonLink href="/join" size="sm">
                 Join as a person
               </ButtonLink>

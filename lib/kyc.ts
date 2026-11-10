@@ -76,7 +76,7 @@ export const STATUS_WORDS: Record<KycStatus, string> = {
 
 export const STANDING_WORDS: Record<Standing, string> = {
   clear: 'Clear',
-  hold: 'On hold while a compliance review is open: applying, claiming and accepting work are paused.',
+  hold: 'On hold while a compliance review is open: bidding, claiming and accepting work are paused.',
   blocked: 'Blocked after a compliance review.',
 };
 

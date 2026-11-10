@@ -65,6 +65,12 @@ export interface SessionValue {
   status: SessionStatus;
   account: string | null;
   person: PersonRef | null;
+  /**
+   * Set when the person record could not be read (the API was unreachable or
+   * failed): `person` is then UNKNOWN, not absent. A page must not offer to
+   * join while this is set; it shows the error and `retry` instead.
+   */
+  personError: string | null;
   expiresAt: string | null;
   /** The wallet connected in this page load, if any. */
   wallet: NearWallet | null;
@@ -78,7 +84,12 @@ export interface SessionValue {
   authed: <T>(run: (token: string) => Promise<T>) => Promise<T>;
   /** Re-read the person record from the API. */
   refresh: () => Promise<void>;
+  /** Ask the API again after `personError`; never throws (a refusal signs the tab out). */
+  retry: () => Promise<void>;
 }
+
+const UNKNOWN_PERSON =
+  'Could not reach Pactora to read your account, so this page cannot tell whether you have a person record yet.';
 
 const Ctx = createContext<SessionValue | null>(null);
 
@@ -92,6 +103,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [stored, setStored] = useState<Stored | null>(null);
   const [person, setPerson] = useState<PersonRef | null>(null);
+  const [personError, setPersonError] = useState<string | null>(null);
   const [wallet, setWallet] = useState<NearWallet | null>(null);
   const walletRef = useRef<NearWallet | null>(null);
   const tokenRef = useRef<string | null>(null);
@@ -101,6 +113,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
     tokenRef.current = null;
     setStored(null);
     setPerson(null);
+    setPersonError(null);
     setStatus('out');
   }, []);
 
@@ -118,6 +131,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
       .then((info) => {
         setStored({...found, account: info.account, expiresAt: info.expiresAt});
         setPerson(info.person);
+        setPersonError(null);
         setStatus('in');
       })
       .catch((err: unknown) => {
@@ -127,7 +141,9 @@ export function SessionProvider({children}: {children: ReactNode}) {
         if (err instanceof ApiError && (err.code === 'UNAUTHORIZED' || err.code === 'WRONG_CREDENTIAL')) {
           clear();
         } else {
+          // Signed in, but whether there is a person record is unknown.
           setStored(found);
+          setPersonError(UNKNOWN_PERSON);
           setStatus('in');
         }
       });
@@ -160,6 +176,7 @@ export function SessionProvider({children}: {children: ReactNode}) {
     tokenRef.current = session.token;
     setStored(next);
     setPerson(session.person);
+    setPersonError(null);
     setStatus('in');
   }, []);
 
@@ -210,13 +227,29 @@ export function SessionProvider({children}: {children: ReactNode}) {
   const refresh = useCallback(async () => {
     const info = await authed((token) => api.getSession(token));
     setPerson(info.person);
+    setPersonError(null);
   }, [authed]);
+
+  const retry = useCallback(async () => {
+    try {
+      const info = await authed((token) => api.getSession(token));
+      setStored((s) => (s ? {...s, account: info.account, expiresAt: info.expiresAt} : s));
+      setPerson(info.person);
+      setPersonError(null);
+    } catch (err) {
+      // authed() already signed the tab out on a 401; anything else is still "unknown".
+      if (!(err instanceof ApiError && (err.code === 'UNAUTHORIZED' || err.code === 'WRONG_CREDENTIAL')))
+        setPersonError(UNKNOWN_PERSON);
+      else clear();
+    }
+  }, [authed, clear]);
 
   const value = useMemo<SessionValue>(
     () => ({
       status,
       account: stored?.account ?? null,
       person,
+      personError,
       expiresAt: stored?.expiresAt ?? null,
       wallet,
       signIn,
@@ -225,8 +258,22 @@ export function SessionProvider({children}: {children: ReactNode}) {
       ensureWallet,
       authed,
       refresh,
+      retry,
     }),
-    [status, stored, person, wallet, signIn, signOut, signOutEverywhere, ensureWallet, authed, refresh],
+    [
+      status,
+      stored,
+      person,
+      personError,
+      wallet,
+      signIn,
+      signOut,
+      signOutEverywhere,
+      ensureWallet,
+      authed,
+      refresh,
+      retry,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -12,9 +12,14 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {TrustCard} from '@/components/TrustCard';
 import {ReportButton} from '@/components/market/Report';
 import {RecordOverTime} from '@/components/market/RecordOverTime';
-import {ErrorState, Loading, Skeleton} from '@/components/ui/States';
+import {ErrorState, Loading, Notice, Skeleton} from '@/components/ui/States';
+import {HireCard} from '@/components/market/HireCard';
 import {ApiError, api, type AgentSummary, type NetworkInfo, type SkillStat} from '@/lib/api';
-import {safeHref} from '@/lib/links';
+import {viewCall, type StakeView} from '@/lib/chain';
+import {manageHref, safeHref} from '@/lib/links';
+import {market} from '@/lib/market';
+import {agentIdArg} from '@/lib/near';
+import {useSession} from '@/lib/session';
 
 /**
  * One agent.
@@ -29,6 +34,42 @@ export function AgentView({agentId}: {agentId: number}) {
   const [error, setError] = useState<{message: string; missing: boolean} | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
+  const session = useSession();
+  // Whether the signed-in account owns this agent (GET /v1/me/agents): null while unknown.
+  const [owns, setOwns] = useState<boolean | null>(null);
+  // The chain's word on whether it can be hired (stake_of); null when not read.
+  const [hireable, setHireable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (session.status !== 'in') {
+      setOwns(session.status === 'out' ? false : null);
+      return;
+    }
+    const c = new AbortController();
+    session
+      .authed((t) => market.myAgents(t, c.signal))
+      .then((r) => setOwns(r.agents.some((a) => a.agentId === String(agentId))))
+      .catch(() => {
+        if (!c.signal.aborted) setOwns(false);
+      });
+    return () => c.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `session` changes identity on every render.
+  }, [session.status, session.account, agentId]);
+
+  const chainAgentId =
+    agent?.chainAgentId !== null && agent?.chainAgentId !== undefined ? String(agent.chainAgentId) : null;
+  const pactora = network?.contracts?.Pactora;
+  const rpc = network?.rpcUrls?.[0];
+  // Read only for a person who might hire it: the hire card says why it cannot be.
+  const wantsStake = session.status === 'in' && session.person !== null && owns === false;
+  useEffect(() => {
+    if (!wantsStake || !chainAgentId || !pactora || !rpc) return;
+    const c = new AbortController();
+    viewCall<StakeView | null>(rpc, pactora, 'stake_of', {agent_id: agentIdArg(chainAgentId)}, c.signal)
+      .then((st) => setHireable(st ? st.hireable : false))
+      .catch(() => setHireable(null));
+    return () => c.abort();
+  }, [wantsStake, chainAgentId, pactora, rpc]);
 
   // For linking the agent to the Pactora contract; the page works without it.
   useEffect(() => {
@@ -146,7 +187,22 @@ export function AgentView({agentId}: {agentId: number}) {
             </div>
           </div>
         }
+        actions={
+          owns && chainAgentId ? (
+            <ButtonLink href={manageHref(chainAgentId)} size="sm" variant="primary">
+              Manage
+            </ButtonLink>
+          ) : undefined
+        }
       />
+
+      {owns === false && <HireCard agent={agent} hireable={hireable} />}
+      {owns && (
+        <Notice>
+          This record is yours, so you cannot hire it: the escrow refuses a job between two records of one
+          owner.
+        </Notice>
+      )}
 
       <section aria-label="Figures" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Figure label="Price per task" value={agent.priceDisplay} />

@@ -31,20 +31,82 @@ export interface IssuedKey {
   warning?: string;
 }
 
+/** routes/webhooks.ts hookView. `kinds` empty means every event kind. */
 export interface Webhook {
   webhookId: string;
   url: string;
-  events: string[];
+  kinds: string[];
+  active: boolean;
+  consecutiveFailures: number;
+  disabledReason: string | null;
   createdAt: string;
 }
 
+/** One delivery attempt series, newest first (GET /v1/webhooks/:id/deliveries). */
 export interface Delivery {
   deliveryId: string;
-  event: string;
-  status: number | null;
-  at: string;
+  seq: number;
+  /** pending (retrying), delivered or failed. */
+  status: string;
   attempts: number;
-  error: string | null;
+  /** The receiver's last HTTP status, or null when it never answered. */
+  lastStatus: number | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  deliveredAt: string | null;
+}
+
+/** PATCH /v1/agents/:id answers these fields only (`name` since 2026-11-10). */
+export interface PatchedAgent {
+  agentId: number | string;
+  name?: string;
+  pricePerTask: string;
+  active: boolean;
+}
+
+const KIND = /^[a-z][a-z0-9_.]{0,63}$/;
+
+/** Event kinds typed as "job.settled, job.message": [] (every kind) when empty, or a problem. */
+export function parseKinds(text: string): {kinds: string[]; problem: string | null} {
+  const kinds = [
+    ...new Set(
+      text
+        .split(/[\s,]+/)
+        .map((k) => k.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const bad = kinds.find((k) => !KIND.test(k));
+  if (bad) return {kinds: [], problem: `“${bad}” is not an event kind (like job.message).`};
+  if (kinds.length > 50) return {kinds: [], problem: 'At most 50 event kinds.'};
+  return {kinds, problem: null};
+}
+
+/** One delivery, in words: "#2 · pending · 2 attempts · last answer 503 · HTTP 503 · next attempt …". */
+export function deliveryLine(d: Delivery, when: (iso: string) => string): string {
+  const parts = [`#${d.seq}`, d.status, `${d.attempts} attempt${d.attempts === 1 ? '' : 's'}`];
+  parts.push(d.lastStatus === null ? 'no answer yet' : `last answer ${d.lastStatus}`);
+  if (d.lastError) parts.push(d.lastError);
+  if (d.deliveredAt) parts.push(`delivered ${when(d.deliveredAt)}`);
+  else if (d.nextAttemptAt) parts.push(`next attempt ${when(d.nextAttemptAt)}`);
+  return parts.join(' · ');
+}
+
+/**
+ * What a saved record says, from the API's reply: the name it confirms, never
+ * "undefined" (an API before 2026-11-10 did not return the name).
+ */
+export function savedSummary(
+  reply: PatchedAgent,
+  sentName: string | undefined,
+  price: (base: string) => string,
+): string {
+  const named = reply.name
+    ? `Now named ${reply.name}`
+    : sentName
+      ? `Saved, but the API did not confirm the name “${sentName}”: reload the profile to check it`
+      : 'Saved';
+  return `${named}; ${price(reply.pricePerTask)} a task; ${reply.active ? 'accepting work' : 'not accepting work'}.`;
 }
 
 const API_KEY = /^ax_[A-Za-z0-9]+_[A-Za-z0-9]+$/;
@@ -97,7 +159,7 @@ export const keys = {
     patch: Partial<Pick<AgentSummary, 'name' | 'description' | 'pricePerTask' | 'active'>>,
   ) => {
     if (Object.keys(patch).length === 0) throw new ApiError('SCHEMA_MISMATCH', 'Nothing changed.', 422);
-    return request<AgentSummary>(
+    return request<PatchedAgent>(
       `/v1/agents/${encodeURIComponent(agentId)}`,
       {method: 'PATCH', headers: json(key(apiKey)), body: JSON.stringify(patch)},
       'could not change the agent',
@@ -106,26 +168,31 @@ export const keys = {
 
   webhooks: (apiKey: string) =>
     request<{webhooks: Webhook[]}>('/v1/webhooks', {headers: key(apiKey)}, 'could not load the webhooks'),
-  addWebhook: (apiKey: string, url: string, events?: string[]) =>
+  /** `kinds` empty or omitted: every event kind. */
+  addWebhook: (apiKey: string, url: string, kinds?: string[]) =>
     request<Webhook & {secret: string}>(
       '/v1/webhooks',
-      {method: 'POST', headers: json(key(apiKey)), body: JSON.stringify({url, ...(events ? {events} : {})})},
+      {
+        method: 'POST',
+        headers: json(key(apiKey)),
+        body: JSON.stringify({url, ...(kinds && kinds.length > 0 ? {kinds} : {})}),
+      },
       'could not add the webhook',
     ),
   deleteWebhook: (apiKey: string, id: string) =>
-    request<void>(
+    request<{webhookId: string; deleted: boolean}>(
       `/v1/webhooks/${encodeURIComponent(id)}`,
       {method: 'DELETE', headers: key(apiKey)},
       'could not delete it',
     ),
   deliveries: (apiKey: string, id: string) =>
-    request<{deliveries: Delivery[]}>(
+    request<{webhookId: string; deliveries: Delivery[]}>(
       `/v1/webhooks/${encodeURIComponent(id)}/deliveries`,
       {headers: key(apiKey)},
       'could not load the deliveries',
     ),
   rotateWebhook: (apiKey: string, id: string) =>
-    request<{webhookId: string; secret: string}>(
+    request<Webhook & {secret: string}>(
       `/v1/webhooks/${encodeURIComponent(id)}/rotate`,
       {method: 'POST', headers: key(apiKey)},
       'could not rotate the secret',
