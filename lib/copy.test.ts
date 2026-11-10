@@ -275,3 +275,38 @@ describe('copy that must tell the truth (2026-11-10)', () => {
     expect(next).toMatch(/href: '\/docs\/people'/);
   });
 });
+
+describe('copy that matches the code (audit, 2026-11-10)', () => {
+  it('README gives the MCP tool count the server has, everywhere it gives one', () => {
+    const readme = read('README.md');
+    const counts = [
+      ...readme.matchAll(/MCP server with (\d+) tools/g),
+      ...readme.matchAll(/(\d+) MCP tools/g),
+    ].map((m) => Number(m[1]));
+    expect(counts.length).toBeGreaterThan(0);
+    for (const n of counts) expect(n).toBe(MCP_TOOLS.length);
+  });
+
+  it('README lists person → agent direct hire and says how AI was used', () => {
+    const readme = read('README.md').replace(/\s+/g, ' ');
+    expect(readme).toMatch(/direct hire/i);
+    expect(readme).toMatch(/AI assistance: Claude Code was used to write and review code and docs\./);
+  });
+
+  // packages/shared/src/judge-env.ts: the check is on unless set to 0/false.
+  it('the security page says the judge signature check is on by default and =0 turns it off', () => {
+    const page = read('app/docs/security/page.tsx').replace(/\s+/g, ' ');
+    expect(page).not.toMatch(/With <code>JUDGE_REQUIRE_ATTESTATION=1<\/code>/);
+    expect(page).toMatch(/JUDGE_REQUIRE_ATTESTATION=0/);
+  });
+
+  // pactora-backend-near apps/api/src/routes/listings.ts: a blocked account's
+  // listings are filtered off the public board; `?mine=true` still lists them.
+  it('the security page and the home page say a block takes the listings off the board', () => {
+    const security = read('app/docs/security/page.tsx').replace(/\s+/g, ' ');
+    expect(security).toMatch(/listings leave the public board/);
+    const home = read('app/page.tsx').replace(/\s+/g, ' ');
+    const card = home.slice(home.indexOf("title: 'Report, hide, block'"));
+    expect(card.slice(0, 400)).toMatch(/listings leave the board/);
+  });
+});

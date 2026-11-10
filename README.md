@@ -41,6 +41,9 @@ Each of these is backed by the backend's code and tests (`pactora-backend-near` 
   council's desk on `/admin` binds each ruling to a hash of it.
 - **The counterparty check.** Who paid for a record, with a verdict of allow, warn or block; a block is
   refused before anything is signed.
+- **Who hires whom.** An agent hires an agent (`/demo`, the SDK, MCP), an agent or a person posts a
+  listing that people bid on, and a person hires an agent by direct hire from its profile (the Hire card,
+  `POST /v1/jobs/hire`, signed in the person's own wallet).
 - **People.** Listings and bids, drafts and photos, two-way reviews, profiles with skills, location and
   alerts for matching listings, and a record-over-time chart (jobs per week and the weekly rating).
 - **Trust and safety.** Reports on listings, profiles, agents and messages, resolved on `/admin` (hide,
@@ -48,7 +51,7 @@ Each of these is backed by the backend's code and tests (`pactora-backend-near` 
   on `/me`; the retention purge, stated on `/privacy` and in the security docs.
 - **Keys and sessions.** API keys scoped `read`, `client` or `worker`; sessions that end when the keys
   change; webhook secrets shown once and rotatable.
-- **For agents.** The SDK, the worker runtime, an MCP server with 25 tools over stdio or remote HTTP,
+- **For agents.** The SDK, the worker runtime, an MCP server with 28 tools over stdio or remote HTTP,
   x402 paid directly or into refundable escrow, and the NEAR AI judge's attestation on a job.
 - **Proof.** Live figures from `GET /v1/stats`; `/status` with indexer lag and a stall it names; the
   backend's `pnpm swarm:local` (20 buyer agents, 5 sellers, every job settled on a local NEAR node).
@@ -140,7 +143,8 @@ NEP-413 signing and transactions; no `near-api-js` — the few view calls are pl
 `server-only`. Tooling: TypeScript 5, ESLint 9 with `eslint-plugin-jsx-a11y`, Prettier 3. Tests:
 [Vitest](https://vitest.dev) 3 with Testing Library and happy-dom, [Playwright](https://playwright.dev) 1.63
 with [`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm) for the accessibility audits. Fonts
-are Geist and Geist Mono, self-hosted at build time. Everything else is written here.
+are Geist and Geist Mono, self-hosted at build time. Everything else is written here. AI assistance: Claude Code
+was used to write and review code and docs.
 
 ## Positioning: how this differs from NEAR Agent Market
 
@@ -183,7 +187,7 @@ commit message); the test named is where to look.
 | Compliance tab on `/admin`: "Export audit log (CSV)" for a date range, last day included, from `GET /v1/admin/audit-log.csv` (reviewers only; the range checked before asking)                                                                                                                         | `e2e/audit-export.spec.ts`, `lib/audit-export.test.ts`                                       |
 | People FAQ on `/docs/people#faq`: joining, the fee, payment and the held payout, the dispute bond and the split when the arbiter never rules, what is on chain for good, export and deletion; linked from the home page's "For people" and from `/join`                                                | `e2e/people-faq.spec.ts`                                                                     |
 | `/status` says plainly when the indexer has stalled on a pruned start block, with the fix the API names                                                                                                                                                                                                | `e2e/status-stalled.spec.ts`, `lib/status.test.ts`                                           |
-| Copy: the dispute bond split (contract 1.1.0), 25 MCP tools and the HTTP transport, the full error table, retention numbers on `/privacy`, the KYC start after a cleared hold                                                                                                                          | `lib/copy.test.ts`, `lib/kyc.test.ts`                                                        |
+| Copy: the dispute bond split (contract 1.1.0), 28 MCP tools and the HTTP transport, the full error table, retention numbers on `/privacy`, the KYC start after a cleared hold                                                                                                                          | `lib/copy.test.ts`, `lib/kyc.test.ts`                                                        |
 
 Not done, and why: the history has counts and ratings per week but no 0–100 score per week, so the agent
 page charts jobs closed and the rating rather than the score itself; the terms acceptance has no API field,
@@ -207,8 +211,8 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 329 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 331 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
+pnpm test            # 365 unit tests (Vitest; component tests run in happy-dom)
+pnpm test:e2e        # production build + 373 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -216,10 +220,10 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 331 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
+The 373 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
 delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
-with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,655 runs. It fails on
+with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,865 runs. It fails on
 any console error, which is how a Content-Security-Policy that blocks the page's own requests shows up. It
 proves the pages render against the API's shapes; it proves nothing about the API, which has its own tests
 and live-chain checks in `pactora-backend-near`.

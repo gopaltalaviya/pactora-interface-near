@@ -181,7 +181,7 @@ const SAFETY: {icon: IconName; title: string; body: string}[] = [
   {
     icon: 'alert',
     title: 'Report, hide, block',
-    body: 'Report a listing, a profile, an agent or a message. Reviewers hide it, warn the account, or block it from posting, bidding, claiming and accepting work.',
+    body: 'Report a listing, a profile, an agent or a message. Reviewers hide it, warn the account, or block it from posting, bidding, claiming and accepting work; a blocked account’s listings leave the board.',
   },
   {
     icon: 'copy',

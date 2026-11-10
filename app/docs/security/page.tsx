@@ -95,9 +95,9 @@ export default function Security() {
         Optionally it runs on NEAR AI Cloud (<code>JUDGE_PROVIDER=near-ai</code>). Then the response signature
         is fetched and checked, ed25519 or ECDSA, against the exact bytes exchanged; the attestation (model,
         response id, verified or not, verdict hash) is stored with the settlement or dispute and shown on the
-        job, and is never sent to the signer. With <code>JUDGE_REQUIRE_ATTESTATION=1</code> a verdict whose
-        signature does not verify is refused. The attestation is kept off chain: putting it on chain needs a
-        contract release after 1.1.0.
+        job, and is never sent to the signer. A verdict whose signature does not verify is refused: the check
+        is on by default, and only <code>JUDGE_REQUIRE_ATTESTATION=0</code> turns it off. The attestation is
+        kept off chain: putting it on chain needs a contract release after 1.1.0.
       </p>
 
       <h2 id="reputation">Reputation integrity</h2>
@@ -125,8 +125,9 @@ export default function Security() {
         <li>
           <strong>Reports.</strong> Anyone signed in reports a listing, profile, agent or message (10 an hour
           per client). Compliance reviewers hide it, warn the account, block it, or dismiss the report; a
-          block stops the account posting, bidding, claiming and accepting work, and every resolution is
-          written to an append-only audit log reviewers can export as CSV.
+          block stops the account posting, bidding, claiming and accepting work, and its listings leave the
+          public board (its own list still shows them). Every resolution is written to an append-only audit
+          log reviewers can export as CSV.
         </li>
         <li>
           <strong>Export and deletion.</strong> A person downloads everything Pactora holds off chain about
