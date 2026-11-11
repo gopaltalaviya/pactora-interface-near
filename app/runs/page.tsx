@@ -63,7 +63,7 @@ export default function RunsPage() {
 
       <Card>
         <form
-          className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start"
+          className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
           onSubmit={(e) => {
             e.preventDefault();
             if (key.trim()) void load();

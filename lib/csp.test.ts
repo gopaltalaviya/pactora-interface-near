@@ -15,11 +15,14 @@ describe('the Content Security Policy', () => {
   it('lets the page reach the API and the NEAR testnet RPC, and no other RPC', () => {
     const connect = directive(csp, 'connect-src');
     expect(connect).toContain('https://api.example.invalid');
-    expect(connect).toContain('https://rpc.testnet.near.org');
+    expect(connect).toContain('https://test.rpc.fastnear.com');
+    // FastNEAR first: rpc.testnet.near.org is deprecated and rate-limited
+    // (2026-11-10), kept only as a fallback. Each origin once.
     expect(connect.filter((o) => /rpc/i.test(o))).toEqual([
-      'https://rpc.testnet.near.org',
       'https://test.rpc.fastnear.com',
+      'https://rpc.testnet.near.org',
     ]);
+    expect(new Set(connect).size).toBe(connect.length);
   });
 
   it('lets NEAR Connect load its wallet manifest and wallet code', () => {

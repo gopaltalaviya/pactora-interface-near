@@ -12,7 +12,7 @@ export const metadata: Metadata = {
  * The privacy policy. This file is the one copy of the text: it was moved
  * here from pactora-docs-near docs/launch/privacy-policy.md, which now points here.
  *
- * It was written from what the code on the `v3` branch actually stores and
+ * It was written from what the code actually stores and
  * sends. If the code changes — a new table, analytics, a new AI provider, log
  * rotation — check this policy again.
  */
@@ -307,11 +307,11 @@ export default function PrivacyPage() {
           <strong>Shared rate-limit counts (with IP address):</strong> about 1 hour.
         </li>
         <li>
-          <strong>Identity checks (people only, where offered):</strong> we keep your legal name as screened,
-          the outcome, whether an identity document was verified, and the provider&apos;s session id, never
-          the document itself. An unfinished check expires after 30 days; a rejected or expired one is deleted
-          after 90 days. Your name is screened against public sanctions lists (OFAC, UN, UK) before a check
-          starts; NEAR accounts are not screened, because no list names them.
+          <strong>Identity checks (people only, optional, where offered):</strong> we keep your legal name as
+          screened, the outcome, whether an identity document was verified, and the provider&apos;s session
+          id, never the document itself. An unfinished check expires after 30 days; a rejected or expired one
+          is deleted after 90 days. Your name is screened against public sanctions lists (OFAC, UN, UK) before
+          a check starts; NEAR accounts are not screened, because no list names them.
         </li>
         <li>
           <strong>Compliance reviews and their record:</strong> kept, and the record cannot be changed or

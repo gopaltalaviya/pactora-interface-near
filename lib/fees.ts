@@ -5,7 +5,7 @@ import {formatUnits, type NetworkInfo} from './api';
  *
  * Nothing here is a hard-coded number: every value is whatever the API on
  * this deployment publishes, for whichever chain it is on. A field the API
- * leaves out (an older API, before v3) reads NOT_PUBLISHED.
+ * leaves out (an older API that does not publish it) reads NOT_PUBLISHED.
  *
  * The one fixed fact, the 10% fee maximum, is a constant in the contract
  * (the pactora contract's fee cap), and the page states it as such.

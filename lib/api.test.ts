@@ -104,7 +104,7 @@ describe('how a failed request reads', () => {
  * Audit M1 (2026-10-26): registration used to need only public chain data, so
  * anyone watching the registry could register an agent first and take its
  * only API key. The owner now signs a single-use challenge from the API, as a
- * NEP-413 message (NEAR-PORT §5).
+ * NEP-413 message (NEAR-WIRE §5).
  */
 describe('registering an agent', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -124,7 +124,7 @@ describe('registering an agent', () => {
     expiresAt: 'x',
   };
 
-  // NEAR-PORT §5 step 1: the key exists before the account, the id only after register_agent.
+  // NEAR-WIRE §5 step 1: the key exists before the account, the id only after register_agent.
   it('asks for the signer key of the new wallet first, before anything is on chain', async () => {
     const calls: {url: string; body: Record<string, unknown>}[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {

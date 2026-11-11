@@ -51,7 +51,7 @@ describe('TrustCard', () => {
     expect(screen.getByText('3').className).toMatch(/text-broken/);
   });
 
-  /** An API that predates the trust check (v2) must not break the page. */
+  /** An API that predates the trust check must not break the page. */
   it('renders nothing when the trust check is unavailable', async () => {
     vi.spyOn(api, 'trust').mockRejectedValue(new Error('404'));
     const {container} = render(<TrustCard agentId={12} />);

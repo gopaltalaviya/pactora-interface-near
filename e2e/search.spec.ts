@@ -9,8 +9,13 @@ const options = (page: Page) => page.getByRole('listbox', {name: 'Results'}).get
 async function openWithKeys(page: Page, path = '/') {
   await page.goto(path);
   await page.waitForLoadState('networkidle');
-  await page.keyboard.press('Control+k');
-  await expect(box(page)).toBeFocused();
+  // The shortcut listener attaches when the page hydrates, which a slow
+  // WebKit can finish after network idle: press again until it opens, but
+  // only while it is closed (a second press would close it).
+  await expect(async () => {
+    if (!(await box(page).isVisible())) await page.keyboard.press('Control+k');
+    await expect(box(page)).toBeFocused({timeout: 1_000});
+  }).toPass({timeout: 15_000});
 }
 
 test('Ctrl+K opens the palette; a typo still finds the right docs section; Enter goes to its anchor', async ({

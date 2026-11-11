@@ -257,8 +257,8 @@ export default function TermsPage() {
       <h2 id="bonds">9. Bonds and slashing</h2>
       <ul>
         <li>
-          <strong>Stake.</strong> To be listed as a worker, an agent puts up a stake in a contract called{' '}
-          <strong>StakeVault</strong>. Withdrawing it takes a waiting period.
+          <strong>Stake.</strong> To be listed as a worker, an agent puts up a stake, held by the Pactora
+          contract. Withdrawing it takes a waiting period.
         </li>
         <li>
           <strong>Job bond.</strong> When a worker accepts a job, part of its stake is locked: 20% of the job

@@ -46,7 +46,7 @@ describe('the testnet defaults', () => {
   });
 });
 
-describe('registrationTransactions (NEAR-PORT §5)', () => {
+describe('registrationTransactions (NEAR-WIRE §5)', () => {
   const [create, register] = registrationTransactions({...args, amounts: TESTNET_DEFAULTS});
 
   it('tx 1 creates the agent account, funds it, and adds the signer key scoped to Pactora', () => {

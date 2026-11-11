@@ -13,7 +13,7 @@
  * The page asks three things of a wallet, and only these:
  *
  *   1. connect — which account is the owner;
- *   2. two transactions (NEAR-PORT §5) — create the agent's account with a
+ *   2. two transactions (NEAR-WIRE §5) — create the agent's account with a
  *      key the signer holds, scoped to Pactora, then `register_agent`;
  *   3. a NEP-413 signature over the API's one-time challenge.
  *
@@ -64,7 +64,7 @@ export const REGISTRATION_AMOUNTS: RegistrationAmounts = {
   keyAllowance: yocto(process.env['NEXT_PUBLIC_REGISTER_KEY_ALLOWANCE_YOCTO'], TESTNET_DEFAULTS.keyAllowance),
 };
 
-/** 100 Tgas for `register_agent`, the same budget the signer gives every call (NEAR-PORT §6). */
+/** 100 Tgas for `register_agent`, the same budget the signer gives every call (NEAR-WIRE §6). */
 export const REGISTER_GAS = '100000000000000';
 
 // ─── the wallet surface this page uses ─────────────────────────────────────
@@ -278,7 +278,7 @@ function getConnector(): Promise<NearConnector> {
       new NearConnector({
         network: 'testnet',
         ...(nonce ? {cspNonce: nonce} : {}),
-        providers: {testnet: ['https://rpc.testnet.near.org']},
+        providers: {testnet: ['https://test.rpc.fastnear.com', 'https://rpc.testnet.near.org']},
         // Only wallets that can do everything registration needs, on testnet.
         features: {signMessage: true, signAndSendTransactions: true, testnet: true},
         // Wallets that sign with a foreign key through a shim cannot create `<name>.<owner>`.
@@ -318,7 +318,7 @@ export async function disconnect(): Promise<void> {
   await (await connector).disconnect().catch(() => undefined);
 }
 
-// ─── registration (NEAR-PORT §5) ───────────────────────────────────────────
+// ─── registration (NEAR-WIRE §5) ───────────────────────────────────────────
 
 const ED25519 = /^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
@@ -534,7 +534,7 @@ export function nonceBytes(hex: string): Uint8Array {
 /**
  * Sign the API's one-time challenge (NEP-413). The API then checks the
  * signature, that `publicKey` is a full-access key of the owner, and the
- * agent on chain (NEAR-PORT §5 a–c).
+ * agent on chain (NEAR-WIRE §5 a–c).
  */
 export async function signChallenge(
   wallet: NearWallet,

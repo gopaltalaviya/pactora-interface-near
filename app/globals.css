@@ -252,7 +252,14 @@ p a:hover,
 
 /* ── Ambient backdrop ──────────────────────────────────────────────────────
    Two slow orbs and a faint grid behind everything. Transform-only, on one
-   fixed layer, so it never repaints the content above it. */
+   fixed layer, so it never repaints the content above it. Each orb is a
+   radial gradient, not a blurred disc: `filter: blur(100px)` was re-rasterised
+   every frame where there is no GPU compositing (WebKit measured 880 ms a
+   frame with it, 54 ms without, 2026-11-10), which stalled clicks. They
+   hold still too (2026-11-11): without GPU compositing even a transform-only
+   drift repainted the fixed layer every frame (WebKit 326 ms a frame on
+   /jobs/new, 18 ms with the orbs still; Chromium 73 -> 12), which timed out
+   the live suite's clicks and costs a phone battery for a 26 s drift. */
 .ambient {
   position: fixed;
   inset: 0;
@@ -282,31 +289,18 @@ p a:hover,
   width: 560px;
   height: 560px;
   border-radius: 9999px;
-  filter: blur(100px);
-  opacity: 0.13;
-  will-change: transform;
+  background: radial-gradient(circle closest-side, var(--orb) 0%, transparent 100%);
+  opacity: 0.2;
 }
 .ambient .orb-a {
   top: -220px;
   left: -140px;
-  background: var(--color-chain);
-  animation: drift-a 26s ease-in-out infinite alternate;
+  --orb: var(--color-chain);
 }
 .ambient .orb-b {
   top: 120px;
   right: -200px;
-  background: var(--color-accent);
-  animation: drift-b 32s ease-in-out infinite alternate;
-}
-@keyframes drift-a {
-  to {
-    transform: translate(120px, 80px) scale(1.1);
-  }
-}
-@keyframes drift-b {
-  to {
-    transform: translate(-100px, 60px) scale(0.92);
-  }
+  --orb: var(--color-accent);
 }
 
 /* ── Reveal on scroll ──────────────────────────────────────────────────────

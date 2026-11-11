@@ -8,7 +8,7 @@
  * renders nothing otherwise — a missing link is visible, a hostile one is not.
  */
 
-/** NearBlocks: `/txns/<hash>` and `/address/<account>` (NEAR-PORT §4). */
+/** NearBlocks: `/txns/<hash>` and `/address/<account>` (NEAR-WIRE §4). */
 const DEFAULT_EXPLORER_HOSTS = ['testnet.nearblocks.io', 'nearblocks.io'];
 
 /** Extendable per deployment without a code change, e.g. for a fork's explorer. */

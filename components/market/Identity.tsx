@@ -18,15 +18,19 @@ import {
   type KycStart,
   type KycState,
 } from '@/lib/kyc';
+import {IDENTITY_OPTIONAL_NOTE, identitySkipped, setIdentitySkipped} from '@/lib/identity-skip';
 import {useSession} from '@/lib/session';
 
 /**
  * A person's identity check and standing (docs/26 F13, F14). The legal name
  * is screened against the sanctions lists before any identity session; a
  * simulated provider is labelled as such, because it checks no document.
+ * The check is optional: nothing on Pactora requires it (the API gates on
+ * standing only), so a person can skip it and come back (lib/identity-skip).
  */
 export function IdentityCard() {
-  const {authed} = useSession();
+  const {authed, account} = useSession();
+  const [skipped, setSkipped] = useState(false);
   const [state, setState] = useState<KycState | null>(null);
   const [name, setName] = useState('');
   const [started, setStarted] = useState<KycStart | null>(null);
@@ -44,7 +48,16 @@ export function IdentityCard() {
     return () => controller.abort();
   }, [authed, attempt]);
 
+  useEffect(() => {
+    setSkipped(account ? identitySkipped(account) : false);
+  }, [account]);
+
   if (!state) return null;
+
+  function skip(next: boolean) {
+    if (account) setIdentitySkipped(account, next);
+    setSkipped(next);
+  }
 
   async function begin() {
     const p = validateLegalName(name);
@@ -63,62 +76,85 @@ export function IdentityCard() {
 
   const session = simulatedSessionOf(started?.url);
   const v = state.verification;
+  const steps = (
+    <>
+      {v && (
+        <p data-testid="kyc-status">
+          Check: {STATUS_WORDS[v.status]}
+          {v.status === 'approved' && v.documentVerified && ' An identity document was verified.'}
+        </p>
+      )}
+      {!state.provider && <p className="text-muted">Identity checks are not available on this server.</p>}
+      {state.provider?.simulated && (
+        <Notice>
+          <span data-testid="simulated-notice">
+            This server uses a <strong>simulated</strong> identity provider for testing: no document is looked
+            at, and a &quot;verified&quot; result here proves nothing about who you are.
+          </span>
+        </Notice>
+      )}
+      {session && (
+        <p>
+          <Link href={`/kyc/simulated?session=${session}`} className="text-accent underline">
+            Continue to the simulated identity check
+          </Link>
+        </p>
+      )}
+      {canStart(state) && !session && (
+        <form className="space-y-2" aria-label="Start an identity check" onSubmit={(e) => e.preventDefault()}>
+          <Field
+            label="Full legal name"
+            htmlFor="kyc-name"
+            error={problem}
+            hint="As on your identity document."
+          >
+            <TextInput id="kyc-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={busy} loading={busy} onClick={() => void begin()}>
+              Start the identity check
+            </Button>
+            {!v && (
+              <Button size="sm" variant="ghost" onClick={() => skip(true)}>
+                Skip for now
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+    </>
+  );
+
   return (
     <Card
       title="Identity check"
       labelledBy="identity"
-      actions={state.provider?.simulated ? <Badge tone="refused">Simulated provider</Badge> : undefined}
-      description="Some work needs a verified identity. Your legal name is screened against public sanctions lists first."
+      actions={
+        <span className="flex flex-wrap gap-1.5">
+          <Badge tone="neutral">Optional</Badge>
+          {state.provider?.simulated && <Badge tone="refused">Simulated provider</Badge>}
+        </span>
+      }
+      description="Optional. If you start a check, your legal name is screened against public sanctions lists first."
     >
       <div className="space-y-3 text-sm">
         <p data-testid="standing">
           Standing: <strong>{STANDING_WORDS[state.standing]}</strong>
         </p>
-        {v && (
-          <p data-testid="kyc-status">
-            Check: {STATUS_WORDS[v.status]}
-            {v.status === 'approved' && v.documentVerified && ' An identity document was verified.'}
-          </p>
-        )}
-        {!state.provider && <p className="text-muted">Identity checks are not available on this server.</p>}
-        {state.provider?.simulated && (
-          <Notice>
-            <span data-testid="simulated-notice">
-              This server uses a <strong>simulated</strong> identity provider for testing: no document is
-              looked at, and a &quot;verified&quot; result here proves nothing about who you are.
-            </span>
-          </Notice>
-        )}
-        {session && (
-          <p>
-            <Link href={`/kyc/simulated?session=${session}`} className="text-accent underline">
-              Continue to the simulated identity check
-            </Link>
-          </p>
-        )}
-        {canStart(state) && !session && (
-          <form
-            className="space-y-2"
-            aria-label="Start an identity check"
-            onSubmit={(e) => e.preventDefault()}
-          >
-            <Field
-              label="Full legal name"
-              htmlFor="kyc-name"
-              error={problem}
-              hint="As on your identity document."
-            >
-              <TextInput
-                id="kyc-name"
-                value={name}
-                maxLength={200}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <Button size="sm" disabled={busy} loading={busy} onClick={() => void begin()}>
-              Start the identity check
+        <Notice>
+          <span data-testid="identity-optional-note">
+            <strong>For judges and testers:</strong> {IDENTITY_OPTIONAL_NOTE}
+          </span>
+        </Notice>
+        {skipped ? (
+          <div className="flex flex-wrap items-center gap-2" data-testid="identity-skipped">
+            <span className="text-muted">You skipped the identity check. You can verify any time.</span>
+            <Button size="sm" variant="secondary" onClick={() => skip(false)}>
+              Verify now
             </Button>
-          </form>
+          </div>
+        ) : (
+          steps
         )}
         <p className="text-xs text-muted" data-testid="wallet-screening">
           NEAR wallets: {state.walletScreening}.
@@ -173,6 +209,11 @@ export function SimulatedCheck({sessionId}: {sessionId: string}) {
           {problem}
         </p>
       )}
+      <Notice>
+        <span data-testid="identity-optional-note">
+          <strong>For judges and testers:</strong> {IDENTITY_OPTIONAL_NOTE}
+        </span>
+      </Notice>
     </div>
   );
 }

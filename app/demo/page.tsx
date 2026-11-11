@@ -345,7 +345,7 @@ export default function DemoPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
               <Field
                 label="Orchestrator API key"
                 htmlFor={ids.key}

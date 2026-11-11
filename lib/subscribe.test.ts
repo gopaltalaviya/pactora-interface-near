@@ -21,7 +21,7 @@ class FakeEventSource {
   addEventListener(kind: string, fn: (e: {data: string; lastEventId: string}) => void) {
     this.listeners.set(kind, [...(this.listeners.get(kind) ?? []), fn]);
   }
-  /** `id` as a v3 server sends it; a real MessageEvent has `lastEventId` '' when none was sent. */
+  /** `id` as a server with event ids sends it; a real MessageEvent has `lastEventId` '' when none was sent. */
   emit(kind: string, data: string, id = '') {
     for (const fn of this.listeners.get(kind) ?? []) fn({data, lastEventId: id});
   }
@@ -53,9 +53,9 @@ function subscribe() {
   return {events, onClose, onConnection, onReplay, stop, source: FakeEventSource.last!};
 }
 
-describe('subscribeToRun resuming (v3)', () => {
+describe('subscribeToRun resuming', () => {
   /**
-   * A v3 server gives every event an id, and a reconnecting EventSource gets
+   * A server that gives every event an id, and a reconnecting EventSource gets
    * only what came after. Clearing the trace then — right for a server that
    * replays everything — would throw the history away.
    */

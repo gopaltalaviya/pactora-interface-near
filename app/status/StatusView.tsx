@@ -73,7 +73,7 @@ function ModelCard({model}: {model: NonNullable<StatusReport['model']>}) {
 }
 
 /**
- * Gas, apart from the components (v3): the signer's own reading of the
+ * Gas, apart from the components: the signer's own reading of the
  * wallets it sends from. A low one is the next transaction failing, said
  * before it happens rather than as a revert during a run.
  */

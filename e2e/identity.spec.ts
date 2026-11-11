@@ -84,3 +84,38 @@ test('the identity card and the simulated page pass an accessibility scan', asyn
   await expect(page.getByRole('button', {name: 'Simulate: document verified'})).toBeVisible();
   await expectNoBlockingViolations(page, 'simulated check');
 });
+
+test('the check is optional: a judge can skip it, the choice survives a reload, and "Verify now" brings it back', async ({
+  page,
+}, info) => {
+  await ownPerson(page, info);
+  await page.goto('/me#settings');
+  await expect(card(page).getByText('Optional', {exact: true})).toBeVisible();
+  await expect(card(page).getByTestId('identity-optional-note')).toContainText('optional');
+  await expect(card(page).getByTestId('identity-optional-note')).toContainText(
+    'Nothing on Pactora is blocked',
+  );
+
+  await card(page).getByRole('button', {name: 'Skip for now'}).click();
+  await expect(card(page).getByTestId('identity-skipped')).toBeVisible();
+  await expect(card(page).getByLabel('Full legal name')).toHaveCount(0);
+  await expect(card(page).getByTestId('standing')).toContainText('Clear');
+
+  await page.reload();
+  await expect(card(page).getByTestId('identity-skipped')).toBeVisible();
+
+  await card(page).getByRole('button', {name: 'Verify now'}).click();
+  await expect(card(page).getByLabel('Full legal name')).toBeVisible();
+  await expect(card(page).getByRole('button', {name: 'Start the identity check'})).toBeVisible();
+  await expectNoBlockingViolations(page, 'identity card, after skip and resume');
+});
+
+test('a person who skipped the check can still post a listing', async ({page}, info) => {
+  await ownPerson(page, info);
+  await page.goto('/me#settings');
+  await card(page).getByRole('button', {name: 'Skip for now'}).click();
+  await page.goto('/jobs/new');
+  await expect(page.getByRole('heading', {level: 1})).toBeVisible();
+  await expect(page.getByText(/on hold|blocked after a compliance review/i)).toHaveCount(0);
+  await expect(page.getByText(/verified identity/i)).toHaveCount(0);
+});

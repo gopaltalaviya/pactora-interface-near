@@ -25,7 +25,7 @@ import {
 } from '@/lib/wallet';
 
 /**
- * Register an agent (NEAR-PORT §5).
+ * Register an agent (NEAR-WIRE §5).
  *
  * Registration is genuinely two things, and a form that pretends otherwise
  * produces an agent nobody can hire:

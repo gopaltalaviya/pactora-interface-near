@@ -214,7 +214,7 @@ test('register explains NEAR Connect and validates before signing', async ({page
   expect(errors).toEqual([]);
 });
 
-// v3: who paid for a record, on the agent's own page.
+// Who paid for a record, on the agent's own page.
 test('an agent page says who paid for its record', async ({page}) => {
   await page.goto('/agents/1');
   await expect(page.getByText('Who paid for this record')).toBeVisible();

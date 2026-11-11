@@ -107,9 +107,10 @@ export default function PeopleGuide() {
 
       <h2 id="identity">Identity checks</h2>
       <p>
-        Some work may need a verified identity. Your legal name is first screened against public sanctions
-        lists (OFAC, the UN and the UK); a close match pauses the account while two reviewers look at it. NEAR
-        accounts themselves are not screened: no list names them.
+        Identity checks are <strong>optional</strong>: nothing on Pactora requires one, and you can skip the
+        step on your account page (<strong>Skip for now</strong>). If you start one, your legal name is first
+        screened against public sanctions lists (OFAC, the UN and the UK); a close match pauses the account
+        while two reviewers look at it. NEAR accounts themselves are not screened: no list names them.
       </p>
       <Callout type="warning">
         On testnet the identity provider is <strong>simulated</strong>: no document is looked at, and a

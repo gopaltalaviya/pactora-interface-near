@@ -23,12 +23,12 @@
 export const API_URL = process.env['NEXT_PUBLIC_API_URL']?.replace(/\/$/, '') ?? 'http://127.0.0.1:8080';
 
 /**
- * A network key: a CAIP-2 string, `near:testnet` (NEAR-PORT §1). Accounts
+ * A network key: a CAIP-2 string, `near:testnet` (NEAR-WIRE §1). Accounts
  * (`ownerAddress`, `walletAddress`, contracts) are NEAR account ids.
  */
 export type ChainId = string;
 
-/** `GET /v1/network` (NEAR-PORT §4). */
+/** `GET /v1/network` (NEAR-WIRE §4). */
 export interface NetworkInfo {
   chainId: ChainId;
   /** What the RPC's `status.chain_id` answers: `testnet`. */
@@ -57,7 +57,7 @@ export interface NetworkInfo {
   minJobAmount?: string;
   minFee?: string;
   windows?: {accept: number; work: number; review: number; dispute: number};
-  // v3 fees and limits. Optional: an older API does not publish them, and the
+  // Fees and limits. Optional: an older API does not publish them, and the
   // fees page then says so rather than showing a number from somewhere else.
   // Amounts are base-unit strings of the payment token; bps are numbers.
   /** The worker's bond, as a share of the job, locked from its stake when it accepts. */
@@ -177,7 +177,7 @@ export type RunEventKind =
   | 'planned'
   | 'plan-failed'
   | 'discovered'
-  /** v3: left out of the pool by the trust check, before the model chose. */
+  /** Left out of the pool by the trust check, before the model chose. */
   | 'excluded'
   | 'selected'
   | 'hired'
@@ -332,7 +332,7 @@ export interface StatusReport {
   }[];
 }
 
-/** GET /v1/agents/:id/trust (v3): the verdict, its reasons and the numbers behind them. */
+/** GET /v1/agents/:id/trust: the verdict, its reasons and the numbers behind them. */
 export interface TrustReport {
   agentId: string;
   chainId: ChainId;
@@ -351,7 +351,7 @@ export interface TrustReport {
   indexedToBlock: string | null;
 }
 
-/** `POST /v1/agents/challenge` (NEAR-PORT §5 step 3). `nonce` is 32 bytes as 64 hex. */
+/** `POST /v1/agents/challenge` (NEAR-WIRE §5 step 3). `nonce` is 32 bytes as 64 hex. */
 export interface Challenge {
   nonce: string;
   message: string;
@@ -417,7 +417,7 @@ export const api = {
 
   agent: (agentId: number, signal?: AbortSignal) => get<AgentSummary>(`/v1/agents/${agentId}`, signal),
 
-  /** Who paid for an agent's record (v3). Public. */
+  /** Who paid for an agent's record. Public. */
   trust: (agentId: number, signal?: AbortSignal) => get<TrustReport>(`/v1/agents/${agentId}/trust`, signal),
 
   /** One job and its on-chain history. Public: the evidence for a run step. */
@@ -442,7 +442,7 @@ export const api = {
   },
 
   /**
-   * `POST /v1/agents/wallet-key` (NEAR-PORT §5 step 1): the `ed25519:` key the
+   * `POST /v1/agents/wallet-key` (NEAR-WIRE §5 step 1): the `ed25519:` key the
    * signer holds for a wallet that does not exist yet. tx 1 adds it to the
    * new account, so it is asked for before anything is on chain. Public: a
    * public key is harmless, and only the signer holds the private half.
@@ -461,7 +461,7 @@ export const api = {
   },
 
   /**
-   * `POST /v1/agents/challenge` (NEAR-PORT §5 step 3), once the agent is on
+   * `POST /v1/agents/challenge` (NEAR-WIRE §5 step 3), once the agent is on
    * chain: it names the id `register_agent` returned.
    */
   challenge(body: {
@@ -658,7 +658,7 @@ export const api = {
  *
  * The server sends everything that already happened when a client connects,
  * so a page opened late, or refreshed mid-run, still shows the whole story.
- * Since v3 every event has an id and a reconnect resumes after the last one
+ * Every event has an id, and a reconnect resumes after the last one
  * seen, rather than replaying it all. Returns an unsubscribe function.
  */
 export type StreamState = 'open' | 'reconnecting' | 'lost';
@@ -674,11 +674,11 @@ export function subscribeToRun(
    */
   onConnection?: (state: StreamState) => void,
   /**
-   * A server without event ids (v2) replays a run's whole history on every
+   * A server without event ids replays a run's whole history on every
    * connection. Called when a RE-connection opens, before that replay, so the
-   * page starts its trace over instead of showing every line twice. A v3
-   * server sends ids and resumes after the last one seen, so this is never
-   * called there — clearing the trace would throw its history away.
+   * page starts its trace over instead of showing every line twice. A server
+   * with ids resumes after the last one seen, so this is never called
+   * there — clearing the trace would throw its history away.
    */
   onReplay?: () => void,
 ): () => void {

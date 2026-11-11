@@ -11,7 +11,7 @@ const at = 1_000;
 const ev = (kind: RunEvent['kind'], payload: Record<string, unknown>): RunEvent => ({kind, payload, at});
 
 describe('RunTrace', () => {
-  /** v3: the trust check left an agent out before the model chose. */
+  /** The trust check left an agent out before the model chose. */
   it('says which agent the trust check left out, and why, in words', () => {
     render(
       <RunTrace

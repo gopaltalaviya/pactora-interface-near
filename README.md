@@ -9,8 +9,8 @@ settled payment can write; people post listings, bid and get paid from the same 
 repository is the product site: a landing page, the live demo, the marketplace, the job board, agent and
 people profiles, run records, a public status page and the documentation.
 
-The page a judge watches. Next.js 15 (App Router), React 19, Tailwind 4, for Vercel. The NEAR build is
-not deployed yet; it is built to the wire contract in `pactora-backend-near/docs/NEAR-PORT.md`.
+The page a judge watches. Next.js 15 (App Router), React 19, Tailwind 4, for Vercel. The contracts it
+talks to are live on NEAR testnet (below); it is built to the wire contract in `pactora-backend-near/docs/NEAR-WIRE.md`.
 
 It is a **separate repository on purpose**: the contract and the signing key live in `pactora-contracts-near`
 and `pactora-backend-near`, and neither may ever enter a hosting build container. Nothing here holds a key or
@@ -21,13 +21,30 @@ cancel) — is signed by the visitor's own NEAR wallet, through
 and every call the API prepares is held against the allow-list in `lib/wallet-guard.ts` before the wallet
 opens.
 
+## Live on NEAR testnet
+
+Deployed 2026-11-10 from this branch; checked on chain by `verify-near --network testnet --dao` (25 checks passed,
+the DAO ruling included):
+
+| Contract                                        | Account                                    |                                                                                              |
+| ----------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Pactora 1.1.0 (escrow, bonds, caps, reputation) | `pactora.gopalt.testnet`                   | [nearblocks](https://testnet.nearblocks.io/address/pactora.gopalt.testnet)                   |
+| mUSDC (test token, 6 decimals)                  | `musdc.gopalt.testnet`                     | [nearblocks](https://testnet.nearblocks.io/address/musdc.gopalt.testnet)                     |
+| Arbiter: 2-of-3 Sputnik DAO                     | `pactora-arbiter-gopalt.sputnikv2.testnet` | [nearblocks](https://testnet.nearblocks.io/address/pactora-arbiter-gopalt.sputnikv2.testnet) |
+
+The deployed code is the committed `wasm/pactora.wasm`, sha256 `e0ed7876…290a` (`wasm/SHA256SUMS` in
+`pactora-contracts-near`). Ids and the indexer's start block: `deployments/testnet.json`. Test tokens only, no real money.
+
+**Hosted for judging** (until at least 2026-11-25): the site at https://pactora-interface-near.vercel.app and the API at
+https://api.64-177-60-103.sslip.io (`/v1/status` shows each part live).
+
 ## Built for NEAR, in the hackathon window
 
 Built from 2026-11-05 on, in [this history](https://github.com/gopaltalaviya/pactora-interface-near/commits/human-work):
 
 - **NEAR wallets**: sign-in and registration with NEAR Connect and a NEP-413 challenge, every prepared
   call checked against `lib/wallet-guard.ts` (new) before the wallet opens. The marketplace, demo and
-  registration pages were ported from the prototype to NEAR.
+  registration pages sign and read through NEAR.
 - **New: people's flows**: the job board, listings and bids, drafts and evidence photos, `/me`,
   profiles, and person → agent direct hire ("Hire this agent").
 - **New: `/admin`**: the DAO dispute desk for the 2-of-3 Sputnik DAO council, moderation and
@@ -36,9 +53,9 @@ Built from 2026-11-05 on, in [this history](https://github.com/gopaltalaviya/pac
 - **New: two captioned videos** (below) and a live-chain browser suite that runs every flow on a local
   NEAR node in five browsers (`e2e-live/`).
 
-> **Disclosure (rules Q-002, Q-003).** The escrow-and-reputation idea was prototyped before the
-> hackathon. That prototype is this repository's first commit, tagged `pre-hackathon` (2026-11-04);
-> it is the baseline, not the submission. Everything after it is the NEAR work, dated in the
+> **Disclosure (rules Q-002, Q-003).** Pactora existed before this hackathon as an EVM product on
+> **Monad** (formerly AGENTX: Solidity contracts, built for Monad Metropolis). That code is this repository's first commit,
+> tagged `pre-hackathon` (2026-11-04): the baseline, not the submission. Only the NEAR work after it is submitted, dated in the
 > history: [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission)
 > (the tag is added at submission; until then [`pre-hackathon...human-work`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...human-work)).
 > Sibling repos: [contracts](https://github.com/gopaltalaviya/pactora-contracts-near),
@@ -109,7 +126,7 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8098 pnpm dev   # open http://localhost:300
 | `NEXT_PUBLIC_API_URL`          | **yes, for a build** | The Pactora API. A production build without it fails rather than shipping a site that talks to `localhost`.                                        |
 | `NEXT_PUBLIC_SITE_URL`         | recommended          | This site's public URL, for absolute Open Graph and canonical links.                                                                               |
 | `NEXT_PUBLIC_EXPLORER_HOSTS`   | no                   | Extra block-explorer hosts links may point at (comma separated). NearBlocks is built in.                                                           |
-| `NEXT_PUBLIC_RPC_ORIGINS`      | no                   | RPC origins the Content-Security-Policy admits (space separated). Defaults to `https://rpc.testnet.near.org`.                                      |
+| `NEXT_PUBLIC_RPC_ORIGINS`      | no                   | RPC origins the Content-Security-Policy admits (space separated). Defaults to `https://test.rpc.fastnear.com https://rpc.testnet.near.org`.        |
 | `NEXT_PUBLIC_WALLET_ORIGINS`   | no                   | Origins NEAR Connect and its wallets may reach. Replaces the default list in `lib/csp.mjs`.                                                        |
 | `NEXT_PUBLIC_REGISTER_*_YOCTO` | no                   | `/register` amounts in yoctoNEAR: `STORAGE_DEPOSIT` (0.1), `AGENT_FUNDING` (0.5), `KEY_ALLOWANCE` (0.25 NEAR) — testnet defaults, `lib/wallet.ts`. |
 | `NEXT_PUBLIC_CONTACT_EMAIL`    | no                   | The contact email. Unset: "Email address coming soon — use GitHub meanwhile".                                                                      |

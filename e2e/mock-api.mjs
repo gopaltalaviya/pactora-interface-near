@@ -14,7 +14,7 @@ const EXPLORER = 'https://testnet.nearblocks.io';
 const HOSTILE = 'javascript:alert(1)';
 
 const network = {
-  // The GET /v1/network shape of NEAR-PORT §4.
+  // The GET /v1/network shape of NEAR-WIRE §4.
   chainId: 'near:testnet',
   nearNetworkId: 'testnet',
   name: 'NEAR Testnet',
@@ -166,7 +166,7 @@ const status = () => ({
   checkedAt: new Date().toISOString(),
   build: {service: 'api', version: '0.1.0', commit: 'a1f9485c0ffe', builtAt: '2026-09-30T12:00:00Z'},
   components: {api: 'up', database: 'up', signer: 'up', rpc: 'up', indexer: 'degraded'},
-  // v3: the signer's gas reading — one wallet low, so the warning is tested.
+  // The signer's gas reading — one wallet low, so the warning is tested.
   gas: {
     state: 'low',
     checkedAt: new Date(Date.now() - 30_000).toISOString(),
@@ -3187,7 +3187,7 @@ createServer(async (req, res) => {
       agents: agents.map((a) => ({...a, skill: skills[a.agentId].find((s) => s.capability === capability)})),
     });
   }
-  // v3: who paid for an agent's record. ResearchBot (1) is trusted; Unproven
+  // Who paid for an agent's record. ResearchBot (1) is trusted; Unproven
   // (2) has no history, so the check says new — as the real one would.
   const trustMatch = /^\/v1\/agents\/(\d+)\/trust$/.exec(url.pathname);
   if (trustMatch) {
