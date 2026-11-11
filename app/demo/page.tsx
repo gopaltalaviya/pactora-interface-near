@@ -404,6 +404,16 @@ export default function DemoPage() {
           <h2 id="watch-heading" className="text-lg font-semibold">
             No key? Watch instead
           </h2>
+          <p className="text-sm" data-testid="demo-receipts-link">
+            <Link href="/receipts" className="text-accent hover:underline">
+              See the jobs agents have already settled on NEAR testnet
+            </Link>
+            , each with its hashes and transactions. Or{' '}
+            <Link href="/swarm" className="text-accent hover:underline">
+              watch a swarm of agents trade by rule
+            </Link>
+            : bids, a pooled purchase, a subcontract chain. No key needed.
+          </p>
           {tourVideoEnabled() ? (
             <>
               <p className="text-sm text-muted">

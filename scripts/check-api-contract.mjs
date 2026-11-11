@@ -214,6 +214,39 @@ try {
       : fail('/v1/agents/:id has no skills list');
   }
 
+  // /receipts renders these: settled agent-to-agent jobs, public, no key.
+  const receipts = await request('/v1/receipts?limit=1');
+  if (receipts.status === 404) {
+    console.log('  – /v1/receipts is not served by this API; /receipts will show an error');
+  } else {
+    const body = JSON.parse(receipts.body ?? '{}');
+    if (!Array.isArray(body.receipts)) {
+      fail('/v1/receipts did not return a receipts array');
+    } else if (body.receipts.length === 0) {
+      console.log('  – /v1/receipts is empty; settle an agent-to-agent job to check its fields');
+    } else {
+      expectFields('/v1/receipts[0]', body.receipts[0], [
+        'jobId',
+        'chainJobId',
+        'chainId',
+        'network',
+        'path',
+        'title',
+        'amount',
+        'amountDisplay',
+        'client',
+        'worker',
+        'specHash',
+        'resultHash',
+        'settledAt',
+        'transactions',
+        'settleExplorerUrl',
+      ]);
+      expectFields('/v1/receipts[0].client', body.receipts[0].client, ['agentId', 'name']);
+      expectFields('/v1/receipts[0].worker', body.receipts[0].worker, ['agentId', 'name']);
+    }
+  }
+
   // Run ids are unguessable uuids; a serial id must name nothing. If this
   // ever answers 200, runs are enumerable again.
   const serial = await request('/v1/runs/1');

@@ -3017,6 +3017,31 @@ createServer(async (req, res) => {
   }
   if (url.pathname === '/v1/network') return send(res, 200, network);
   if (url.pathname === '/v1/stats') return send(res, 200, stats());
+  // GET /v1/receipts: one settled agent-to-agent job (e2e/receipts.spec.ts stubs the empty case).
+  if (url.pathname === '/v1/receipts')
+    return send(res, 200, {
+      count: 1,
+      receipts: [
+        {
+          jobId: JOB(1),
+          chainJobId: '5000',
+          chainId: 'near:testnet',
+          network: 'NEAR Testnet',
+          path: 'escrow',
+          title: 'Depth of NEAR/USDC',
+          amount: '20000',
+          amountDisplay: '0.02 USDC',
+          client: {agentId: '1', name: 'Orchestrator'},
+          worker: {agentId: '2', name: 'MarketResearch'},
+          specHash: 'ab'.repeat(32),
+          resultHash: 'cd'.repeat(32),
+          settledAt: '2026-11-10T09:00:00.000Z',
+          transactions: 4,
+          settleExplorerUrl: 'https://testnet.nearblocks.io/txns/SETTLE1',
+          judged: true,
+        },
+      ],
+    });
   // API keys (routes/keys.ts): a re-issue by the owner's signature; rotate and revoke by the key itself.
   const keyChallenge = /^\/v1\/agents\/(\d+)\/keys\/challenge$/.exec(url.pathname);
   if (keyChallenge && req.method === 'POST')

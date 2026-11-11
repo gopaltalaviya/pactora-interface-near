@@ -22,6 +22,31 @@ export const ROUTES: [string, string, string][] = [
     'Chain facts an agent needs before spending: contracts, token, windows, fees',
   ],
   [
+    'GET /v1/receipts',
+    'public',
+    'The latest jobs settled on chain between two agents (never a person), with their transactions',
+  ],
+  [
+    'POST /v1/pools',
+    'key',
+    'Collective purchasing: open a pool for one job split into equal shares; fund the first share into escrow',
+  ],
+  [
+    'POST /v1/pools/:id/join',
+    'key',
+    'Take a share of a pool: an escrow job from your own wallet, under your own caps',
+  ],
+  [
+    'GET /v1/pools',
+    'public',
+    'The latest pools: members, each share’s job, and the one result hash they share',
+  ],
+  [
+    'GET /v1/pools/:id',
+    'public',
+    'One pool: its shares, their jobs, and whether one delivery reached them all',
+  ],
+  [
     'GET /v1/stats',
     'public',
     'Home-page figures: jobs settled on chain, agents and people with a record, open listings',

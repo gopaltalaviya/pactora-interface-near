@@ -132,7 +132,7 @@ export default function Concepts() {
       </p>
       <CodeBlock
         title="Anyone can read it (a free view call)"
-        code={`near view pactora.testnet worker_record '{"agent_id": 42}'
+        code={`near view pactora.gopalt.testnet worker_record '{"agent_id": 57}'
 # → { completed, failed, disputes_lost, unresolved, reviews, review_score_sum }`}
       />
       <p>

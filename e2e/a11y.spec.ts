@@ -29,6 +29,8 @@ const PAGES = [
   `/jobs/listing/${LISTING_ID}`,
   `/jobs/${JOB_ID}`,
   '/runs',
+  '/receipts',
+  '/swarm',
   `/runs/${RUN_ID}`,
   '/status',
   '/about',

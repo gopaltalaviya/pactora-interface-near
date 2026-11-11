@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pactora: the 20-second opener</title>
+    <style>
+      @font-face {
+        font-family: Geist;
+        src: url(../overview/fonts/sans.woff2) format('woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: GeistMono;
+        src: url(../overview/fonts/mono.woff2) format('woff2');
+        font-weight: 100 900;
+      }
+      :root {
+        --ink: #07090d;
+        --surface: #0d1118;
+        --raised: #151a23;
+        --edge: #222833;
+        --muted: #8f98ab;
+        --text: #e9edf5;
+        --settled: #3fd68c;
+        --accent: #6ea8ff;
+        --chain: #9d8cff;
+        --refused: #f5b942;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: var(--ink);
+        color: var(--text);
+        font-family: Geist, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .bg {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.06) 1px, transparent 0);
+        background-size: 24px 24px;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        opacity: 0;
+      }
+      .eyebrow {
+        font:
+          600 16px GeistMono,
+          monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--chain);
+      }
+      h1 {
+        font-size: 60px;
+        line-height: 1.08;
+        font-weight: 700;
+        text-align: center;
+        max-width: 1040px;
+        letter-spacing: -0.02em;
+      }
+      h1 .b {
+        color: var(--settled);
+      }
+      h2 {
+        font-size: 40px;
+        font-weight: 650;
+        text-align: center;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        font-size: 22px;
+        color: var(--muted);
+        text-align: center;
+        max-width: 980px;
+        line-height: 1.4;
+      }
+      .row {
+        display: flex;
+        gap: 18px;
+        justify-content: center;
+        flex-wrap: wrap;
+        max-width: 1160px;
+      }
+      .chip {
+        border: 1px solid var(--edge);
+        background: var(--raised);
+        border-radius: 12px;
+        padding: 12px 16px;
+        font:
+          500 18px GeistMono,
+          monospace;
+        min-width: 250px;
+      }
+      .chip.win {
+        border-color: var(--settled);
+        box-shadow:
+          0 0 0 1px var(--settled),
+          0 0 28px rgb(63 214 140 / 0.25);
+      }
+      .chip small {
+        display: block;
+        color: var(--muted);
+        font-size: 14px;
+        margin-top: 4px;
+      }
+      .coin {
+        border-radius: 999px;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        padding: 10px 18px;
+        font:
+          600 18px GeistMono,
+          monospace;
+      }
+      .box {
+        border: 1px solid var(--settled);
+        border-radius: 16px;
+        padding: 18px 26px;
+        font:
+          600 22px Geist,
+          sans-serif;
+        text-align: center;
+        background: rgb(63 214 140 / 0.06);
+      }
+      .receipt {
+        border: 1px solid var(--edge);
+        background: var(--surface);
+        border-radius: 16px;
+        padding: 26px 32px;
+        width: 760px;
+        font:
+          500 19px GeistMono,
+          monospace;
+        line-height: 1.7;
+      }
+      .receipt .k {
+        color: var(--muted);
+      }
+      .ok {
+        color: var(--settled);
+      }
+      .url {
+        font:
+          600 22px GeistMono,
+          monospace;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg"></div>
+    <section class="scene" id="s1">
+      <div class="eyebrow">Pactora · on NEAR</div>
+      <h1>Hire an AI agent or a person.<br /><span class="b">Pay only when the work is accepted.</span></h1>
+      <p class="sub">The money waits in a NEAR contract, not with a platform.</p>
+    </section>
+    <section class="scene" id="s2">
+      <div class="eyebrow">A swarm trades by rule</div>
+      <h2 id="s2-title"></h2>
+      <div class="row" id="bids"></div>
+      <p class="sub" id="s2-why"></p>
+    </section>
+    <section class="scene" id="s3">
+      <div class="eyebrow">Collective purchasing</div>
+      <h2 id="s3-title"></h2>
+      <div class="row" id="coins"></div>
+      <div class="box" id="s3-box"></div>
+      <p class="sub" id="s3-sub"></p>
+    </section>
+    <section class="scene" id="s4">
+      <div class="eyebrow">Every job leaves a public receipt</div>
+      <div class="receipt" id="receipt"></div>
+      <p class="url">pactora-interface-near.vercel.app/swarm</p>
+    </section>
+    <script>
+      // Filled by render-hook.mjs from lib/swarm-run.json (a real recorded run).
+      window.DURATION = 20;
+      const SCENES = [
+        ['s1', 0, 4.6],
+        ['s2', 4.6, 10.4],
+        ['s3', 10.4, 15.6],
+        ['s4', 15.6, 20],
+      ];
+      const usdc = (b) => `${(Number(b) / 1e6).toLocaleString('en-US', {maximumFractionDigits: 4})} mUSDC`;
+      const clamp = (x) => Math.max(0, Math.min(1, x));
+      const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+      let built = false;
+      function build(d) {
+        // Scene 2: the round-2 choice that went to a dearer bid with the better record, if any.
+        const c =
+          d.choices.find((x) => {
+            const cheapest = [...x.options].sort((a, b) => Number(a.price) - Number(b.price))[0];
+            return x.round > 1 && cheapest.seller !== x.chose;
+          }) ?? d.choices[d.choices.length - 1];
+        document.getElementById('s2-title').textContent =
+          `${d.bids.length} bids, ${d.settlements.length} jobs settled on chain`;
+        const bids = document.getElementById('bids');
+        for (const o of [...c.options].sort((a, b) => b.score - a.score)) {
+          const el = document.createElement('div');
+          el.className = 'chip' + (o.seller === c.chose ? ' win' : '');
+          el.innerHTML = `${o.seller} · ${usdc(o.price)}<small>reputation ${o.reputation} · score ${o.score.toFixed(3)}</small>`;
+          bids.appendChild(el);
+        }
+        const cheapest = [...c.options].sort((a, b) => Number(a.price) - Number(b.price))[0];
+        document.getElementById('s2-why').textContent =
+          cheapest.seller !== c.chose
+            ? `${c.buyer} chose ${c.chose} over a cheaper bid: reputation only a settled job on chain can write.`
+            : `${c.buyer} chose ${c.chose}: the best of price and on-chain reputation.`;
+        // Scene 3: the pool.
+        const p = d.pool;
+        document.getElementById('s3-title').textContent =
+          `${p.members.length} buyers, one job none could buy alone`;
+        const coins = document.getElementById('coins');
+        for (const m of p.members) {
+          const el = document.createElement('div');
+          el.className = 'coin';
+          el.textContent = `${m}: ${usdc(p.share)}`;
+          coins.appendChild(el);
+        }
+        document.getElementById('s3-box').textContent = `${usdc(p.total)} job from ${p.worker} · settled`;
+        document.getElementById('s3-sub').textContent =
+          `Each pays its share into escrow under its own ${usdc(p.perTaskCap)} cap. One delivery, one result hash on every share.`;
+        // Scene 4: a real settlement.
+        const s = d.settlements.find((x) => x.round === 3) ?? d.settlements[0];
+        document.getElementById('receipt').innerHTML = [
+          `<span class="k">network </span>${d.network}`,
+          `<span class="k">contract</span> ${d.contract}`,
+          `<span class="k">job     </span> chain job ${s.chainJobId}`,
+          `<span class="k">paid    </span> ${usdc(s.amount)}  ${s.buyer} → ${s.seller}`,
+          `<span class="k">result  </span> ${String(s.resultHash).slice(0, 22)}…`,
+          `<span class="k">state   </span> <span class="ok">Settled ✓</span>`,
+        ].join('<br/>');
+        built = true;
+      }
+      window.render = (t) => {
+        if (!built) build(window.DATA);
+        for (const [id, a, b] of SCENES) {
+          const el = document.getElementById(id);
+          const fadeIn = ease((t - a) / 0.5);
+          const fadeOut = 1 - ease((t - (b - 0.4)) / 0.4);
+          const o = t < a || t > b ? 0 : Math.min(fadeIn, id === 's4' ? 1 : fadeOut);
+          el.style.opacity = String(o);
+          el.style.transform = `translateY(${(1 - fadeIn) * 18}px)`;
+          // Children arrive one by one.
+          [...el.querySelectorAll('.chip, .coin')].forEach((c, i) => {
+            const k = ease((t - a - 0.6 - i * 0.35) / 0.5);
+            c.style.opacity = String(k);
+            c.style.transform = `translateY(${(1 - k) * 22}px)`;
+          });
+        }
+      };
+    </script>
+  </body>
+</html>

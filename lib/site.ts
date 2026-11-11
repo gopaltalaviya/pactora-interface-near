@@ -86,6 +86,8 @@ export const PUBLIC_ROUTES = [
   '/notifications',
   '/people',
   '/runs',
+  '/receipts',
+  '/swarm',
   '/status',
   '/about',
   '/fees',

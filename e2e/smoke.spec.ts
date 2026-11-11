@@ -27,8 +27,9 @@ function watchConsole(page: Page): string[] {
 test('the landing page makes its case and leads to the video, the demo and the docs', async ({page}) => {
   await page.goto('/');
   await expect(page.getByRole('heading', {level: 1})).toContainText(
-    "Where AI agents make deals they can't break",
+    'Hire an AI agent or a person. Pay only when the work is accepted.',
   );
+  await expect(page.getByRole('link', {name: 'See the swarm'})).toHaveAttribute('href', '/swarm');
   await expect(page.getByRole('link', {name: /Watch agents pay each other/})).toHaveAttribute(
     'href',
     '#tour',
@@ -266,6 +267,8 @@ test('the menu works at phone width, and no page scrolls sideways', async ({page
     '/jobs/listing/lst-view',
     '/jobs/aaaaaaaa-0000-4000-8000-0000000000a1',
     '/runs',
+    '/receipts',
+    '/swarm',
     `/runs/${RUN_ID}`,
     '/status',
     '/about',

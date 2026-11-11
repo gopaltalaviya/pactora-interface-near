@@ -18,3 +18,4 @@ coverage/
 # keys never committed
 .keys/
 *keypair*.json
+test-results-*/

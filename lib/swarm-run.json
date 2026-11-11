@@ -1,0 +1,525 @@
+{
+  "network": "NEAR Testnet",
+  "chainId": "near:testnet",
+  "contract": "pactora.gopalt.testnet",
+  "recordedAt": "2026-11-11T17:31:55.038Z",
+  "rules": {
+    "sellers": [
+      {
+        "name": "Atlas",
+        "floor": "20000",
+        "markdown": 0.7,
+        "capacity": 10
+      },
+      {
+        "name": "Birch",
+        "floor": "25000",
+        "markdown": 0.8,
+        "capacity": 10
+      },
+      {
+        "name": "Cobalt",
+        "floor": "30000",
+        "markdown": 0.6,
+        "capacity": 6
+      }
+    ],
+    "buyerScore": {
+      "price": 0.55,
+      "reputation": 0.45
+    }
+  },
+  "listings": [
+    {
+      "buyer": "Buyer 01",
+      "listingId": "3d92e498-279b-43e4-8224-c4526f0c4bf5",
+      "ceiling": "30000",
+      "round": 1
+    },
+    {
+      "buyer": "Buyer 02",
+      "listingId": "6dc32204-b25d-498b-985c-7125fbdc80f5",
+      "ceiling": "45000",
+      "round": 1
+    },
+    {
+      "buyer": "Buyer 03",
+      "listingId": "239d319f-1fdf-4aae-a0fd-6ab2ddde5cc4",
+      "ceiling": "60000",
+      "round": 1
+    },
+    {
+      "buyer": "Buyer 04",
+      "listingId": "e413869b-960b-45b1-a935-22b2f990c5a4",
+      "ceiling": "75000",
+      "round": 2
+    },
+    {
+      "buyer": "Buyer 05",
+      "listingId": "be01a5ce-b845-43f1-88a7-7fbbb4033329",
+      "ceiling": "90000",
+      "round": 2
+    },
+    {
+      "buyer": "Buyer 06",
+      "listingId": "a0fe5150-b3c1-4a6a-9051-be4a791068e4",
+      "ceiling": "100000",
+      "round": 2
+    }
+  ],
+  "bids": [
+    {
+      "seller": "Birch",
+      "listingId": "239d319f-1fdf-4aae-a0fd-6ab2ddde5cc4",
+      "price": "48000",
+      "round": 1
+    },
+    {
+      "seller": "Atlas",
+      "listingId": "239d319f-1fdf-4aae-a0fd-6ab2ddde5cc4",
+      "price": "42000",
+      "round": 1
+    },
+    {
+      "seller": "Cobalt",
+      "listingId": "239d319f-1fdf-4aae-a0fd-6ab2ddde5cc4",
+      "price": "36000",
+      "round": 1
+    },
+    {
+      "seller": "Birch",
+      "listingId": "6dc32204-b25d-498b-985c-7125fbdc80f5",
+      "price": "36000",
+      "round": 1
+    },
+    {
+      "seller": "Atlas",
+      "listingId": "6dc32204-b25d-498b-985c-7125fbdc80f5",
+      "price": "31500",
+      "round": 1
+    },
+    {
+      "seller": "Cobalt",
+      "listingId": "6dc32204-b25d-498b-985c-7125fbdc80f5",
+      "price": "30000",
+      "round": 1
+    },
+    {
+      "seller": "Birch",
+      "listingId": "3d92e498-279b-43e4-8224-c4526f0c4bf5",
+      "price": "25000",
+      "round": 1
+    },
+    {
+      "seller": "Atlas",
+      "listingId": "3d92e498-279b-43e4-8224-c4526f0c4bf5",
+      "price": "21000",
+      "round": 1
+    },
+    {
+      "seller": "Cobalt",
+      "listingId": "3d92e498-279b-43e4-8224-c4526f0c4bf5",
+      "price": "30000",
+      "round": 1
+    },
+    {
+      "seller": "Birch",
+      "listingId": "a0fe5150-b3c1-4a6a-9051-be4a791068e4",
+      "price": "80000",
+      "round": 2
+    },
+    {
+      "seller": "Atlas",
+      "listingId": "a0fe5150-b3c1-4a6a-9051-be4a791068e4",
+      "price": "70000",
+      "round": 2
+    },
+    {
+      "seller": "Cobalt",
+      "listingId": "a0fe5150-b3c1-4a6a-9051-be4a791068e4",
+      "price": "60000",
+      "round": 2
+    },
+    {
+      "seller": "Birch",
+      "listingId": "be01a5ce-b845-43f1-88a7-7fbbb4033329",
+      "price": "72000",
+      "round": 2
+    },
+    {
+      "seller": "Atlas",
+      "listingId": "be01a5ce-b845-43f1-88a7-7fbbb4033329",
+      "price": "63000",
+      "round": 2
+    },
+    {
+      "seller": "Cobalt",
+      "listingId": "be01a5ce-b845-43f1-88a7-7fbbb4033329",
+      "price": "54000",
+      "round": 2
+    },
+    {
+      "seller": "Birch",
+      "listingId": "e413869b-960b-45b1-a935-22b2f990c5a4",
+      "price": "60000",
+      "round": 2
+    },
+    {
+      "seller": "Atlas",
+      "listingId": "e413869b-960b-45b1-a935-22b2f990c5a4",
+      "price": "52500",
+      "round": 2
+    },
+    {
+      "seller": "Cobalt",
+      "listingId": "e413869b-960b-45b1-a935-22b2f990c5a4",
+      "price": "45000",
+      "round": 2
+    }
+  ],
+  "choices": [
+    {
+      "round": 1,
+      "buyer": "Buyer 01",
+      "ceiling": "30000",
+      "chose": "Atlas",
+      "options": [
+        {
+          "seller": "Atlas",
+          "price": "21000",
+          "reputation": 50,
+          "score": 0.39
+        },
+        {
+          "seller": "Birch",
+          "price": "25000",
+          "reputation": 50,
+          "score": 0.317
+        },
+        {
+          "seller": "Cobalt",
+          "price": "30000",
+          "reputation": 50,
+          "score": 0.225
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "buyer": "Buyer 02",
+      "ceiling": "45000",
+      "chose": "Cobalt",
+      "options": [
+        {
+          "seller": "Cobalt",
+          "price": "30000",
+          "reputation": 50,
+          "score": 0.408
+        },
+        {
+          "seller": "Atlas",
+          "price": "31500",
+          "reputation": 50,
+          "score": 0.39
+        },
+        {
+          "seller": "Birch",
+          "price": "36000",
+          "reputation": 50,
+          "score": 0.335
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "buyer": "Buyer 03",
+      "ceiling": "60000",
+      "chose": "Cobalt",
+      "options": [
+        {
+          "seller": "Cobalt",
+          "price": "36000",
+          "reputation": 50,
+          "score": 0.445
+        },
+        {
+          "seller": "Atlas",
+          "price": "42000",
+          "reputation": 50,
+          "score": 0.39
+        },
+        {
+          "seller": "Birch",
+          "price": "48000",
+          "reputation": 50,
+          "score": 0.335
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "buyer": "Buyer 04",
+      "ceiling": "75000",
+      "chose": "Cobalt",
+      "options": [
+        {
+          "seller": "Cobalt",
+          "price": "45000",
+          "reputation": 52,
+          "score": 0.454
+        },
+        {
+          "seller": "Atlas",
+          "price": "52500",
+          "reputation": 50,
+          "score": 0.39
+        },
+        {
+          "seller": "Birch",
+          "price": "60000",
+          "reputation": 50,
+          "score": 0.335
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "buyer": "Buyer 05",
+      "ceiling": "90000",
+      "chose": "Cobalt",
+      "options": [
+        {
+          "seller": "Cobalt",
+          "price": "54000",
+          "reputation": 52,
+          "score": 0.454
+        },
+        {
+          "seller": "Atlas",
+          "price": "63000",
+          "reputation": 50,
+          "score": 0.39
+        },
+        {
+          "seller": "Birch",
+          "price": "72000",
+          "reputation": 50,
+          "score": 0.335
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "buyer": "Buyer 06",
+      "ceiling": "100000",
+      "chose": "Cobalt",
+      "options": [
+        {
+          "seller": "Cobalt",
+          "price": "60000",
+          "reputation": 52,
+          "score": 0.454
+        },
+        {
+          "seller": "Atlas",
+          "price": "70000",
+          "reputation": 50,
+          "score": 0.39
+        },
+        {
+          "seller": "Birch",
+          "price": "80000",
+          "reputation": 50,
+          "score": 0.335
+        }
+      ]
+    }
+  ],
+  "pool": {
+    "poolId": "dffe9bf1-76e8-427f-be9a-20e2cfc0efad",
+    "worker": "Cobalt",
+    "share": "100000",
+    "total": "300000",
+    "perTaskCap": "100000",
+    "members": ["Buyer 01", "Buyer 02", "Buyer 03"],
+    "resultHash": "df4e29fc93bcd251939c4f8a518354d0f0b4e9eed56c27462c2c0b68af207ea5",
+    "sameDelivery": true,
+    "state": "settled",
+    "jobs": [
+      {
+        "buyer": "Buyer 01",
+        "jobId": "fb24314d-8242-444d-8d19-01cc4e4a4d1f",
+        "chainJobId": "61"
+      },
+      {
+        "buyer": "Buyer 02",
+        "jobId": "d6f4e2cb-c4e4-471d-9ed2-fa82566b41d6",
+        "chainJobId": "62"
+      },
+      {
+        "buyer": "Buyer 03",
+        "jobId": "92db3fd3-dc59-4506-8393-cdecd8a6195b",
+        "chainJobId": "63"
+      }
+    ]
+  },
+  "subcontract": {
+    "client": "Buyer 04",
+    "middle": "Cobalt",
+    "sub": "Atlas",
+    "parent": {
+      "jobId": "1307b8ed-9872-4659-8dd7-791c993ba664",
+      "chainJobId": "64",
+      "amount": "30000"
+    },
+    "child": {
+      "jobId": "6b0f4065-6a5d-49ef-a69c-1ec7f12bdf7c",
+      "chainJobId": "65",
+      "amount": "20000"
+    },
+    "middleNet": "9700"
+  },
+  "settlements": [
+    {
+      "round": 1,
+      "buyer": "Buyer 01",
+      "seller": "Atlas",
+      "amount": "21000",
+      "jobId": "c8f58a79-2fbc-4a07-9d4a-c6e6ae254465",
+      "chainJobId": "55",
+      "resultHash": "460d3afc3e8505e18ab0d136583c5b2ed06f4be49d86772d9d369edbb05f8910",
+      "txHash": "Hs1hZCBb4cwxRyDVLvRo4Hgj4e6LdX6W99BeHRj4V1ac",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/Hs1hZCBb4cwxRyDVLvRo4Hgj4e6LdX6W99BeHRj4V1ac"
+    },
+    {
+      "round": 1,
+      "buyer": "Buyer 02",
+      "seller": "Cobalt",
+      "amount": "30000",
+      "jobId": "97d4a96a-2aa0-4ea2-b772-07e1078d767d",
+      "chainJobId": "56",
+      "resultHash": "20c3fb9fe8cf3f335d6db2cecd16339165ce9e6670eca7739685c954cf4362d5",
+      "txHash": "69nHzUedPA5SQqE8UUVeyx1pZvPHJgE9oX89B414khsM",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/69nHzUedPA5SQqE8UUVeyx1pZvPHJgE9oX89B414khsM"
+    },
+    {
+      "round": 1,
+      "buyer": "Buyer 03",
+      "seller": "Cobalt",
+      "amount": "36000",
+      "jobId": "3bdc0077-6444-4492-b8b4-300de5b721f7",
+      "chainJobId": "57",
+      "resultHash": "a10db2ace76a23be055a428d67645056cebd5066d87ca920e251c406b3fac6e9",
+      "txHash": "Fa55vDoX4VN7BxaYr2hanB8sRrLYtgBgs9D6A9zK19LP",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/Fa55vDoX4VN7BxaYr2hanB8sRrLYtgBgs9D6A9zK19LP"
+    },
+    {
+      "round": 2,
+      "buyer": "Buyer 04",
+      "seller": "Cobalt",
+      "amount": "45000",
+      "jobId": "7f8cf3ac-cb3f-465d-b826-ef8eacb7b127",
+      "chainJobId": "58",
+      "resultHash": "e58e31ae26fd09bafc6fafed37bcdc2e80b6dbb3a75e350fb3e7a3bae8caebba",
+      "txHash": "7LHpJid4cj9GRkGhjB9CXJwCZnUp4eSJwAkvE2udEQam",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/7LHpJid4cj9GRkGhjB9CXJwCZnUp4eSJwAkvE2udEQam"
+    },
+    {
+      "round": 2,
+      "buyer": "Buyer 05",
+      "seller": "Cobalt",
+      "amount": "54000",
+      "jobId": "1cc9c05e-4840-4ac1-95f9-495d048a68a2",
+      "chainJobId": "59",
+      "resultHash": "224da5e84fe7d14fd378872d8bf166d45afb4826e56fc1aba6dccc79af768f5e",
+      "txHash": "3AwJggCApsypCCbHmcxs4bLhYTfP4Z3QZfw52WYTWpKR",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/3AwJggCApsypCCbHmcxs4bLhYTfP4Z3QZfw52WYTWpKR"
+    },
+    {
+      "round": 2,
+      "buyer": "Buyer 06",
+      "seller": "Cobalt",
+      "amount": "60000",
+      "jobId": "ad5db892-6fa3-4546-bbcd-7eecebcf194f",
+      "chainJobId": "60",
+      "resultHash": "7d498c4c08862912daed3172ed73eeafb164484184ceb7fbd47d64da52371af8",
+      "txHash": "FbtaXqbLiktMyKm8tAmYsf4tExSta8vLH5fUBDGK7T2M",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/FbtaXqbLiktMyKm8tAmYsf4tExSta8vLH5fUBDGK7T2M"
+    },
+    {
+      "round": 3,
+      "buyer": "Buyer 01",
+      "seller": "Cobalt",
+      "amount": "100000",
+      "jobId": "fb24314d-8242-444d-8d19-01cc4e4a4d1f",
+      "chainJobId": "61",
+      "resultHash": "df4e29fc93bcd251939c4f8a518354d0f0b4e9eed56c27462c2c0b68af207ea5",
+      "txHash": "65p54bmoZJiPnA5Ga3oDppGegvrHemmnDP8GopJ32zAG",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/65p54bmoZJiPnA5Ga3oDppGegvrHemmnDP8GopJ32zAG"
+    },
+    {
+      "round": 3,
+      "buyer": "Buyer 02",
+      "seller": "Cobalt",
+      "amount": "100000",
+      "jobId": "d6f4e2cb-c4e4-471d-9ed2-fa82566b41d6",
+      "chainJobId": "62",
+      "resultHash": "df4e29fc93bcd251939c4f8a518354d0f0b4e9eed56c27462c2c0b68af207ea5",
+      "txHash": "66qNy9oK82oDFEDpnQ8ZC1vR9iANS6WByVSkYXEjeegz",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/66qNy9oK82oDFEDpnQ8ZC1vR9iANS6WByVSkYXEjeegz"
+    },
+    {
+      "round": 3,
+      "buyer": "Buyer 03",
+      "seller": "Cobalt",
+      "amount": "100000",
+      "jobId": "92db3fd3-dc59-4506-8393-cdecd8a6195b",
+      "chainJobId": "63",
+      "resultHash": "df4e29fc93bcd251939c4f8a518354d0f0b4e9eed56c27462c2c0b68af207ea5",
+      "txHash": "4hFWyB41w5kXe4oG4XHFm2V3t7owcm1mZtbHheHX86CC",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/4hFWyB41w5kXe4oG4XHFm2V3t7owcm1mZtbHheHX86CC"
+    },
+    {
+      "round": 4,
+      "buyer": "Cobalt",
+      "seller": "Atlas",
+      "amount": "20000",
+      "jobId": "6b0f4065-6a5d-49ef-a69c-1ec7f12bdf7c",
+      "chainJobId": "65",
+      "resultHash": "80247ee9a058cb7cf3a0c07430f8882be467c2c4c2e9bb5d86e11c138f132cc4",
+      "txHash": "DnVdDVaWCyZ87dSGno3DZ6RBkkKfvSmaZnaW3KABcgVt",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/DnVdDVaWCyZ87dSGno3DZ6RBkkKfvSmaZnaW3KABcgVt"
+    },
+    {
+      "round": 4,
+      "buyer": "Buyer 04",
+      "seller": "Cobalt",
+      "amount": "30000",
+      "jobId": "1307b8ed-9872-4659-8dd7-791c993ba664",
+      "chainJobId": "64",
+      "resultHash": "ed08df2059679d1633f799e8b2089c2da1e2d8c6e13f339090287a6bebf78e6e",
+      "txHash": "31aqPD37un7u2LygaycBdGBFYEWHiw7CG5P7qKvNDqF2",
+      "explorerUrl": "https://testnet.nearblocks.io/txns/31aqPD37un7u2LygaycBdGBFYEWHiw7CG5P7qKvNDqF2"
+    }
+  ],
+  "reputation": [
+    {
+      "seller": "Atlas",
+      "score": 52,
+      "completed": 2,
+      "settled": 2
+    },
+    {
+      "seller": "Birch",
+      "score": 50,
+      "completed": 0,
+      "settled": 0
+    },
+    {
+      "seller": "Cobalt",
+      "score": 64,
+      "completed": 9,
+      "settled": 9
+    }
+  ]
+}

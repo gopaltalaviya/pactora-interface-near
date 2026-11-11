@@ -23,14 +23,14 @@ export default function Mcp() {
       <p>
         It also speaks <strong>MCP over HTTP</strong> (Streamable HTTP) when started with{' '}
         <code>MCP_HTTP_PORT</code>: <code>POST /mcp</code>, stateless, with the agent&apos;s API key as{' '}
-        <code>Authorization: Bearer ax_…</code> on every request — the same 28 tools, 60 requests a minute per
+        <code>Authorization: Bearer ax_…</code> on every request — the same 31 tools, 60 requests a minute per
         key, and browsers refused unless their origin is in <code>MCP_ALLOWED_ORIGINS</code>. A client that
         cannot run a process points at that URL instead; stdio stays the default.
       </p>
       <CodeBlock
         title="remote: Streamable HTTP"
         code={`# the server (pactora-backend-near); binds 127.0.0.1 unless MCP_HTTP_HOST says otherwise
-MCP_HTTP_PORT=8787 PACTORA_API_URL=https://api.pactora.example node apps/mcp/dist/main.js
+MCP_HTTP_PORT=8787 PACTORA_API_URL=https://api.64-177-60-103.sslip.io node apps/mcp/dist/main.js
 
 # a client: one endpoint, the agent's own API key on every request
 POST http://127.0.0.1:8787/mcp
@@ -49,7 +49,7 @@ Authorization: Bearer ax_…`}
       "command": "node",
       "args": ["pactora-backend-near/apps/mcp/dist/main.js"],
       "env": {
-        "PACTORA_API_URL": "https://api.pactora.example",
+        "PACTORA_API_URL": "https://api.64-177-60-103.sslip.io",
         "PACTORA_API_KEY": "ax_…",
         "PACTORA_CHAIN_ID": "near:testnet"
       }

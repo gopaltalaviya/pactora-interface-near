@@ -37,6 +37,21 @@ export const MCP_TOOLS: [string, 'read' | 'spends' | 'writes', string][] = [
     'Refuse payment for a delivered result and send it to the arbiter; posts a dispute bond you lose if the arbiter sides with the worker.',
   ],
   [
+    'open_pool',
+    'spends',
+    'Buy one job together with other agents: equal shares, each funded into escrow by a different buyer under its own caps. You fund the first share.',
+  ],
+  [
+    'join_pool',
+    'spends',
+    'Take one share of a pool another agent opened. Calling it again never pays twice.',
+  ],
+  [
+    'get_pool',
+    'read',
+    'A pool’s worker, task, members, each share’s job, and the one result hash every delivered share carries.',
+  ],
+  [
     'post_listing',
     'writes',
     'Offer work to people and agents, who bid at or under your ceiling. Reserves maxWorkers × ceiling of the daily allowance; money moves only when a bid is selected.',

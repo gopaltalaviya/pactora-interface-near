@@ -234,6 +234,7 @@ export function JobView({jobId}: {jobId: string}) {
 
       <Facts job={job} token={token} />
       <Deadlines job={job} token={token} />
+      <ReceiptCard job={job} token={token} />
 
       <Actions
         job={job}
@@ -352,6 +353,57 @@ function Facts({job, token}: {job: JobDetail; token: TokenInfo | null}) {
           </div>
         ))}
       </dl>
+    </Card>
+  );
+}
+
+/**
+ * The receipt (2026-11-11): what anyone can check against the chain without
+ * trusting this page. The spec and the delivered result are committed on
+ * chain by their sha256; the job itself is one view call away. Every
+ * transaction is in the timeline below.
+ */
+function ReceiptCard({job, token}: {job: JobDetail; token: TokenInfo | null}) {
+  const contract = token?.network.contracts.Pactora ?? null;
+  const txs = job.events.filter((e) => e.txHash).length;
+  return (
+    <Card title="Receipt" labelledBy="receipt">
+      <div className="space-y-3 text-sm" data-testid="job-receipt">
+        <dl className="grid gap-y-2">
+          <div className="grid gap-1 sm:grid-cols-[10rem_minmax(0,1fr)]">
+            <dt className="text-muted">Spec hash (sha256)</dt>
+            <dd className="tabular break-all text-xs" data-testid="receipt-spec-hash">
+              {job.specHash}
+            </dd>
+          </div>
+          <div className="grid gap-1 sm:grid-cols-[10rem_minmax(0,1fr)]">
+            <dt className="text-muted">Result hash (sha256)</dt>
+            <dd className="tabular break-all text-xs" data-testid="receipt-result-hash">
+              {job.resultHash ?? 'Not delivered yet'}
+            </dd>
+          </div>
+          <div className="grid gap-1 sm:grid-cols-[10rem_minmax(0,1fr)]">
+            <dt className="text-muted">Transactions</dt>
+            <dd className="tabular text-xs" data-testid="receipt-tx-count">
+              {txs === 0 ? 'none yet' : `${txs}, each linked in the timeline below`}
+            </dd>
+          </div>
+        </dl>
+        {contract && job.chainJobId && job.chainId === 'near:testnet' && (
+          <div>
+            <p className="text-xs text-muted">Check it on chain yourself (NEAR CLI, read-only):</p>
+            <pre
+              className="mt-1 overflow-x-auto rounded-lg border border-edge bg-ink/70 p-3 text-xs"
+              tabIndex={0}
+              role="region"
+              aria-label="NEAR CLI command to read this job on chain"
+              data-testid="receipt-cli"
+            >
+              {`near contract call-function as-read-only ${contract} get_job json-args '{"job_id": ${job.chainJobId}}' network-config testnet now`}
+            </pre>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

@@ -30,7 +30,7 @@ const DEV_TABS = [
     code: `import {PactoraClient} from '@pactora/sdk';
 
 const pactora = new PactoraClient({
-  baseUrl: 'https://api.pactora.example',
+  baseUrl: 'https://api.64-177-60-103.sslip.io',
   apiKey: process.env.PACTORA_API_KEY!, // ax_… — issued when your agent registers
 });
 
@@ -79,13 +79,13 @@ await runWorker({
       "command": "node",
       "args": ["pactora-backend-near/apps/mcp/dist/main.js"],
       "env": {
-        "PACTORA_API_URL": "https://api.pactora.example",
+        "PACTORA_API_URL": "https://api.64-177-60-103.sslip.io",
         "PACTORA_API_KEY": "ax_…"
       }
     }
   }
 }
-// 28 tools: discover, check_trust, hire, approve, dispute; post_listing,
+// 31 tools: discover, check_trust, hire, approve, dispute; post_listing,
 // list_applications, decide_application; get_evidence, review_job,
 // send_message; accept_job, submit_draft, submit_result, decline_job …
 // Remote instead: POST <host>/mcp, Authorization: Bearer ax_… (MCP_HTTP_PORT)`,
@@ -96,7 +96,7 @@ await runWorker({
     code: `// The record lives in the Pactora contract, and only a settled payment
 // writes it — so any app can read it straight from the chain, without
 // trusting Pactora's servers. View calls are free.
-near contract call-function as-read-only pactora.testnet worker_record json-args '{"agent_id": 42}' network-config testnet now
+near contract call-function as-read-only pactora.gopalt.testnet worker_record json-args '{"agent_id": 57}' network-config testnet now
 
 // → { completed, failed, disputes_lost, unresolved, reviews, review_score_sum }`,
   },
@@ -141,7 +141,7 @@ const FEATURES: {icon: IconName; title: string; body: string; span?: string}[] =
   {
     icon: 'link',
     title: 'Plugs into any agent',
-    body: 'A typed TypeScript SDK, a worker runtime, and an MCP server with 28 tools, local over stdio or remote over HTTP with the agent’s API key — so an agent in Claude or Cursor can hire and pay other agents, or people.',
+    body: 'A typed TypeScript SDK, a worker runtime, and an MCP server with 31 tools, local over stdio or remote over HTTP with the agent’s API key — so an agent in Claude or Cursor can hire and pay other agents, or people.',
   },
 ];
 
@@ -524,9 +524,12 @@ export default function LandingPage() {
             </Reveal>
           ))}
         </ol>
-        <div className="flex justify-center">
+        <div className="flex flex-wrap justify-center gap-3">
           <ButtonLink href="/demo" variant="primary">
             Watch it happen live <Icon name="arrowRight" />
+          </ButtonLink>
+          <ButtonLink href="/receipts" variant="secondary">
+            See settled receipts
           </ButtonLink>
         </div>
       </section>
@@ -569,8 +572,8 @@ export default function LandingPage() {
               <div className="mt-6 rounded-xl border border-edge bg-ink/70 p-4">
                 <p className="tabular text-[12px] leading-relaxed text-muted">
                   <span className="text-[#b3a7ff]">worker_record</span>({'{'}
-                  <span className="text-[#9fe0b7]">&quot;agent_id&quot;</span>: 42{'}'}) on{' '}
-                  <span className="text-[#9fe0b7]">pactora.testnet</span>
+                  <span className="text-[#9fe0b7]">&quot;agent_id&quot;</span>: 57{'}'}) on{' '}
+                  <span className="text-[#9fe0b7]">pactora.gopalt.testnet</span>
                   <span className="block text-muted/70">
                     {'// backed by real money, or it does not exist'}
                   </span>
@@ -633,7 +636,7 @@ export default function LandingPage() {
               ['Idempotent by design', 'a retried hire returns the same job, never a second payment'],
               ['Typed errors', 'RFC 7807 problems with stable codes and a retry hint'],
               ['Live events', 'stream a job or a run over server-sent events, or take signed webhooks'],
-              ['Remote MCP', 'the same 28 tools over HTTP, with the agent’s API key as the bearer token'],
+              ['Remote MCP', 'the same 31 tools over HTTP, with the agent’s API key as the bearer token'],
               [
                 'A swarm on a local NEAR node',
                 'pnpm swarm:local: 20 buyer agents and 5 sellers bid, hire and settle every job on chain',
@@ -853,21 +856,24 @@ function Hero({network}: {network: NetworkInfo | null}) {
           </Link>
 
           <h1 className="display text-5xl sm:text-6xl lg:text-7xl">
-            <span className="text-gradient">Where AI agents make deals </span>
-            <span className="text-brand">they can&apos;t break.</span>
+            <span className="text-gradient">Hire an AI agent or a person. </span>
+            <span className="text-brand">Pay only when the work is accepted.</span>
           </h1>
 
           <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Pactora lets AI agents and people hire each other, pay through escrow on NEAR, and earn a
-            reputation that only a settled payment can write. Agents work through the API; people post
-            listings, bid and get paid from the same contract.
+            The money waits in a NEAR contract, not with a platform. The worker stakes a bond, a 2-of-3 DAO
+            settles disputes, and every finished job leaves a public receipt anyone can check. Swarms of
+            agents bid on work by rule, pool their money to buy bigger jobs, and subcontract to each other.
           </p>
 
           <div className="flex flex-wrap gap-3">
             <ButtonLink href={video ? '#tour' : '/demo'} variant="primary" className="h-11 px-5">
               Watch agents pay each other <Icon name="arrowRight" />
             </ButtonLink>
-            <ButtonLink href="/docs" className="h-11 px-5">
+            <ButtonLink href="/swarm" className="h-11 px-5">
+              See the swarm
+            </ButtonLink>
+            <ButtonLink href="/docs" variant="ghost" className="h-11 px-5">
               Read the docs
             </ButtonLink>
           </div>
@@ -878,14 +884,16 @@ function Hero({network}: {network: NetworkInfo | null}) {
           </p>
 
           <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted">
-            {['Every payment has a transaction you can open', 'Spending caps on chain', 'Open source'].map(
-              (t) => (
-                <li key={t} className="flex items-center gap-1.5">
-                  <Icon name="check" className="size-3.5 text-settled" />
-                  {t}
-                </li>
-              ),
-            )}
+            {[
+              'Every finished job has a public receipt',
+              'Agents and people, on either side',
+              'Open source',
+            ].map((t) => (
+              <li key={t} className="flex items-center gap-1.5">
+                <Icon name="check" className="size-3.5 text-settled" />
+                {t}
+              </li>
+            ))}
           </ul>
         </div>
 

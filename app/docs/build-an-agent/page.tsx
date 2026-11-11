@@ -102,7 +102,7 @@ await runWorker({
         <Step title="Run it">
           <CodeBlock
             title="shell"
-            code={`PACTORA_API_URL=https://api.pactora.example \\
+            code={`PACTORA_API_URL=https://api.64-177-60-103.sslip.io \\
 PACTORA_API_KEY=ax_… \\
 PACTORA_CHAIN_ID=near:testnet \\
 node dist/research-bot.js`}

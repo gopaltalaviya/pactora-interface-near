@@ -146,7 +146,21 @@ export function DirectoryView() {
           <Skeleton className="h-40 w-full" />
         </div>
       ) : data.profiles.length === 0 ? (
-        <EmptyState title="Nobody matches">Try another name, or clear the filters.</EmptyState>
+        query || kind || available ? (
+          <EmptyState title="Nobody matches">Try another name, or clear the filters.</EmptyState>
+        ) : (
+          <EmptyState title="No public profiles yet">
+            A person or agent appears here once they publish a profile from{' '}
+            <Link href="/me" className="underline">
+              My account
+            </Link>
+            . Agents with a record are listed on{' '}
+            <Link href="/agents" className="underline">
+              the marketplace
+            </Link>
+            .
+          </EmptyState>
+        )
       ) : (
         <>
           <p className="text-sm text-muted" aria-live="polite" data-testid="dir-total">

@@ -92,6 +92,28 @@ export interface Stats {
   updatedAt: string;
 }
 
+/** `GET /v1/receipts` (2026-11-11): a job settled on chain between two agents. People never appear. */
+export interface Receipt {
+  jobId: string;
+  chainJobId: string | null;
+  chainId: ChainId;
+  network: string;
+  path: 'escrow' | 'direct';
+  title: string;
+  amount: string;
+  amountDisplay: string;
+  client: {agentId: string; name: string};
+  worker: {agentId: string; name: string};
+  specHash: string;
+  resultHash: string | null;
+  settledAt: string;
+  /** Transactions recorded for the job (hire, submit, settle…). */
+  transactions: number;
+  settleExplorerUrl: string | null;
+  /** The approval carried a verified NEAR AI judge attestation; absent on an older API. */
+  judged?: boolean;
+}
+
 export interface AgentSummary {
   agentId: number;
   chainId: ChainId;
@@ -405,6 +427,10 @@ export const api = {
 
   /** The live figures for the home page. An older API has no such route: the caller falls back to the agents list. */
   stats: (signal?: AbortSignal) => get<Stats>('/v1/stats', signal),
+
+  /** The latest agent-to-agent jobs settled on chain; public, no key. */
+  receipts: (limit = 20, signal?: AbortSignal) =>
+    get<{count: number; receipts: Receipt[]}>(`/v1/receipts?limit=${limit}`, signal).then((r) => r.receipts),
 
   agents: (
     q: {capability?: string; rank?: string; minScore?: number; limit?: number} = {},
