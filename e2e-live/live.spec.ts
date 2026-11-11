@@ -37,6 +37,13 @@ import {
 
 test.describe.configure({mode: 'serial'});
 test.setTimeout(240_000);
+// WebKit (desktop and the iPhone profile) renders in software in Playwright on
+// Windows. Late in this serial run, with earlier users' pages still open on
+// purpose, every step took 7-25 s and the longest flows ran out of their
+// 240 s (2026-11-11: held account, person -> agent, agent -> person; each
+// passes alone, and in Chromium, Firefox and Android). Three times the time
+// in WebKit only; the assertions are the same.
+test.slow(({browserName}) => browserName === 'webkit', 'software rendering in WebKit on Windows');
 
 const DAY = 86_400_000;
 const PRICE = '50000'; // 0.05 mUSDC: under the default per-task cap (0.1)
