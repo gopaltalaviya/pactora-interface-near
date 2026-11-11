@@ -226,19 +226,16 @@ export default function PrivacyPage() {
           address — to serve the site.
         </li>
         <li>
-          <strong>
-            <P>[VPS PROVIDER]</P>
-          </strong>{' '}
-          (server hosting — Vultr today) gets everything stored on our server: the database, logs and backups
-          — to run the API, signer and database.
+          <strong>Vultr</strong> (server hosting) gets everything stored on our server: the database, logs and
+          backups — to run the API, signer and database.
         </li>
         <li>
           <strong>Let&apos;s Encrypt</strong> gets our domain name only — for HTTPS certificates.
         </li>
         <li>
-          <strong>NEAR RPC providers</strong> (the public NEAR RPC today, or <P>[RPC PROVIDER]</P>) get
-          blockchain requests from our server, and from your browser on the register page — to read and send
-          blockchain transactions.
+          <strong>NEAR RPC providers</strong> (FastNEAR&apos;s public RPC and transactions API today,
+          NEAR&apos;s own RPC as a fallback) get blockchain requests from our server, and from your browser on
+          the register page — to read and send blockchain transactions.
         </li>
         <li>
           <strong>GitHub and jsDelivr</strong>, and the host of the wallet you pick, get your IP address when

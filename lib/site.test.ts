@@ -14,7 +14,7 @@ describe('readSite', () => {
     expect(site.operatorName).toBeNull();
     expect(operatorName(site)).toBe(OPERATOR_FALLBACK);
     expect(OPERATOR_FALLBACK).toBe('the Pactora operator ([name to be confirmed])');
-    expect(EMAIL_FALLBACK).toBe('Email address coming soon — use GitHub meanwhile');
+    expect(EMAIL_FALLBACK).toBe('No email address: please use the GitHub issues below');
   });
 
   it('treats blank values as unset', () => {

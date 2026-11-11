@@ -6,7 +6,7 @@
  *
  * | Variable                    | Unset                                               |
  * | --------------------------- | --------------------------------------------------- |
- * | `NEXT_PUBLIC_CONTACT_EMAIL` | "Email address coming soon — use GitHub meanwhile"  |
+ * | `NEXT_PUBLIC_CONTACT_EMAIL` | "No email address: please use the GitHub issues below"  |
  * | `NEXT_PUBLIC_X_HANDLE`      | no X link anywhere                                  |
  * | `NEXT_PUBLIC_OPERATOR_NAME` | "the Pactora operator ([name to be confirmed])"     |
  *
@@ -15,7 +15,7 @@
  * ignored rather than linked.
  */
 
-export const EMAIL_FALLBACK = 'Email address coming soon — use GitHub meanwhile';
+export const EMAIL_FALLBACK = 'No email address: please use the GitHub issues below';
 export const OPERATOR_FALLBACK = 'the Pactora operator ([name to be confirmed])';
 
 export interface Site {

@@ -350,7 +350,7 @@ test('the terms and privacy pages say they are drafts and show what is not decid
 
 test('contact: no X link and no email link until they are set', async ({page}) => {
   await page.goto('/contact');
-  await expect(page.getByText('Email address coming soon — use GitHub meanwhile')).toBeVisible();
+  await expect(page.getByText('No email address: please use the GitHub issues below')).toBeVisible();
   await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
   await expect(page.locator('a[href*="x.com"], a[href*="twitter.com"]')).toHaveCount(0);
   await expect(page.getByRole('link', {name: 'security page'})).toHaveAttribute(
