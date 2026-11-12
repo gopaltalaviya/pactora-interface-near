@@ -1,4 +1,5 @@
 import {formatUnits, type NetworkInfo} from './api';
+import {windowsText} from './job-deadlines';
 
 /**
  * The fees and limits table on /fees, built from `GET /v1/network` alone.
@@ -148,5 +149,92 @@ export function feeRows(n: NetworkInfo): FeeRow[] {
       value: time(n.windows?.dispute),
       note: 'No decision by then plus a grace period: the worker is paid, and the dispute bond is split half to the worker, half back to the client.',
     },
+  ];
+}
+
+// ─── one job's money, as the contract works it out ─────────────────────────
+
+/**
+ * A share of a job, never below the floor: the contract's `fee_of`, `bond_of`
+ * and `dispute_bond_of` (`bps_of(amount).max(floor)`, rounded down). Null when
+ * the API does not publish the share, so a page says so instead of guessing.
+ */
+export function bondOf(amount: string, bps: number | undefined, floor: string | undefined): bigint | null {
+  if (bps === undefined || !/^\d{1,39}$/.test(amount)) return null;
+  const share = (BigInt(amount) * BigInt(bps)) / 10000n;
+  const min = floor && /^\d{1,39}$/.test(floor) ? BigInt(floor) : 0n;
+  return share > min ? share : min;
+}
+
+type Shares = Pick<
+  NetworkInfo,
+  'protocolFeeBps' | 'minFee' | 'bondBps' | 'minBond' | 'disputeBondBps' | 'minDisputeBond'
+>;
+
+/** The protocol fee on a job: taken from the worker's pay when it settles, fixed when the job is created. */
+export const feeOf = (amount: string, n: Shares): bigint | null => bondOf(amount, n.protocolFeeBps, n.minFee);
+/** The worker's bond: locked from its stake when it accepts. */
+export const workerBondOf = (amount: string, n: Shares): bigint | null =>
+  bondOf(amount, n.bondBps, n.minBond);
+/** The client's dispute bond: taken from its purse only if it disputes. */
+export const disputeBondOf = (amount: string, n: Shares): bigint | null =>
+  bondOf(amount, n.disputeBondBps, n.minDisputeBond);
+
+/** What the worker is paid at `amount`: the price minus the fee, never below 0. Null when the fee is unknown. */
+export function workerGets(amount: string, fee: bigint | null): bigint | null {
+  if (fee === null || !/^\d{1,39}$/.test(amount)) return null;
+  const left = BigInt(amount) - fee;
+  return left > 0n ? left : 0n;
+}
+
+export interface SummaryRow {
+  id: string;
+  label: string;
+  value: string;
+}
+
+/**
+ * What a client is about to commit, before the wallet opens: the money
+ * locked, the fee (from the worker's side), the bonds, and the time limits.
+ * Every figure is the network's published rule applied to this price.
+ */
+export function spendSummary(amount: string, n: NetworkInfo): SummaryRow[] {
+  const {symbol, decimals} = n.paymentToken;
+  const money = (v: bigint | null) =>
+    v === null ? NOT_PUBLISHED : `${formatUnits(v.toString(), decimals)} ${symbol}`;
+  const fee = feeOf(amount, n);
+  return [
+    {id: 'locked', label: 'Locked in escrow from your purse', value: money(BigInt(amount))},
+    {id: 'fee', label: 'Protocol fee (taken from the worker’s pay)', value: money(fee)},
+    {id: 'receives', label: 'The worker receives on approval', value: money(workerGets(amount, fee))},
+    {
+      id: 'bond',
+      label: 'Worker bond (from its stake, when it accepts)',
+      value: money(workerBondOf(amount, n)),
+    },
+    {
+      id: 'disputeBond',
+      label: 'Your dispute bond (only if you dispute)',
+      value: money(disputeBondOf(amount, n)),
+    },
+    {id: 'windows', label: 'Time limits', value: windowsText(n.windows) ?? NOT_PUBLISHED},
+  ];
+}
+
+/** The same for a worker bidding or taking a slot at `amount`. */
+export function workSummary(amount: string, n: NetworkInfo): SummaryRow[] {
+  const {symbol, decimals} = n.paymentToken;
+  const money = (v: bigint | null) =>
+    v === null ? NOT_PUBLISHED : `${formatUnits(v.toString(), decimals)} ${symbol}`;
+  const fee = feeOf(amount, n);
+  return [
+    {id: 'receives', label: 'You receive on approval', value: money(workerGets(amount, fee))},
+    {id: 'fee', label: 'Protocol fee (taken from your pay)', value: money(fee)},
+    {
+      id: 'bond',
+      label: 'Your bond, locked from your stake when you accept',
+      value: money(workerBondOf(amount, n)),
+    },
+    {id: 'windows', label: 'Time limits', value: windowsText(n.windows) ?? NOT_PUBLISHED},
   ];
 }

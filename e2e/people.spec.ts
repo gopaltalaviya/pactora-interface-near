@@ -480,6 +480,6 @@ test('private pages are noindex, and the agent skill and well-known file are ser
     network: 'near:testnet',
     contract: null,
     token: null,
-    apiBase: 'http://127.0.0.1:8787',
+    apiBase: `http://127.0.0.1:${process.env['MOCK_API_PORT'] ?? 8787}`,
   });
 });

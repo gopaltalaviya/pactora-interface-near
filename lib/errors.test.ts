@@ -64,3 +64,78 @@ describe('describeError', () => {
     expect(errorText(new Error('plain'))).toBe('plain');
   });
 });
+
+/**
+ * 2026-11-12: the contract's refusals about money and time, however they
+ * arrive (the wallet's outcome, or the API's signer), and the faucet's, in
+ * plain words with the next step. None of these is worth a blind retry.
+ */
+describe('describeError: contract and faucet refusals', () => {
+  const fromApi = (code: string, name: string) =>
+    new ApiError(code, `the contract refused: ${name} (transaction 8Ha3T, nothing changed)`, 402);
+  const fromWallet = (name: string) =>
+    new Error(
+      `create_job failed: {"ActionError":{"kind":{"FunctionCallError":{"ExecutionError":"Smart contract panicked: ${name}"}}}}`,
+    );
+
+  it.each([
+    ['InsufficientBalance', 'INSUFFICIENT_FUNDS', /purse does not hold enough.*Fund your purse/],
+    ['DailyCapExceeded', 'BUDGET_EXCEEDED', /daily cap allows.*raise your daily cap/],
+    ['PerTaskCapExceeded', 'BUDGET_EXCEEDED', /per-task spending cap.*Raise the cap/],
+    ['InsufficientStorage', 'INSUFFICIENT_FUNDS', /too little NEAR for storage.*Add storage/],
+    ['InsufficientBond', 'INSUFFICIENT_FUNDS', /unlocked stake does not cover the bond.*Add stake/],
+    ['DeadlinePassed', 'DEADLINE_PASSED', /deadline for this step has passed.*keeper/],
+    ['NotHireable', 'AGENT_NOT_HIREABLE', /cannot be hired right now.*Choose another worker/],
+  ])('%s, from the API and from the wallet', (name, code, words) => {
+    for (const err of [fromApi(code, name), fromWallet(name)]) {
+      const out = describeError(err, 'action');
+      expect(out.text).toMatch(words);
+      expect(out.text).not.toContain(name);
+      expect(out.text).not.toContain(code);
+      expect(out.retryable).toBe(false);
+    }
+  });
+
+  it('points a money refusal at the money panel', () => {
+    expect(describeError(fromWallet('InsufficientBalance'), 'action').next).toEqual({
+      href: '/me#money',
+      label: 'See your money',
+    });
+    expect(describeError(fromWallet('DeadlinePassed'), 'action').next).toBeUndefined();
+  });
+
+  it('says each faucet limit in words', () => {
+    const limit = (detail: string) => errorText(new ApiError('LIMIT_REACHED', detail, 409));
+    expect(limit('ann.testnet already claimed today (UTC 2026-11-12)')).toBe(
+      'You have already claimed test tokens today. You can claim again after midnight UTC.',
+    );
+    expect(limit('at most 3 claims per address per day')).toMatch(/internet address/);
+    expect(limit('the faucet has given out all it may today; try tomorrow')).toBe(
+      'The faucet has given out all it may today. Try again after midnight UTC.',
+    );
+    // Another LIMIT_REACHED keeps the API's words.
+    expect(limit('at most 3 bids per listing')).toBe('at most 3 bids per listing');
+  });
+
+  it('says a server with no faucet, from the 503 detail request() keeps', () => {
+    const none = new ApiError(
+      'UPSTREAM_UNAVAILABLE',
+      'Pactora is temporarily unavailable',
+      undefined,
+      undefined,
+      'no faucet is configured on this server',
+    );
+    const out = describeError(none, 'action');
+    expect(out.text).toMatch(/no test-token faucet set up/);
+    expect(out.retryable).toBe(false);
+    expect(
+      errorText(
+        new ApiError(
+          'FORBIDDEN',
+          'the faucet exists on testnet only — real tokens are never given away',
+          403,
+        ),
+      ),
+    ).toBe('The faucet runs on testnet only: real tokens are never given away.');
+  });
+});

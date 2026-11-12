@@ -7,7 +7,7 @@ import {Button} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {Skeleton} from '@/components/ui/States';
 import {api, type NetworkInfo} from '@/lib/api';
-import {errorText} from '@/lib/errors';
+import {describeError, errorText} from '@/lib/errors';
 import {market, type ConfirmedAction, type Me, type PersonAction, type PrepareExtra} from '@/lib/market';
 import {refreshNotifications} from '@/lib/notifications';
 import {confirmPersonAction, PersonActionTimeout, runPersonAction} from '@/lib/person-action';
@@ -133,6 +133,8 @@ export interface ActionState {
   /** Progress, in words. Stays after a failure so the person sees how far it got. */
   status: string | null;
   error: string | null;
+  /** Where the error is fixed, when the page knows (a contract refusal about money). */
+  fix?: {href: string; label: string} | null;
   /** A sent transaction the chain has not confirmed yet: confirm again, never sign again. */
   pending: {jobId: string; action: PersonAction; txHash: string} | null;
   done: ConfirmedAction | null;
@@ -170,7 +172,8 @@ export function usePersonAction(onDone?: (result: ConfirmedAction) => void) {
     setState((prev) => ({
       ...prev,
       busy: false,
-      error: errorText(err),
+      error: describeError(err, 'action').text,
+      fix: describeError(err, 'action').next ?? null,
       pending: err instanceof PersonActionTimeout ? {jobId, action, txHash: err.txHash} : prev.pending,
     }));
   }, []);
@@ -217,6 +220,15 @@ export function ActionFeedback({state, recheck}: {state: ActionState; recheck: (
       {state.error && (
         <p role="alert" className="text-broken" data-testid="action-error">
           {state.error}
+          {state.fix && (
+            <>
+              {' '}
+              <Link href={state.fix.href} className="underline">
+                {state.fix.label}
+              </Link>
+              .
+            </>
+          )}
         </p>
       )}
       {state.pending && !state.busy && (

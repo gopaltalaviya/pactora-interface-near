@@ -11,6 +11,10 @@ import {
   type TokenInfo,
 } from '@/components/market/hooks';
 import {DisputeEvidenceCard, JudgeCard} from '@/components/market/Dispute';
+import {NotReady} from '@/components/market/Readiness';
+import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {SpendSummary} from '@/components/money/SpendSummary';
+import {Countdown} from '@/components/ui/Countdown';
 import {DeliveryPanels, useDelivery} from '@/components/market/Evidence';
 import {PartyReviewCard} from '@/components/market/Profile';
 import {utc} from '@/components/market/ListingCard';
@@ -22,10 +26,12 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import type {StreamState} from '@/lib/api';
 import {describeError, type ErrorView} from '@/lib/errors';
+import {bondOf, disputeBondOf, feeOf, spendSummary, workerBondOf} from '@/lib/fees';
+import {bondBlocked, disputeBlocked, spendBlocked, type MoneyBlock} from '@/lib/hire';
 import {gateForDrafts, listingTermsOf, type DraftPhase} from '@/lib/evidence';
 import {subscribeToJob} from '@/lib/job-stream';
 import {LIMITS, validateReason} from '@/lib/listing-form';
-import {KEEPER_LINE, deadlineRows, windowsText} from '@/lib/job-deadlines';
+import {KEEPER_LINE, deadlineRows, nextStep, windowsText} from '@/lib/job-deadlines';
 import {manageHref, safeHref} from '@/lib/links';
 import {
   amountDisplay,
@@ -327,22 +333,55 @@ function ResultCard({result}: {result: unknown}) {
 }
 
 function Facts({job, token}: {job: JobDetail; token: TokenInfo | null}) {
-  const fee = job.fee !== null && token ? amountDisplay(job.fee, token.decimals, token.symbol) : null;
-  const receives =
-    job.fee !== null && token && BigInt(job.amount) >= BigInt(job.fee)
-      ? amountDisplay((BigInt(job.amount) - BigInt(job.fee)).toString(), token.decimals, token.symbol)
+  const n = token?.network;
+  const units = (base: bigint | string | null | undefined) =>
+    base !== null && base !== undefined && token
+      ? amountDisplay(base.toString(), token.decimals, token.symbol)
       : null;
+  // The fee is fixed when the job is created (the contract's fee_of). The API sends it once
+  // known; before that, or from an older API, it is the network's rule applied to the price.
+  const known = typeof job.fee === 'string' ? job.fee : null;
+  const rule = n ? feeOf(job.amount, n) : null;
+  const fee = known ?? (rule !== null ? rule.toString() : null);
+  const receives =
+    fee !== null && BigInt(job.amount) >= BigInt(fee) ? (BigInt(job.amount) - BigInt(fee)).toString() : null;
+  const byRule = known === null && fee !== null ? ' (by the network’s rule)' : '';
+  const bonds = job.bonds ?? null;
+  const workerBond = bonds ? bonds.workerBond : n ? workerBondOf(job.amount, n) : null;
+  const disputeBond = bonds ? bonds.disputeBond : n ? disputeBondOf(job.amount, n) : null;
+  const bondRule = bonds ? '' : ' (by the network’s rule)';
+  const workerBondNote = bonds
+    ? bonds.bondLocked
+      ? ', locked from the worker’s stake'
+      : job.state === 'created'
+        ? ', locked when the worker accepts'
+        : ', not locked'
+    : '';
   const rows: [string, string][] = [
     ['Price', job.amountDisplay],
-    ['Protocol fee', fee ?? (job.fee === null ? 'Set when the job settles' : '—')],
-    ['Worker receives', receives ?? (job.fee === null ? 'The price minus the fee' : '—')],
+    ['Protocol fee', units(fee) ? `${units(fee)}${byRule}` : 'Fixed when the job is created on chain'],
+    ['Worker receives', units(receives) ? `${units(receives)}${byRule}` : 'The price minus the fee'],
+    [
+      'Worker bond',
+      units(workerBond) ? `${units(workerBond)}${workerBondNote}${bondRule}` : 'Not published by this API',
+    ],
+    [
+      'Dispute bond',
+      units(disputeBond)
+        ? `${units(disputeBond)}, only if the client disputes${bondRule}`
+        : 'Not published by this API',
+    ],
     ['Network', job.network],
     ['On chain as', job.chainJobId ? `job ${job.chainJobId}` : 'not on chain yet'],
     ['Created', utc(job.createdAt)],
     ['Settled', job.settledAt ? utc(job.settledAt) : '—'],
   ];
   return (
-    <Card title="The job" labelledBy="facts">
+    <Card
+      title="The job"
+      labelledBy="facts"
+      description="The fee comes out of the worker’s pay, never on top of the price. Bonds are held, not spent: each goes back to its owner unless a deadline is missed or a dispute is lost."
+    >
       <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
         {rows.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-4">
@@ -418,9 +457,21 @@ function Deadlines({job, token}: {job: JobDetail; token: TokenInfo | null}) {
   if (job.state === 'settled' || job.state === 'refunded') return null;
   const rows = deadlineRows(job, now);
   const windows = rows.length === 0 ? windowsText(token?.network.windows) : null;
+  const next = nextStep(job);
   return (
     <Card title="Deadlines" labelledBy="deadlines">
       <div className="space-y-3 text-sm" data-testid="job-deadlines">
+        {next && (
+          <p data-testid="job-next-step">
+            {next.text}
+            {next.by && (
+              <>
+                {' '}
+                Time left: <Countdown to={next.by} className="font-medium" />.
+              </>
+            )}
+          </p>
+        )}
         {rows.length > 0 ? (
           <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
             {rows.map((r) => (
@@ -495,14 +546,6 @@ function Timeline({job, stream}: {job: JobDetail; stream: StreamState | 'connect
   );
 }
 
-/** A bond as the network sets it: a share of the job, never below the floor. */
-function bondOf(amount: string, bps: number | undefined, floor: string | undefined): bigint | null {
-  if (bps === undefined) return null;
-  const share = (BigInt(amount) * BigInt(bps)) / 10000n;
-  const min = floor ? BigInt(floor) : 0n;
-  return share > min ? share : min;
-}
-
 /**
  * What the wallet is about to be asked, in one line, before it opens: the
  * method, the contract and the money. The same facts the allow-list holds the
@@ -520,13 +563,13 @@ function willSign(action: PersonAction, job: JobDetail, token: TokenInfo | null)
     case 'create':
       return `You will sign: ${where}: ${price} into escrow.`;
     case 'accept':
-      return `You will sign: ${where}: no payment; a bond of ${money(bondOf(job.amount, n?.bondBps, n?.minBond))} is locked from your stake until the job settles.`;
+      return `You will sign: ${where}: no payment; a bond of ${money(job.bonds ? BigInt(job.bonds.workerBond) : bondOf(job.amount, n?.bondBps, n?.minBond))} is locked from your stake until the job settles.`;
     case 'submit':
       return `You will sign: ${where}: no payment; the result’s hash goes on chain.`;
     case 'approve':
       return `You will sign: ${where}: ${price} to the worker, minus the fee.`;
     case 'dispute':
-      return `You will sign: ${where}: ${price} stays in escrow; your bond is ${money(bondOf(job.amount, n?.disputeBondBps, n?.minDisputeBond))}, returned if the arbiter rules for you.`;
+      return `You will sign: ${where}: ${price} stays in escrow; your bond is ${money(job.bonds ? BigInt(job.bonds.disputeBond) : bondOf(job.amount, n?.disputeBondBps, n?.minDisputeBond))}, returned if the arbiter rules for you.`;
     case 'cancel':
       return `You will sign: ${where}: ${price} back to you. Cancelling is possible only until the worker accepts.`;
     case 'decline':
@@ -576,6 +619,42 @@ function Actions({
   const declineRef = useRef<HTMLTextAreaElement>(null);
   const {state} = person;
   const explorer = state.done ? safeHref(state.done.explorerUrl) : null;
+
+  // What the signer's own record holds, read before a button that spends: create_job takes the
+  // price from the purse, accept_job locks the bond from the stake, dispute takes the dispute bond.
+  const session = useSession();
+  const spends = actions.some((a) => a === 'create' || a === 'accept' || a === 'dispute');
+  const chainAgentId = session.person?.chainAgentId ?? null;
+  const money = useMoney(token?.network ?? null, {
+    account: spends && session.status === 'in' ? session.account : null,
+    chainAgentId: spends ? chainAgentId : null,
+  });
+  const record = money.record?.ok ? money.record.value : null;
+  const n = token?.network;
+  const ctx = {
+    decimals: token?.decimals ?? 6,
+    symbol: token?.symbol ?? '',
+    chainAgentId,
+    testnet: n?.testnet === true,
+  };
+  const blocks: Partial<Record<PersonAction, MoneyBlock | null>> = n
+    ? {
+        create: spendBlocked(job.amount, record?.purse ?? null, record?.storage ?? null, ctx),
+        accept: bondBlocked(
+          job.bonds ? BigInt(job.bonds.workerBond) : workerBondOf(job.amount, n),
+          record?.stake ?? null,
+          record?.purse ?? null,
+          ctx,
+        ),
+        dispute: disputeBlocked(
+          job.bonds ? BigInt(job.bonds.disputeBond) : disputeBondOf(job.amount, n),
+          record?.purse ?? null,
+          ctx,
+        ),
+      }
+    : {};
+  const blocked = (a: PersonAction) => (actions.includes(a) ? (blocks[a] ?? null) : null);
+  const firstBlock = blocked('create') ?? blocked('accept') ?? blocked('dispute');
 
   // An inline form that opens takes focus, so a keyboard user is in it, not still on the button.
   useEffect(() => {
@@ -669,7 +748,7 @@ function Actions({
                   <Button
                     key={a}
                     variant={a === 'cancel' ? 'danger' : 'primary'}
-                    disabled={pending}
+                    disabled={pending || blocked(a) !== null}
                     onClick={() => {
                       setOpen(null);
                       void person.run(job.jobId, a, {}, expected);
@@ -702,7 +781,7 @@ function Actions({
               {actions.includes('dispute') && (
                 <Button
                   variant="danger"
-                  disabled={pending}
+                  disabled={pending || blocked('dispute') !== null}
                   onClick={() => setOpen(open === 'dispute' ? null : 'dispute')}
                 >
                   {ACTION_LABEL.dispute}
@@ -720,6 +799,25 @@ function Actions({
               )}
             </div>
 
+            {firstBlock && <NotReady readiness={firstBlock} testId="action-money-blocked" />}
+            {actions.includes('create') && n && <SpendSummary rows={spendSummary(job.amount, n)} />}
+            {spends && (
+              <MoneyPanel
+                network={n ?? null}
+                money={money}
+                account={session.account}
+                chainAgentId={chainAgentId}
+                compact
+                only={
+                  actions.includes('create')
+                    ? ['purse', 'daily', 'storage', 'near']
+                    : actions.includes('accept')
+                      ? ['stake', 'daily', 'near']
+                      : ['purse', 'near']
+                }
+                id="action-money"
+              />
+            )}
             {/* Before the wallet opens: the method, the contract, the money. */}
             <ul className="space-y-1 text-xs text-muted" aria-label="What you will sign">
               {actions
@@ -815,7 +913,11 @@ function Actions({
                 <p className="text-xs text-muted" data-testid="will-sign-dispute">
                   {willSign('dispute', job, token)}
                 </p>
-                <Button variant="danger" disabled={pending} onClick={disputeResult}>
+                <Button
+                  variant="danger"
+                  disabled={pending || blocked('dispute') !== null}
+                  onClick={disputeResult}
+                >
                   Sign and dispute
                 </Button>
               </div>

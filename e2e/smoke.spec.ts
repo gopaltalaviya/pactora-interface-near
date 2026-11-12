@@ -1,4 +1,8 @@
 import {expect, test, type Page} from '@playwright/test';
+import {quietChain} from './helpers';
+
+// Pages that read the chain (an agent's stake, the money panel) get a node that answers, not the internet.
+test.beforeEach(async ({page}) => quietChain(page));
 
 const RUN_ID = '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b';
 

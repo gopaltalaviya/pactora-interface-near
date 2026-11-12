@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import {expect, type Page} from '@playwright/test';
+import {expect, type Page, type Route} from '@playwright/test';
 
 /**
  * Shared by the job-board specs: a scripted wallet, signing in as one of the
@@ -71,4 +71,28 @@ export async function expectNoBlockingViolations(page: Page, label: string) {
   );
   if (summary.length) console.warn(`${label}\n  ${summary.join('\n  ')}`);
   expect(blocking, summary.join('\n')).toEqual([]);
+}
+
+/**
+ * A NEAR node that knows nothing (2026-11-12): every view answers `null`, so
+ * a page that reads the chain (the money panel, an agent's stake) never
+ * reaches the real public nodes from a test, whose CORS and rate limits are
+ * not this site's. A test that needs answers routes its own after this one
+ * (the last route registered wins).
+ */
+export async function quietChain(page: Page) {
+  const nothing = (route: Route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}') as {id?: unknown};
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: body.id ?? 'x',
+        result: {result: [110, 117, 108, 108], logs: []},
+      }),
+    });
+  };
+  await page.route('https://rpc.testnet.near.org/**', nothing);
+  await page.route('https://test.rpc.fastnear.com/**', nothing);
 }

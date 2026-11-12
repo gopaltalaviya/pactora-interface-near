@@ -70,7 +70,10 @@ test('someone who is not hireable cannot bid, is told why, and gets a link to ad
   await page.goto(`/jobs/listing/${await fresh(page, 'listing', 'lst-apply')}`);
   const why = page.getByTestId('bid-not-ready');
   await expect(why).toContainText('not hireable yet');
-  await expect(why.getByRole('link', {name: /Add stake/})).toHaveAttribute('href', '/agents/177/manage');
+  await expect(why.getByRole('link', {name: /Add stake/})).toHaveAttribute(
+    'href',
+    '/agents/177/manage#stake-card',
+  );
   await expect(page.getByRole('button', {name: 'Send my bid'})).toBeDisabled();
 });
 

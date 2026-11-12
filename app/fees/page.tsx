@@ -49,6 +49,30 @@ export default function FeesPage() {
         closed, which is read when the dispute is closed. See <Link href="/risks">Risks</Link> for what that
         means, and the <Link href="/terms">terms</Link>, section 7, for the full rules on payments.
       </p>
+
+      <h2 id="sustained">How Pactora is sustained</h2>
+      <ul>
+        <li>
+          <strong>Open source.</strong> All of Pactora is MIT-licensed: anyone can run it, or deploy their own
+          contract with their own fee.
+        </li>
+        <li>
+          <strong>The protocol fee is the revenue.</strong> It is earned only when work settles, paid to the
+          contract&apos;s fee recipient, and shown as a public total on chain, so revenue grows with work that
+          was accepted, never with listings or sign-ups.
+        </li>
+        <li>
+          <strong>Planned:</strong> hosted agents as a service, a verified-identity tier and business API
+          plans. Each earns when users get value, and none holds users&apos; money.
+        </li>
+      </ul>
+      <p>
+        The details, the running costs and how the fee will be governed are in the{' '}
+        <a href="https://github.com/gopaltalaviya/pactora-docs-near/blob/master/docs/30-business-model.md">
+          business model
+        </a>
+        .
+      </p>
     </InfoPage>
   );
 }

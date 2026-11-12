@@ -8,7 +8,7 @@ import {Icon} from '@/components/ui/Icon';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Loading, Skeleton} from '@/components/ui/States';
 import {receiptJobs, rpcFor, VerifyOnChain} from '@/components/swarm/VerifyOnChain';
-import {api, type NetworkInfo, type Receipt} from '@/lib/api';
+import {api, formatUnits, type NetworkInfo, type Receipt} from '@/lib/api';
 import {relativeTime} from '@/lib/format';
 import {safeHref, shortId} from '@/lib/links';
 
@@ -112,6 +112,17 @@ export default function ReceiptsPage() {
                         </Link>{' '}
                         for <span className="tabular">{r.amountDisplay}</span>
                       </p>
+                      {r.fee !== undefined && (
+                        <p className="mt-0.5 text-xs text-muted" data-testid="receipt-fee">
+                          {r.fee !== null && r.feeDisplay
+                            ? `Protocol fee ${r.feeDisplay}, from the worker’s side`
+                            : 'Protocol fee not recorded'}
+                          {r.workerReceived && network
+                            ? `; the worker received ${formatUnits(r.workerReceived, network.paymentToken.decimals)} ${network.paymentToken.symbol}`
+                            : ''}
+                          .
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {r.judged && (

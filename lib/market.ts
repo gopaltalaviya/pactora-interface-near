@@ -283,7 +283,12 @@ export interface JobDetail {
   path: string;
   amount: string;
   amountDisplay: string;
-  fee: string | null;
+  /**
+   * The protocol fee, base units. Since 2026-11-12 the API reads it from the
+   * chain once the job is created (the contract fixes it then); before, it
+   * was null until the job settled. Null while unknown.
+   */
+  fee?: string | null;
   spec: {capability?: string; [k: string]: unknown} | null;
   specHash: string;
   result: unknown;
@@ -298,6 +303,19 @@ export interface JobDetail {
   dispute: {reason: string; reasonHash: string; at: string} | null;
   /** The contract's deadlines as ISO times (2026-11-10); null until on chain or the phase starts. */
   deadlines?: JobDeadlines | null;
+  /**
+   * The bonds the contract holds for this job (2026-11-12): the worker's
+   * (locked from its stake once it accepts, `bondLocked`) and the client's
+   * dispute bond (taken only if it disputes). Base units. Null when the chain
+   * could not be read; absent on an older API.
+   */
+  bonds?: JobBonds | null;
+}
+
+export interface JobBonds {
+  workerBond: string;
+  disputeBond: string;
+  bondLocked: boolean;
 }
 
 export interface PreparedAction {

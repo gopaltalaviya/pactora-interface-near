@@ -31,6 +31,10 @@ import {ProfileEditor} from '@/components/market/Profile';
 import {IdentityCard} from '@/components/market/Identity';
 import {ChannelsCard} from '@/components/market/Channels';
 import {StandingBanner} from '@/components/market/Standing';
+import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {useLandOn} from '@/components/ui/useLandOn';
+import {nearFaucetOf} from '@/lib/balances';
+import {describeError} from '@/lib/errors';
 import {useSession} from '@/lib/session';
 import {termsAcceptedAt} from '@/lib/terms';
 
@@ -178,8 +182,9 @@ function Signed({onDeleted}: {onDeleted: (what: string) => void}) {
         {tab === 'overview' && (
           <>
             <Overview />
-            <MyAgents />
+            <MyMoney />
             {person && <FaucetCard />}
+            <MyAgents />
           </>
         )}
         {tab === 'profile' &&
@@ -931,31 +936,117 @@ function YourDataCard({onDeleted}: {onDeleted: (what: string) => void}) {
   );
 }
 
+/** "Your money" (2026-11-12): the wallet, the person record's purse and stake, and the open jobs. */
+function MyMoney() {
+  const token = useNetwork();
+  const {account, person} = useSession();
+  const chainAgentId = person?.chainAgentId ?? null;
+  const money = useMoney(token?.network ?? null, {account, chainAgentId, jobs: Boolean(person)});
+  return (
+    <MoneyPanel
+      network={token?.network ?? null}
+      money={money}
+      account={account}
+      chainAgentId={chainAgentId}
+    />
+  );
+}
+
 /**
  * Test tokens to try Pactora with (docs/26 F23): testnet only, once a day,
- * from a faucet with a limited float. Not shown where there is no faucet.
+ * from a faucet with a limited float. Never silently missing (2026-11-12): a
+ * server with no faucet, a read that failed, or a network that is not testnet
+ * each get a card that says so and what to do instead; the NEAR faucet for
+ * gas is linked too. Links to /me#faucet land on this card.
  */
 function FaucetCard() {
   const {authed} = useSession();
   const token = useNetwork();
+  const symbol = token?.symbol ?? 'tokens';
   const units = (base: string) =>
     token ? amountDisplay(base, token.decimals, token.symbol) : `${base} base units`;
   const [status, setStatus] = useState<FaucetStatus | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [claim, setClaim] = useState<FaucetClaim | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
+    setReadError(null);
     authed((t) => notifications.faucet(t, controller.signal))
       .then(setStatus)
-      .catch(() => {
-        if (!controller.signal.aborted) setStatus(null);
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setStatus(null);
+        setReadError(describeError(err, 'action').text);
       });
     return () => controller.abort();
-  }, [authed]);
+  }, [authed, attempt]);
 
-  if (!status || !status.testnet || !status.available) return null;
+  // Arrived from a "test tokens" link: bring the card into view once it has something to say.
+  const settled = status !== null || readError !== null;
+  useLandOn('faucet', settled);
+
+  const gas = token ? nearFaucetOf(token.network) : null;
+  const gasLine = gas ? (
+    <p className="text-xs text-muted" data-testid="near-faucet">
+      Need NEAR for the network fee (gas)?{' '}
+      <a href={gas} target="_blank" rel="noopener noreferrer" className="underline">
+        NEAR testnet faucet
+        <span className="sr-only"> (opens in a new tab)</span>
+      </a>
+      .
+    </p>
+  ) : null;
+
+  if (!settled) {
+    return (
+      <Card title="Test tokens" labelledBy="faucet">
+        <p role="status" className="text-sm text-muted">
+          Checking the faucet…
+        </p>
+      </Card>
+    );
+  }
+
+  const unavailable = !status
+    ? 'unreadable'
+    : !status.testnet
+      ? 'mainnet'
+      : !status.available
+        ? 'none'
+        : null;
+  if (!status || unavailable) {
+    return (
+      <Card title={`Test ${symbol} faucet is not available on this server`} labelledBy="faucet">
+        <div className="space-y-3 text-sm" data-testid="faucet-unavailable">
+          <p role="status">
+            {unavailable === 'unreadable'
+              ? `Pactora could not say whether it has a faucet: ${readError ?? 'the request failed.'}`
+              : unavailable === 'mainnet'
+                ? 'This server runs on a network where tokens are real, and real tokens are never given away.'
+                : `This server has no test-token faucet set up, so it cannot send you test ${symbol}.`}
+          </p>
+          <p className="text-muted">
+            {unavailable === 'unreadable'
+              ? 'Try again in a moment. '
+              : unavailable === 'none'
+                ? 'Ask whoever runs this server to set one up, or get test tokens from someone who has some. '
+                : ''}
+            Meanwhile you can still look around: jobs, agents and receipts need no tokens.
+          </p>
+          {unavailable === 'unreadable' && (
+            <Button size="sm" variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+              Try again
+            </Button>
+          )}
+          {unavailable !== 'mainnet' && gasLine}
+        </div>
+      </Card>
+    );
+  }
 
   async function take() {
     setBusy(true);
@@ -971,16 +1062,25 @@ function FaucetCard() {
 
   const href = claim ? safeHref(claim.explorerUrl) : null;
   const claimed = status.claimedToday || claim !== null;
+  const held = status.standing === 'hold' || status.standing === 'blocked';
+  const whole = /^\d{1,39}$/;
+  const dry =
+    whole.test(status.remainingToday) &&
+    whole.test(status.amount) &&
+    BigInt(status.remainingToday) < BigInt(status.amount);
   return (
     <Card
       title="Test tokens"
       labelledBy="faucet"
-      description="Testnet only: tokens with no value, to try hiring, bidding and staking."
+      description={`Testnet only: ${symbol} with no value, to try hiring, bidding and staking.`}
     >
       <div className="space-y-3 text-sm">
         <p>
           Claim {units(status.amount)} once a day (UTC), sent to your own account
           {claim?.registered ? '; your account was registered with the token first' : ''}.
+        </p>
+        <p className="text-xs text-muted" data-testid="faucet-remaining">
+          The faucet can give out {units(status.remainingToday)} more today, across everyone.
         </p>
         {claim ? (
           <p role="status" data-testid="faucet-sent">
@@ -989,22 +1089,39 @@ function FaucetCard() {
               <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
                 View transaction
               </a>
-            )}
+            )}{' '}
+            Next: move it into your purse or stake (Your money, above).
           </p>
         ) : claimed ? (
           <p className="text-muted" data-testid="faucet-claimed">
-            You have claimed today. Come back tomorrow.
+            You have claimed today. Come back after midnight UTC.
+          </p>
+        ) : held ? (
+          <p className="text-refused" data-testid="faucet-standing">
+            Your account is {status.standing === 'hold' ? 'on hold' : 'blocked'}, so the faucet will not send
+            you tokens.{' '}
+            <Link href="/me#settings" className="underline">
+              Your identity check
+            </Link>
+            .
+          </p>
+        ) : dry ? (
+          <p className="text-refused" data-testid="faucet-dry">
+            The faucet has given out all it may today. Try again after midnight UTC.
           </p>
         ) : (
           <Button size="sm" disabled={busy} loading={busy} onClick={() => void take()}>
             Claim test tokens
           </Button>
         )}
-        {problem && (
-          <p role="alert" className="text-xs text-broken">
-            {problem}
-          </p>
-        )}
+        <div aria-live="polite">
+          {problem && (
+            <p role="alert" className="text-xs text-broken">
+              {problem}
+            </p>
+          )}
+        </div>
+        {gasLine}
       </div>
     </Card>
   );

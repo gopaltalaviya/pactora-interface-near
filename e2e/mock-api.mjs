@@ -782,7 +782,10 @@ const jobView = (j) => ({
   path: 'escrow',
   amount: j.amount,
   amountDisplay: display(j.amount),
-  fee: j.fee,
+  // Fixed when the job is created on chain (2026-11-12); an older API (`noDeadlines`) knew it only once settled.
+  fee:
+    j.fee ??
+    (j.chainJobId && !j.noDeadlines ? String(share(j.amount, network.protocolFeeBps, network.minFee)) : null),
   spec: j.spec ?? {capability: 'photo-capture', input: {}},
   specHash: '0x' + 'ab'.repeat(32),
   result: j.result,
@@ -801,7 +804,22 @@ const jobView = (j) => ({
   declined: j.declined,
   dispute: j.dispute,
   deadlines: deadlinesOf(j),
+  // The bonds the contract holds (2026-11-12); absent from an older API, null before the job is on chain.
+  ...(j.noDeadlines ? {} : {bonds: bondsOf(j)}),
 });
+/** A share of a job, never below the floor: the contract's fee_of / bond_of / dispute_bond_of. */
+function share(amount, bps, floor) {
+  const s = (BigInt(amount) * BigInt(bps)) / 10000n;
+  return s > BigInt(floor) ? s : BigInt(floor);
+}
+function bondsOf(j) {
+  if (!j.chainJobId) return null;
+  return {
+    workerBond: String(share(j.amount, network.bondBps, network.minBond)),
+    disputeBond: String(share(j.amount, network.disputeBondBps, network.minDisputeBond)),
+    bondLocked: ['accepted', 'submitted', 'disputed'].includes(j.state),
+  };
+}
 /**
  * GET /v1/jobs/:id `deadlines` (2026-11-10): the contract's deadlines as ISO
  * times, null until the job is on chain or the phase has started. Here they
@@ -1175,7 +1193,9 @@ async function market(req, res, url) {
   }
 
   if (path === '/v1/jobs' && req.method === 'GET') {
-    if (!account || !me) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    // A signed-in account with no agent here (the feed people) has no jobs: an empty page, not a 401.
+    if (!me) return send(res, 200, {count: 0, nextCursor: null, jobs: []});
     const limit = Number(url.searchParams.get('limit') ?? 20);
     const after = url.searchParams.get('cursor');
     const status = url.searchParams.get('status');
@@ -2194,6 +2214,10 @@ function otherPartyReviews(jobId, role) {
 // one back.
 const feeds = new Map();
 const faucetClaimed = new Set();
+// /__test/faucet/:account/:mode (2026-11-12): `none` is a server with no faucet set up (available
+// false, a POST answers 503 "no faucet is configured"), `down` a GET that fails with a 503, `dry`
+// a faucet that has given out all it may today. Unset: a working faucet.
+const faucetMode = new Map();
 const FEED_KINDS = ['job.created', 'job.accepted', 'job.draft.submitted', 'job.message', 'settled'];
 function feedOf(account) {
   if (!feeds.has(account)) {
@@ -2303,16 +2327,20 @@ async function feedRoutes(req, res, path, account, me, url) {
   if (path === '/v1/faucet') {
     const known = isFeedPerson(account) || Boolean(me);
     if (!known) return problem(res, 403, 'FORBIDDEN', 'no person');
+    const mode = faucetMode.get(account);
+    if (mode === 'down') return problem(res, 503, 'UPSTREAM_UNAVAILABLE', 'the faucet store is down');
     if (req.method === 'GET')
       return send(res, 200, {
-        available: true,
+        available: mode !== 'none',
         testnet: true,
         standing: standingOf.get(account) ?? 'clear',
         amount: '5000000',
         claimedToday: faucetClaimed.has(account),
         day: new Date().toISOString().slice(0, 10),
-        remainingToday: '495000000',
+        remainingToday: mode === 'dry' ? '0' : '495000000',
       });
+    if (mode === 'none')
+      return problem(res, 503, 'UPSTREAM_UNAVAILABLE', 'no faucet is configured on this server');
     if (faucetClaimed.has(account))
       return problem(res, 409, 'LIMIT_REACHED', `${account} already claimed today`);
     faucetClaimed.add(account);
@@ -2975,6 +3003,12 @@ async function hooks(req, res, url) {
     faucetClaimed.delete(feedReset[1]);
     return send(res, 200, {reset: feedReset[1]});
   }
+  const faucetSet = /^\/__test\/faucet\/([^/]+)\/(available|none|down|dry)$/.exec(url.pathname);
+  if (faucetSet) {
+    if (faucetSet[2] === 'available') faucetMode.delete(faucetSet[1]);
+    else faucetMode.set(faucetSet[1], faucetSet[2]);
+    return send(res, 200, {account: faucetSet[1], mode: faucetSet[2]});
+  }
   if (url.pathname === '/__test/created') {
     return send(res, 200, Object.fromEntries(created));
   }
@@ -3031,6 +3065,9 @@ createServer(async (req, res) => {
           title: 'Depth of NEAR/USDC',
           amount: '20000',
           amountDisplay: '0.02 USDC',
+          fee: '200',
+          feeDisplay: '0.0002 USDC',
+          workerReceived: '19800',
           client: {agentId: '1', name: 'Orchestrator'},
           worker: {agentId: '2', name: 'MarketResearch'},
           specHash: 'ab'.repeat(32),

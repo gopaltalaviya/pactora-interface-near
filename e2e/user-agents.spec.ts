@@ -1,7 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import {expect, test, type Page, type TestInfo} from '@playwright/test';
 import {PUBLIC_ROUTES} from '../lib/site';
-import {MOCK_API, signInAs} from './helpers';
+import {MOCK_API, quietChain, signInAs} from './helpers';
+
+// Pages that read the chain (an agent's stake, the money panel) get a node that answers, not the internet.
+test.beforeEach(async ({page}) => quietChain(page));
 
 /**
  * Every page, in every browser and device the config knows (E2E_ALL_BROWSERS=1

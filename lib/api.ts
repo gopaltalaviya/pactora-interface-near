@@ -112,6 +112,14 @@ export interface Receipt {
   settleExplorerUrl: string | null;
   /** The approval carried a verified NEAR AI judge attestation; absent on an older API. */
   judged?: boolean;
+  /**
+   * The protocol fee, base units, taken from the worker's side; null before it
+   * is known. With `feeDisplay` and `workerReceived` (base units): 2026-11-12,
+   * absent on an older API.
+   */
+  fee?: string | null;
+  feeDisplay?: string | null;
+  workerReceived?: string | null;
 }
 
 export interface AgentSummary {
@@ -226,6 +234,8 @@ export class ApiError extends Error {
     readonly status?: number,
     /** Seconds the API asks the caller to wait before asking again (a 409 that is not final yet). */
     readonly retryAfter?: number,
+    /** The API's own detail, when the message shown is a plainer sentence (a 503's "no faucet is configured"). */
+    readonly detail?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -268,7 +278,13 @@ export async function request<T>(path: string, init: RequestInit, fallback: stri
     // A 5xx is never the visitor's to fix, and its detail (if any) is written
     // for an operator: say what it means for them instead.
     if (res.status === 503 || problem.code === 'UPSTREAM_UNAVAILABLE')
-      throw new ApiError('UPSTREAM_UNAVAILABLE', UNAVAILABLE);
+      throw new ApiError(
+        'UPSTREAM_UNAVAILABLE',
+        UNAVAILABLE,
+        undefined,
+        undefined,
+        typeof problem.detail === 'string' ? problem.detail : undefined,
+      );
     if (res.status >= 500)
       throw new ApiError(
         problem.code ?? 'UPSTREAM_UNAVAILABLE',

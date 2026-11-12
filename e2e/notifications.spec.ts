@@ -1,5 +1,8 @@
 import {expect, test, type Page, type TestInfo} from '@playwright/test';
-import {expectNoBlockingViolations, MOCK_API, signInAs} from './helpers';
+import {expectNoBlockingViolations, MOCK_API, quietChain, signInAs} from './helpers';
+
+// /me reads the chain for the money panel: a node that answers, not the internet.
+test.beforeEach(async ({page}) => quietChain(page));
 
 /**
  * Notifications and the test-token faucet (docs/26 F10, F23), against the

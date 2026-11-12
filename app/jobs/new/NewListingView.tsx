@@ -24,6 +24,10 @@ import {applyTemplate, LISTING_TEMPLATES} from '@/lib/listing-templates';
 import {CATEGORIES, market, MODES, type Category, type HiringMode, type InteractionMode} from '@/lib/market';
 import {useSession} from '@/lib/session';
 import {StandingBanner} from '@/components/market/Standing';
+import {NotReady} from '@/components/market/Readiness';
+import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {postBlocked} from '@/lib/hire';
+import {parseUnits} from '@/lib/near';
 
 /**
  * Post a listing. The form checks what the API checks, beside each field; the
@@ -47,6 +51,24 @@ export function NewListingView() {
   const [failure, setFailure] = useState<{message: string; uncertain: boolean} | null>(null);
   const key = useRef<KeyState | null>(null);
   const [template, setTemplate] = useState<string>('blank');
+
+  // The purse the listing reserves against (the API's checkBudget): a listing it would refuse is not sent.
+  const money = useMoney(token?.network ?? null, {
+    account: session.status === 'in' ? session.account : null,
+    chainAgentId: session.person?.chainAgentId ?? null,
+  });
+  const purse = money.record?.ok ? money.record.value.purse : null;
+  const ceiling = parseUnits(draft.price, token?.decimals ?? 6);
+  const workers = /^\d{1,2}$/.test(draft.maxWorkers.trim()) ? Number(draft.maxWorkers.trim()) : NaN;
+  const moneyBlock =
+    token && ceiling && !/^0+$/.test(ceiling)
+      ? postBlocked(ceiling, workers, purse, {
+          decimals: token.decimals,
+          symbol: token.symbol,
+          chainAgentId: session.person?.chainAgentId ?? null,
+          testnet: token.network.testnet,
+        })
+      : null;
 
   /** A template fills the form (F31); "blank" empties it. Errors are cleared: the fields changed. */
   function pick(id: string) {
@@ -436,8 +458,23 @@ export function NewListingView() {
                 </ErrorState>
               )}
 
+              <MoneyPanel
+                network={token?.network ?? null}
+                money={money}
+                account={session.account}
+                chainAgentId={session.person?.chainAgentId ?? null}
+                compact
+                only={['purse', 'daily', 'near']}
+                id="post-money"
+              />
+              <NotReady readiness={moneyBlock ?? {reason: null, fixes: []}} testId="post-money-blocked" />
+
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" loading={busy} disabled={session.status !== 'in'}>
+                <Button
+                  type="submit"
+                  loading={busy}
+                  disabled={session.status !== 'in' || moneyBlock !== null}
+                >
                   Post the listing
                 </Button>
                 <span className="text-xs text-muted">

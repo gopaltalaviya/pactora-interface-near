@@ -70,3 +70,47 @@ export function windowsText(
 
 export const KEEPER_LINE =
   'If a deadline passes, Pactora’s keeper closes the job on chain by itself: a job nobody accepted or delivered is refunded to the client, a delivery left unreviewed is paid to the worker, and a dispute the arbiter never rules on is paid to the worker after a grace period.';
+
+/** Who acts next on an open job, what they do, by when, and what happens if nobody does. */
+export interface NextStep {
+  /** The deadline it runs against, an ISO time; null when there is none yet. */
+  by: string | null;
+  text: string;
+}
+
+export function nextStep(job: {
+  state: string;
+  chainJobId: string | null;
+  deadlines?: JobDeadlines | null;
+}): NextStep | null {
+  const d = job.deadlines ?? null;
+  switch (job.state) {
+    case 'created':
+      return job.chainJobId
+        ? {
+            by: d?.acceptBy ?? null,
+            text: 'Next: the worker accepts the job. If nobody accepts in time, the client is refunded in full.',
+          }
+        : {
+            by: null,
+            text: 'Next: the client signs to fund the job on chain. Until then no money is held and no clock runs.',
+          };
+    case 'accepted':
+      return {
+        by: d?.workBy ?? null,
+        text: 'Next: the worker delivers the result. If it does not deliver in time, the client is refunded and also receives the worker’s bond.',
+      };
+    case 'submitted':
+      return {
+        by: d?.reviewBy ?? null,
+        text: 'Next: the client approves or disputes the result. If the client says nothing in time, the payment is released to the worker.',
+      };
+    case 'disputed':
+      return {
+        by: d?.disputeBy ?? null,
+        text: 'Next: the arbiter rules. If no ruling comes in time, the worker is paid after a grace period and the dispute bond is split half and half.',
+      };
+    default:
+      return null;
+  }
+}

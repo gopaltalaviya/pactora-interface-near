@@ -29,6 +29,22 @@ const fail = (m) => {
 };
 
 /** Present means "the key exists and is not undefined". `null` is a real value. */
+/**
+ * Optional fields (an older API leaves them out): absent is fine and said so;
+ * present, each must have the given shape, which `check` returns true for.
+ */
+function expectOptional(label, object, checks) {
+  for (const [field, check] of Object.entries(checks)) {
+    if (object?.[field] === undefined) console.log(`  – ${label}.${field} is not sent; the page falls back`);
+    else
+      check(object[field])
+        ? ok(`${label}.${field} has the expected shape`)
+        : fail(`${label}.${field} is ${JSON.stringify(object[field])}, not the expected shape`);
+  }
+}
+const baseUnitsOrNull = (v) => v === null || (typeof v === 'string' && /^\d{1,39}$/.test(v));
+const stringOrNull = (v) => v === null || typeof v === 'string';
+
 function expectFields(label, object, fields) {
   const missing = fields.filter((f) => object?.[f] === undefined);
   missing.length === 0
@@ -243,6 +259,24 @@ try {
         'settleExplorerUrl',
       ]);
       expectFields('/v1/receipts[0].client', body.receipts[0].client, ['agentId', 'name']);
+      // 2026-11-12, optional: the receipts page shows the fee when they are sent.
+      expectOptional('/v1/receipts[0]', body.receipts[0], {
+        fee: baseUnitsOrNull,
+        feeDisplay: stringOrNull,
+        workerReceived: baseUnitsOrNull,
+      });
+      // The job page: the fee, fixed at creation, and the bonds the contract holds (optional).
+      const job = await get(`/v1/jobs/${encodeURIComponent(body.receipts[0].jobId)}`);
+      expectOptional('/v1/jobs/:id', job, {
+        fee: baseUnitsOrNull,
+        bonds: (b) =>
+          b === null ||
+          (baseUnitsOrNull(b?.workerBond) &&
+            b.workerBond !== null &&
+            baseUnitsOrNull(b?.disputeBond) &&
+            b.disputeBond !== null &&
+            typeof b?.bondLocked === 'boolean'),
+      });
       expectFields('/v1/receipts[0].worker', body.receipts[0].worker, ['agentId', 'name']);
     }
   }

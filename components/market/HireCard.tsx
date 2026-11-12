@@ -7,8 +7,13 @@ import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
 import {Field, Select, TextArea, TextInput} from '@/components/ui/Field';
 import {Notice} from '@/components/ui/States';
+import {NotReady} from '@/components/market/Readiness';
+import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {SpendSummary} from '@/components/money/SpendSummary';
 import {formatUnits, type AgentSummary} from '@/lib/api';
-import {hireBlocked, TASK_MAX, validateHire} from '@/lib/hire';
+import {spendSummary} from '@/lib/fees';
+import {hireBlocked, spendBlocked, TASK_MAX, validateHire} from '@/lib/hire';
+import {parseUnits} from '@/lib/near';
 import {classifyFailure, keyForSend, newKeyState, type KeyState} from '@/lib/listing-form';
 import {market, type Hired} from '@/lib/market';
 import {useSession} from '@/lib/session';
@@ -25,6 +30,17 @@ import {signInHref} from '@/lib/signin-next';
  * that cannot be hired: the form, disabled, with the reason. The page leaves
  * the card out for the agent's own owner.
  */
+
+const hireLimits = (
+  token: {minJobAmount: string | undefined; maxJobAmount: string | undefined},
+  decimals: number,
+  symbol: string,
+) => ({
+  decimals,
+  symbol,
+  minimum: token.minJobAmount ?? '1',
+  ceiling: token.maxJobAmount ?? '340282366920938463463374607431768211455',
+});
 
 const fresh = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -55,14 +71,31 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
   const path = `/agents/${agent.agentId}`;
   const blocked = hireBlocked(agent, hireable);
 
+  // The person's own purse, read before anything is created: a hire the purse cannot fund is not offered.
+  const money = useMoney(token?.network ?? null, {
+    account: session.status === 'in' ? session.account : null,
+    chainAgentId: session.person?.chainAgentId ?? null,
+  });
+  const record = money.record?.ok ? money.record.value : null;
+  // Only a price the form itself accepts is checked against the purse: a malformed or
+  // out-of-range one is the form's to explain when Hire is pressed.
+  const limits = token ? hireLimits(token, decimals, symbol) : null;
+  const typed = parseUnits(price, decimals);
+  const priced = typed && limits && !validateHire(price, 'x', limits).errors.price ? typed : null;
+  const amountForCheck = hired?.job?.amount ?? priced;
+  const moneyBlock =
+    token && amountForCheck
+      ? spendBlocked(amountForCheck, record?.purse ?? null, record?.storage ?? null, {
+          decimals,
+          symbol,
+          chainAgentId: session.person?.chainAgentId ?? null,
+          testnet: token.network.testnet,
+        })
+      : null;
+
   async function hire() {
     if (!token) return;
-    const checked = validateHire(price, task, {
-      decimals,
-      symbol,
-      minimum: token.minJobAmount ?? '1',
-      ceiling: token.maxJobAmount ?? '340282366920938463463374607431768211455',
-    });
+    const checked = validateHire(price, task, hireLimits(token, decimals, symbol));
     setErrors(checked.errors);
     setProblem(null);
     if (!checked.body) return;
@@ -186,7 +219,23 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
               />
             </Field>
           </div>
-          <Button type="submit" size="sm" loading={busy} disabled={busy || blocked !== null || !token}>
+          {token && priced && blocked === null && <SpendSummary rows={spendSummary(priced, token.network)} />}
+          <MoneyPanel
+            network={token?.network ?? null}
+            money={money}
+            account={session.account}
+            chainAgentId={session.person.chainAgentId}
+            compact
+            only={['purse', 'daily', 'storage', 'near']}
+            id="hire-money"
+          />
+          {blocked === null && moneyBlock && <NotReady readiness={moneyBlock} testId="hire-money-blocked" />}
+          <Button
+            type="submit"
+            size="sm"
+            loading={busy}
+            disabled={busy || blocked !== null || !token || moneyBlock !== null}
+          >
             Hire
           </Button>
           <p className="text-xs text-muted">
@@ -211,10 +260,11 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
                 You will sign: create_job on {token?.network.contracts.Pactora ?? 'the Pactora contract'}:{' '}
                 {job.amountDisplay} into escrow.
               </p>
+              {moneyBlock && <NotReady readiness={moneyBlock} testId="hire-money-blocked" />}
               <Button
                 size="sm"
                 loading={action.state.busy}
-                disabled={action.state.busy || action.state.pending !== null}
+                disabled={action.state.busy || action.state.pending !== null || moneyBlock !== null}
                 onClick={() =>
                   void action.run(job.jobId, 'create', {}, {chainJobId: null, amount: job.amount})
                 }

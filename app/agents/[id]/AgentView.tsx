@@ -14,8 +14,8 @@ import {ReportButton} from '@/components/market/Report';
 import {RecordOverTime} from '@/components/market/RecordOverTime';
 import {ErrorState, Loading, Notice, Skeleton} from '@/components/ui/States';
 import {HireCard} from '@/components/market/HireCard';
-import {ApiError, api, type AgentSummary, type NetworkInfo, type SkillStat} from '@/lib/api';
-import {viewCall, type StakeView} from '@/lib/chain';
+import {ApiError, api, formatUnits, type AgentSummary, type NetworkInfo, type SkillStat} from '@/lib/api';
+import {rpcOf, viewCall, type StakeView} from '@/lib/chain';
 import {manageHref, safeHref} from '@/lib/links';
 import {market} from '@/lib/market';
 import {agentIdArg} from '@/lib/near';
@@ -59,17 +59,26 @@ export function AgentView({agentId}: {agentId: number}) {
   const chainAgentId =
     agent?.chainAgentId !== null && agent?.chainAgentId !== undefined ? String(agent.chainAgentId) : null;
   const pactora = network?.contracts?.Pactora;
-  const rpc = network?.rpcUrls?.[0];
-  // Read only for a person who might hire it: the hire card says why it cannot be.
-  const wantsStake = session.status === 'in' && session.person !== null && owns === false;
+  const rpc = network ? rpcOf(network) : null;
+  // The stake, for everyone (2026-11-12): a visitor sees what backs this agent, and a person
+  // who might hire it is told by the hire card why it cannot be.
+  const [stake, setStake] = useState<{view: StakeView | null} | {error: string} | null>(null);
   useEffect(() => {
-    if (!wantsStake || !chainAgentId || !pactora || !rpc) return;
+    if (!chainAgentId || !pactora || !rpc) return;
     const c = new AbortController();
+    setStake(null);
     viewCall<StakeView | null>(rpc, pactora, 'stake_of', {agent_id: agentIdArg(chainAgentId)}, c.signal)
-      .then((st) => setHireable(st ? st.hireable : false))
-      .catch(() => setHireable(null));
+      .then((st) => {
+        setStake({view: st && typeof st === 'object' ? st : null});
+        setHireable(st && typeof st.hireable === 'boolean' ? st.hireable : false);
+      })
+      .catch((err: unknown) => {
+        if (c.signal.aborted) return;
+        setStake({error: err instanceof Error ? err.message : 'could not be read'});
+        setHireable(null);
+      });
     return () => c.abort();
-  }, [wantsStake, chainAgentId, pactora, rpc]);
+  }, [chainAgentId, pactora, rpc]);
 
   // For linking the agent to the Pactora contract; the page works without it.
   useEffect(() => {
@@ -312,6 +321,14 @@ export function AgentView({agentId}: {agentId: number}) {
               )}
             </dd>
           </div>
+          {chainAgentId && (
+            <div className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:gap-3">
+              <dt className="w-32 shrink-0 text-muted">Stake</dt>
+              <dd className="min-w-0 space-y-1" data-testid="agent-stake" aria-live="polite">
+                <StakeFacts stake={stake} network={network} />
+              </dd>
+            </div>
+          )}
           <div className="flex flex-col gap-1 py-3 last:pb-0 sm:flex-row sm:items-center sm:gap-3">
             <dt className="w-32 shrink-0 text-muted">Accepting work</dt>
             <dd className="flex items-center gap-2">
@@ -322,6 +339,37 @@ export function AgentView({agentId}: {agentId: number}) {
         </dl>
       </Card>
     </div>
+  );
+}
+
+/** The agent's bond, read from the chain: what a client can take if it fails to deliver. */
+function StakeFacts({
+  stake,
+  network,
+}: {
+  stake: {view: StakeView | null} | {error: string} | null;
+  network: NetworkInfo | null;
+}) {
+  if (!stake) return <span className="text-muted">Reading from the chain…</span>;
+  if ('error' in stake)
+    return (
+      <span className="text-muted">Could not be read from the chain just now. Reload to try again.</span>
+    );
+  const v = stake.view;
+  const token = network?.paymentToken;
+  const units = (base: string) => (token ? `${formatUnits(base, token.decimals)} ${token.symbol}` : base);
+  if (!v) return <span className="text-muted">No stake: the escrow will not hire it.</span>;
+  return (
+    <>
+      <span className="tabular flex flex-wrap items-center gap-2">
+        {units(v.unlocked)} unlocked{v.locked !== '0' ? `, ${units(v.locked)} locked in jobs` : ''}
+        <Badge tone={v.hireable ? 'settled' : 'refused'}>{v.hireable ? 'hireable' : 'not hireable'}</Badge>
+      </span>
+      <span className="block text-xs text-muted">
+        {network?.minStake ? `At least ${units(network.minStake)} unlocked makes an agent hireable. ` : ''}
+        Each job it accepts locks a share as a bond, which the client gets if it does not deliver in time.
+      </span>
+    </>
   );
 }
 

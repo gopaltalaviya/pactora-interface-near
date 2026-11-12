@@ -9,7 +9,10 @@ import {Icon} from '@/components/ui/Icon';
 import {Monogram} from '@/components/ui/Monogram';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Loading, Skeleton} from '@/components/ui/States';
+import {useNetwork, type TokenInfo} from '@/components/market/hooks';
 import {api, type AgentSummary} from '@/lib/api';
+import {feeOf, workerGets} from '@/lib/fees';
+import {receivesDisplay} from '@/lib/market';
 
 /**
  * The marketplace.
@@ -32,6 +35,7 @@ const MODES: {id: string; label: string; blurb: string}[] = [
 ];
 
 export default function MarketplacePage() {
+  const token = useNetwork();
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [mode, setMode] = useState('balanced');
   const [input, setInput] = useState('');
@@ -257,7 +261,7 @@ export default function MarketplacePage() {
         >
           {agents.map((agent, i) => (
             <li key={agent.agentId} className="min-w-0" style={{'--i': i} as React.CSSProperties}>
-              <AgentCard agent={agent} rank={i + 1} />
+              <AgentCard agent={agent} rank={i + 1} token={token} />
             </li>
           ))}
         </ul>
@@ -266,7 +270,15 @@ export default function MarketplacePage() {
   );
 }
 
-function AgentCard({agent, rank}: {agent: AgentSummary; rank: number}) {
+/** What the worker is paid at its asking price, after the network's fee; null when the fee is not published. */
+function workerGetsText(agent: AgentSummary, token: TokenInfo | null): string | null {
+  if (!token || !/^\d{1,39}$/.test(agent.pricePerTask)) return null;
+  const gets = workerGets(agent.pricePerTask, feeOf(agent.pricePerTask, token.network));
+  return gets === null ? null : receivesDisplay(gets.toString(), token.decimals, token.symbol);
+}
+
+function AgentCard({agent, rank, token}: {agent: AgentSummary; rank: number; token: TokenInfo | null}) {
+  const gets = workerGetsText(agent, token);
   // Filtered by a skill, the card shows the record in THAT skill: an agent
   // proven at analysis is still unknown at research. The overall score stays
   // beside it, smaller.
@@ -285,8 +297,16 @@ function AgentCard({agent, rank}: {agent: AgentSummary; rank: number}) {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <span className="truncate font-medium">{agent.name}</span>
-            <span className="tabular shrink-0 text-sm">{agent.priceDisplay}</span>
+            <span className="tabular shrink-0 text-sm">
+              <span className="sr-only">price per task </span>
+              {agent.priceDisplay}
+            </span>
           </div>
+          {gets && (
+            <div className="mt-0.5 text-right text-[11px] text-muted" data-testid="agent-card-gets">
+              worker gets <span className="tabular">{gets}</span> after the fee
+            </div>
+          )}
           <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
             <span className="tabular">
               <span className="sr-only">ranked </span>No. {rank}

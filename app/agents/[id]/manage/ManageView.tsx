@@ -15,7 +15,10 @@ import {displayAccount, formatYocto, parseUnits} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {signInHref} from '@/lib/signin-next';
 import {AgentEditCard, KeyCard, ReissueCard, WebhooksCard} from '@/components/market/AgentAdmin';
+import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {useLandOn} from '@/components/ui/useLandOn';
 import {
+  acceptWalletTransaction,
   cancelUnstakeTransaction,
   completeUnstakeTransaction,
   fundTransaction,
@@ -24,6 +27,7 @@ import {
   setCapsTransaction,
   stakeTransaction,
   storageDepositTransaction,
+  unfreezeTransaction,
   withdrawTransaction,
   type Transaction,
 } from '@/lib/wallet';
@@ -116,6 +120,19 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const owner = data?.agent?.owner ?? null;
   const isOwner = session.status === 'in' && session.account !== null && session.account === owner;
 
+  // The owner's own wallet (what Fund and Stake draw on); the record itself is `data`, read above.
+  const wallet = useMoney(network, {
+    account: isOwner ? session.account : null,
+    chainAgentId: null,
+    record: false,
+  });
+  const walletToken = wallet.wallet?.token?.ok ? wallet.wallet.token.value : null;
+
+  // Arrived from a fix link (#fund-card, #caps-card, ...): bring that card into view once it exists.
+  const [hash, setHash] = useState('');
+  useEffect(() => setHash(window.location.hash.replace(/^#/, '')), []);
+  useLandOn(hash, data !== null && isOwner && hash !== '');
+
   const send = useCallback(
     async (label: string, build: () => Transaction) => {
       if (!session.account) return;
@@ -151,7 +168,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const faucet = network?.testnet ? (
     <p className="mt-2 text-xs text-muted">
       Need test {symbol || 'tokens'}?{' '}
-      <Link href="/me#overview" className="text-accent underline">
+      <Link href="/me#faucet" className="text-accent underline">
         Claim them from the faucet
       </Link>{' '}
       on your account page, then stake here.
@@ -199,6 +216,14 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const now = Math.floor(Date.now() / 1000);
   const minStake = network.minStake;
   const explorer = network.explorerBaseUrl;
+  const walletRead = wallet.wallet?.token ?? null;
+  const walletLine = walletRead
+    ? walletRead.ok
+      ? `In your wallet: ${units(walletRead.value)}.`
+      : `Your wallet's ${symbol} could not be read.`
+    : wallet.loading
+      ? `Reading your wallet's ${symbol}...`
+      : `Needs ${symbol} in your wallet.`;
 
   return (
     <div className="space-y-6">
@@ -292,6 +317,75 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
         </Notice>
       ) : null}
 
+      {agent.frozen && (
+        <Notice>
+          <p data-testid="agent-frozen">
+            This agent is frozen: its wallet can do nothing and nobody can hire it. Open jobs still end by
+            their deadlines.{' '}
+            {isOwner && pactora ? (
+              <>
+                You own it, so you can lift the freeze with one signature.{' '}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={busy === 'Unfreeze'}
+                  disabled={busy !== null}
+                  onClick={() => send('Unfreeze', () => unfreezeTransaction(pactora, chainAgentId))}
+                >
+                  Unfreeze
+                </Button>
+              </>
+            ) : (
+              `Only its owner, ${displayAccount(agent.owner)}, can unfreeze it.`
+            )}
+          </p>
+        </Notice>
+      )}
+      {!agent.wallet && (
+        <Notice>
+          <p data-testid="wallet-not-accepted">
+            {agent.pending_wallet
+              ? `The wallet ${displayAccount(agent.pending_wallet)} has not accepted yet, so this agent cannot hire, work or be hired.`
+              : 'This agent has no wallet yet, so it cannot hire, work or be hired.'}{' '}
+            {agent.pending_wallet && session.account === agent.pending_wallet && pactora ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={busy === 'Accept the wallet'}
+                disabled={busy !== null}
+                onClick={() =>
+                  send('Accept the wallet', () => acceptWalletTransaction(pactora, chainAgentId))
+                }
+              >
+                Accept as its wallet
+              </Button>
+            ) : agent.pending_wallet ? (
+              `Next: sign in as ${displayAccount(agent.pending_wallet)} and open this page to accept, with one signature.`
+            ) : (
+              'Next: its owner names a wallet, which then accepts.'
+            )}
+          </p>
+        </Notice>
+      )}
+
+      {isOwner && (
+        <MoneyPanel
+          network={network}
+          money={{
+            ...wallet,
+            record: {ok: true, value: data},
+            reload: () => {
+              wallet.reload();
+              setAttempt((n) => n + 1);
+            },
+          }}
+          account={session.account}
+          chainAgentId={chainAgentId}
+          title={ownPerson ? 'Your money' : 'Money: your wallet and this agent'}
+          description="Your wallet (what Fund and Stake draw on) and this record, read from the chain just now."
+        />
+      )}
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card
           title="Purse"
@@ -309,6 +403,17 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
               <Stat label="Per-task cap" value={units(purse.per_task_cap)} />
               <Stat label="Daily cap" value={units(purse.daily_cap)} />
               <Stat label="Left today" value={units(purse.daily_remaining)} />
+              <Stat
+                label="More frees up"
+                value={
+                  purse.next_release_at > now ? (
+                    <span className="text-base">{new Date(purse.next_release_at * 1000).toUTCString()}</span>
+                  ) : (
+                    'nothing pending'
+                  )
+                }
+                hint="Spending counts for 24 hours; this is when the oldest spend stops counting."
+              />
             </div>
           ) : (
             <p className="text-sm text-muted">No purse.</p>
@@ -351,7 +456,8 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
           <AmountCard
             id="fund"
             title="Fund the purse"
-            hint={`Moves ${symbol} from your account into the purse. Needs ${symbol} in your wallet.`}
+            hint={`Moves ${symbol} from your account into the purse. ${walletLine}`}
+            max={walletToken}
             button="Fund"
             unit={symbol}
             decimals={decimals}
@@ -369,6 +475,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
                 ? `At least ${units(minStake)} unlocked makes a worker hireable.`
                 : 'A worker needs the network minimum to be hireable.'
             }
+            max={walletToken}
             button="Stake"
             unit={symbol}
             decimals={decimals}
@@ -433,6 +540,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
                 decimals={decimals}
                 disabled={busy !== null || !stake || stake.unlocked === '0'}
                 busy={busy === 'Request unstake'}
+                max={stake?.unlocked ?? null}
                 onSubmit={(amount) =>
                   send('Request unstake', () => requestUnstakeTransaction(pactora, chainAgentId, amount))
                 }
@@ -443,6 +551,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
             id="withdraw"
             title="Withdraw from the purse"
             hint={`Sends ${symbol} to your account.`}
+            max={purse?.balance ?? null}
             button="Withdraw"
             unit={symbol}
             decimals={decimals}
@@ -526,6 +635,7 @@ function AmountForm({
   disabled,
   busy,
   onSubmit,
+  max = null,
 }: {
   id: string;
   button: string;
@@ -534,6 +644,8 @@ function AmountForm({
   disabled: boolean;
   busy: boolean;
   onSubmit: (base: string) => void;
+  /** The most this can take, base units: a Max button fills it in. Null: no Max. */
+  max?: string | null;
 }) {
   const [text, setText] = useState('');
   const base = text.trim() === '' ? null : parseUnits(text, decimals);
@@ -569,9 +681,23 @@ function AmountForm({
           placeholder="1.5"
         />
       </Field>
-      <Button type="submit" size="sm" loading={busy} disabled={disabled || !base || base === '0'}>
-        {button}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" loading={busy} disabled={disabled || !base || base === '0'}>
+          {button}
+        </Button>
+        {max !== null && /^\d{1,40}$/.test(max) && max !== '0' && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            aria-label={`Max ${button.toLowerCase()} amount: ${formatUnits(max, decimals)} ${unit}`}
+            onClick={() => setText(formatUnits(max, decimals))}
+          >
+            Max
+          </Button>
+        )}
+      </div>
     </form>
   );
 }
@@ -591,6 +717,7 @@ function AmountCard({
   disabled: boolean;
   busy: boolean;
   onSubmit: (base: string) => void;
+  max?: string | null;
 }) {
   return (
     <Card title={title} description={hint} labelledBy={`${id}-card`}>

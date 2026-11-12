@@ -19,6 +19,8 @@ import {
   utc,
 } from '@/components/market/ListingCard';
 import {NotReady, useBidReadiness} from '@/components/market/Readiness';
+import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {SpendSummary} from '@/components/money/SpendSummary';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -27,6 +29,8 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import {ReportButton} from '@/components/market/Report';
 import {StandingBanner} from '@/components/market/Standing';
+import {spendSummary, workSummary} from '@/lib/fees';
+import {spendBlocked} from '@/lib/hire';
 import {subscribeToJob} from '@/lib/job-stream';
 import {safeHref} from '@/lib/links';
 import {LIMITS, validateBid, validateReason} from '@/lib/listing-form';
@@ -250,8 +254,20 @@ function ApplicantPanel({
   const [confirmWithdraw, setConfirmWithdraw] = useState<string | null>(null);
   const decimals = token?.decimals ?? 6;
   const signIn = useSignInHref();
-  const readiness = useBidReadiness(token);
+  // The bond is checked at the price that would be accepted: the ceiling for a claim, else the bid typed.
+  const typed = parseUnits(price, decimals);
+  const priced =
+    listing.hiringMode === 'instant'
+      ? listing.maxPriceBaseUnits
+      : typed && !/^0+$/.test(typed)
+        ? typed
+        : null;
+  const readiness = useBidReadiness(token, priced);
   const notReady = readiness.reason !== null;
+  const money = useMoney(token?.network ?? null, {
+    account: session.status === 'in' ? session.account : null,
+    chainAgentId: session.person?.chainAgentId ?? null,
+  });
 
   if (session.status === 'loading') return null;
   // The person record is unknown (the API failed): the banner under the header says so, with a retry.
@@ -436,10 +452,19 @@ function ApplicantPanel({
               .
             </p>
           ) : (
-            <div className="mt-4">
+            <div className="mt-4 space-y-3">
+              {token && <SpendSummary rows={workSummary(listing.maxPriceBaseUnits, token.network)} />}
+              <MoneyPanel
+                network={token?.network ?? null}
+                money={money}
+                account={session.account}
+                chainAgentId={session.person.chainAgentId}
+                compact
+                only={['stake', 'daily', 'near']}
+                id="claim-money"
+              />
               <NotReady readiness={readiness} />
               <Button
-                className={notReady ? 'mt-3' : ''}
                 loading={busy === 'claim'}
                 disabled={busy !== null || notReady}
                 onClick={() => void claim()}
@@ -487,6 +512,18 @@ function ApplicantPanel({
                 aria-invalid={Boolean(errors.proposal) || undefined}
               />
             </Field>
+            {token && priced && (
+              <SpendSummary rows={workSummary(priced, token.network)} title="At this price" />
+            )}
+            <MoneyPanel
+              network={token?.network ?? null}
+              money={money}
+              account={session.account}
+              chainAgentId={session.person.chainAgentId}
+              compact
+              only={['stake', 'daily', 'near']}
+              id="bid-money"
+            />
             <Button type="submit" loading={busy === 'apply'} disabled={busy !== null || notReady}>
               Send my bid
             </Button>
@@ -609,9 +646,25 @@ function OwnerPanel({
     txHash: string | undefined;
     explorerUrl: string | undefined;
   } | null>(null);
+  // The owner's purse, read before any "Sign and fund": a create_job the contract would refuse is never offered.
+  const ownerMoney = useMoney(token?.network ?? null, {
+    account: session.status === 'in' ? session.account : null,
+    chainAgentId: session.person?.chainAgentId ?? null,
+  });
+  const ownRecord = ownerMoney.record?.ok ? ownerMoney.record.value : null;
+  const fundBlock = (amount: string) =>
+    token
+      ? spendBlocked(amount, ownRecord?.purse ?? null, ownRecord?.storage ?? null, {
+          decimals: token.decimals,
+          symbol: token.symbol,
+          chainAgentId: session.person?.chainAgentId ?? null,
+          testnet: token.network.testnet,
+        })
+      : null;
   const action = usePersonAction(() => {
     setFunding(null);
     reload();
+    ownerMoney.reload();
   });
 
   async function simple(label: string, run: (t: string) => Promise<unknown>) {
@@ -764,10 +817,28 @@ function OwnerPanel({
             You will sign: create_job on {token?.network.contracts.Pactora ?? 'the Pactora contract'}:{' '}
             {funding.amountDisplay} into escrow.
           </p>
+          <div className="mt-3 space-y-3">
+            {token && <SpendSummary rows={spendSummary(funding.amount, token.network)} />}
+            <MoneyPanel
+              network={token?.network ?? null}
+              money={ownerMoney}
+              account={session.account}
+              chainAgentId={session.person?.chainAgentId ?? null}
+              compact
+              only={['purse', 'daily', 'storage', 'near']}
+              id="fund-money"
+            />
+            <NotReady
+              readiness={fundBlock(funding.amount) ?? {reason: null, fixes: []}}
+              testId="fund-blocked"
+            />
+          </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button
               loading={action.state.busy}
-              disabled={action.state.busy || action.state.pending !== null}
+              disabled={
+                action.state.busy || action.state.pending !== null || fundBlock(funding.amount) !== null
+              }
               onClick={() =>
                 void action.run(funding.jobId, 'create', {}, {chainJobId: null, amount: funding.amount})
               }
@@ -852,7 +923,12 @@ function OwnerPanel({
                       size="sm"
                       aria-label={`Sign and fund slot ${s.slot}`}
                       loading={action.state.busy}
-                      disabled={action.state.busy || action.state.pending !== null || busy !== null}
+                      disabled={
+                        action.state.busy ||
+                        action.state.pending !== null ||
+                        busy !== null ||
+                        fundBlock(unfunded.rows.get(s.jobId)!.amount) !== null
+                      }
                       onClick={() =>
                         void action.run(
                           s.jobId!,
@@ -892,6 +968,19 @@ function OwnerPanel({
           ))}
           {slots.length === 0 && <li className="text-sm text-muted">No slot is filled yet.</li>}
         </ul>
+        {(() => {
+          // Why a slot's "Sign and fund" is off: the first unfunded slot the purse cannot cover.
+          if (funding) return null;
+          const blocked = slots
+            .map((s) => (s.jobId ? unfunded.rows.get(s.jobId) : undefined))
+            .map((row) => (row ? fundBlock(row.amount) : null))
+            .find((b) => b !== null);
+          return blocked ? (
+            <div className="mt-3">
+              <NotReady readiness={blocked} testId="fund-blocked" />
+            </div>
+          ) : null;
+        })()}
       </Card>
 
       {listing.hiringMode === 'applications' && (

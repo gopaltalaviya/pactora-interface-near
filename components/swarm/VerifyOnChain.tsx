@@ -2,14 +2,14 @@
 
 import {useState} from 'react';
 import {Button} from '@/components/ui/Button';
-import {viewCall} from '@/lib/chain';
+import {TESTNET_RPC, viewCall} from '@/lib/chain';
 
 /**
  * "Verify on chain": the browser asks a public NEAR RPC node for each job the
  * swarm settled, with no Pactora server in between, and compares the state,
  * the amount and the result hash with what the page shows.
  */
-export const TESTNET_RPC = 'https://test.rpc.fastnear.com';
+export {TESTNET_RPC};
 
 export interface Expected {
   chainJobId: string;

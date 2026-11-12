@@ -134,7 +134,8 @@ test('a price above what one job may hold is refused before the API; the API’s
 
   // On hold: the API answers 403 COUNTERPARTY_BLOCKED, and the card says so.
   expect((await page.request.post(`${MOCK_API}/__test/standing/${account}/hold`)).ok()).toBe(true);
-  await card.getByLabel(/^Price/).fill('1');
+  // Within the purse's per-task cap (0.1), so the money pre-check lets the API answer.
+  await card.getByLabel(/^Price/).fill('0.05');
   await card.getByRole('button', {name: 'Hire'}).click();
   await expect(card.getByRole('alert')).toContainText(/on hold/);
   await expect(card.getByRole('button', {name: 'Sign and fund the job'})).toHaveCount(0);
@@ -219,6 +220,6 @@ test('the manage page of your own person record speaks of you, links back to /me
   await expect(page.getByRole('heading', {level: 1})).toHaveText('Your person record');
   await expect(page.getByRole('link', {name: 'My account'}).first()).toHaveAttribute('href', '/me');
   const stake = page.getByRole('region', {name: 'Stake'});
-  await expect(stake.getByRole('link', {name: /faucet/i})).toHaveAttribute('href', '/me#overview');
+  await expect(stake.getByRole('link', {name: /faucet/i})).toHaveAttribute('href', '/me#faucet');
   await expect(page.getByText(/On-chain agent 177/)).toHaveCount(0);
 });

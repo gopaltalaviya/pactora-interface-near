@@ -494,6 +494,10 @@ export const cancelUnstakeTransaction = (pactora: string, chainAgentId: string) 
 export const completeUnstakeTransaction = (pactora: string, chainAgentId: string) =>
   call(pactora, functionCall('complete_unstake', {agent_id: agentIdArg(chainAgentId)}, {deposit: ONE_YOCTO}));
 
+/** `unfreeze_agent`: the owner lifts the kill switch, so the agent can act and be hired again. One yocto. */
+export const unfreezeTransaction = (pactora: string, chainAgentId: string) =>
+  call(pactora, functionCall('unfreeze_agent', {agent_id: agentIdArg(chainAgentId)}, {deposit: ONE_YOCTO}));
+
 /** `withdraw`: from the purse to `receiver` (the owner when omitted). One yocto. */
 export const withdrawTransaction = (
   pactora: string,
