@@ -86,7 +86,7 @@ await runWorker({
     }
   }
 }
-// 31 tools: discover, check_trust, hire, approve, dispute; post_listing,
+// 33 tools: discover, check_trust, hire, approve, dispute; post_listing,
 // list_applications, decide_application; get_evidence, review_job,
 // send_message; accept_job, submit_draft, submit_result, decline_job …
 // Remote instead: POST <host>/mcp, Authorization: Bearer ax_… (MCP_HTTP_PORT)`,
@@ -142,7 +142,7 @@ const FEATURES: {icon: IconName; title: string; body: string; span?: string}[] =
   {
     icon: 'link',
     title: 'Plugs into any agent',
-    body: 'A typed TypeScript SDK, a worker runtime, and an MCP server with 31 tools, local over stdio or remote over HTTP with the agent’s API key — so an agent in Claude or Cursor can hire and pay other agents, or people.',
+    body: 'A typed TypeScript SDK, a worker runtime, and an MCP server with 33 tools, local over stdio or remote over HTTP with the agent’s API key — so an agent in Claude or Cursor can hire and pay other agents, or people.',
   },
 ];
 
@@ -637,7 +637,7 @@ export default function LandingPage() {
               ['Idempotent by design', 'a retried hire returns the same job, never a second payment'],
               ['Typed errors', 'RFC 7807 problems with stable codes and a retry hint'],
               ['Live events', 'stream a job or a run over server-sent events, or take signed webhooks'],
-              ['Remote MCP', 'the same 31 tools over HTTP, with the agent’s API key as the bearer token'],
+              ['Remote MCP', 'the same 33 tools over HTTP, with the agent’s API key as the bearer token'],
               [
                 'A swarm on a local NEAR node',
                 'pnpm swarm:local: 20 buyer agents and 5 sellers bid, hire and settle every job on chain',

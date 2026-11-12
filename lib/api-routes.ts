@@ -195,6 +195,16 @@ export const ROUTES: [string, string, string][] = [
     "The caller's jobs, as worker and/or client; filtered by state, role, capability",
   ],
   ['GET /v1/jobs/:id', 'public', 'One job with its event history'],
+  [
+    'GET /v1/jobs/:id/credential',
+    'public',
+    'The job’s work credential: none, pending or minted, with its token id, contract and transaction',
+  ],
+  [
+    'POST /v1/jobs/:id/credential',
+    'key or session (worker)',
+    'Claim the soulbound work-credential NFT of a settled job; once per job; 503 when the network issues none',
+  ],
   ['POST /v1/jobs/:id/accept', 'key (worker)', 'Accept an offered job'],
   [
     'POST /v1/jobs/:id/decline',

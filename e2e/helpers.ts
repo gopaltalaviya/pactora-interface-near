@@ -96,3 +96,71 @@ export async function quietChain(page: Page) {
   await page.route('https://rpc.testnet.near.org/**', nothing);
   await page.route('https://test.rpc.fastnear.com/**', nothing);
 }
+
+/** The work-credentials contract e2e/credentials.spec.ts adds to the mock network (mock-api.mjs CREDENTIALS). */
+export const CREDENTIALS = 'credentials.pactora.testnet';
+
+/** GET /v1/network, as a network with the credentials contract deployed answers it. */
+export async function withCredentials(page: Page) {
+  await page.route(`${MOCK_API}/v1/network`, async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as {contracts: Record<string, string>};
+    body.contracts['Credentials'] = CREDENTIALS;
+    await route.fulfill({response: res, json: body});
+  });
+}
+
+export const credentialToken = (owner: string, chainJobId: string, amount: string, settledAt: string) => ({
+  token_id: chainJobId,
+  owner_id: owner,
+  metadata: {
+    title: `Pactora job #${chainJobId}`,
+    description: 'A paid job on Pactora, settled on chain.',
+    media: null,
+    issued_at: String(Date.parse(settledAt)),
+    extra: JSON.stringify({
+      contract: 'pactora.testnet',
+      chainJobId,
+      client: 'olive.testnet',
+      worker: owner,
+      amount,
+      token: 'musdc.pactora.testnet',
+      specHash: 'ab'.repeat(32),
+      resultHash: 'cd'.repeat(32),
+      reviewHash: null,
+      settledAt,
+    }),
+  },
+});
+
+/**
+ * The node answers `nft_tokens_for_owner` on the credentials contract from
+ * `byOwner` (or fails, with `fail`); every other view falls through to
+ * quietChain's `null`. Registered after quietChain, so it is asked first.
+ */
+export async function chainCredentials(
+  page: Page,
+  byOwner: Record<string, unknown[]>,
+  {fail = false}: {fail?: boolean} = {},
+) {
+  const seen: string[] = [];
+  const handler = async (route: Route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}') as {
+      id?: unknown;
+      params?: {account_id?: string; method_name?: string; args_base64?: string};
+    };
+    if (body.params?.method_name !== 'nft_tokens_for_owner') return route.fallback();
+    const args = JSON.parse(Buffer.from(body.params.args_base64 ?? '', 'base64').toString()) as {
+      account_id: string;
+    };
+    seen.push(`${body.params.account_id}:${args.account_id}`);
+    if (fail) return route.fulfill({status: 502, contentType: 'text/plain', body: 'bad gateway'});
+    const value = byOwner[args.account_id] ?? [];
+    return route.fulfill({
+      contentType: 'application/json',
+      json: {jsonrpc: '2.0', id: body.id ?? 'x', result: {result: [...Buffer.from(JSON.stringify(value))]}},
+    });
+  };
+  await page.route('https://rpc.testnet.near.org/**', handler);
+  return seen;
+}

@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
-import {errorText} from '@/components/market/hooks';
+import {errorText, useNetwork} from '@/components/market/hooks';
+import {CredentialList} from '@/components/market/CredentialList';
 import {Button} from '@/components/ui/Button';
 import {utc} from '@/components/market/ListingCard';
 import {Badge, Tag} from '@/components/ui/Badge';
@@ -23,6 +24,9 @@ export function ProfileView({profileId}: {profileId: string}) {
   const [attempt, setAttempt] = useState(0);
   // An agent's profile names its CONTRACT id; its marketplace page is keyed by the API's id.
   const [marketId, setMarketId] = useState<number | null>(null);
+  // That agent's own account, which holds its work credentials.
+  const [marketWallet, setMarketWallet] = useState<string | null>(null);
+  const network = useNetwork()?.network ?? null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -45,7 +49,10 @@ export function ProfileView({profileId}: {profileId: string}) {
       .agents({limit: 100}, controller.signal)
       .then((list) => {
         const found = list.find((a) => String(a.chainAgentId ?? '') === chainAgentId);
-        if (found) setMarketId(found.agentId);
+        if (found) {
+          setMarketId(found.agentId);
+          setMarketWallet(found.walletAddress);
+        }
       })
       .catch(() => undefined);
     return () => controller.abort();
@@ -176,6 +183,11 @@ export function ProfileView({profileId}: {profileId: string}) {
         </div>
       </Card>
       <RecordOverTime subject={{profileId: p.profileId}} />
+      {/* Work credentials, on a network that issues them: a person's are held by the account it
+          shows; an agent's by its own account (feature/work-credentials). */}
+      {network?.contracts.Credentials && (p.account ?? marketWallet) && (
+        <CredentialList owner={(p.account ?? marketWallet)!} network={network} />
+      )}
       <Card
         title="Reviews"
         labelledBy="reviews"

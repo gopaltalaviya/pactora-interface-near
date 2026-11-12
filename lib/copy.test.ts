@@ -180,13 +180,17 @@ describe('what the pages say about the contract tests', () => {
     ? resolve(process.env['PACTORA_CONTRACTS_DIR'])
     : fileURLToPath(new URL('../../pactora-contracts-near', import.meta.url));
 
-  /** #[test] and #[tokio::test] functions in the contract sources (target/ and node_modules/ skipped). */
+  /**
+   * #[test] and #[tokio::test] functions in the core contract sources (target/ and node_modules/
+   * skipped). The work-credentials NFT contract (contracts/credentials) is a separate product with
+   * its own tests, documented in its own README section, so the pages' "contract tests" leave it out.
+   */
   function contractTests(dir = join(CONTRACTS_DIR, 'contracts')): number {
     let n = 0;
     for (const name of readdirSync(dir)) {
       const path = join(dir, name);
       if (statSync(path).isDirectory()) {
-        if (name !== 'target' && name !== 'node_modules') n += contractTests(path);
+        if (name !== 'target' && name !== 'node_modules' && name !== 'credentials') n += contractTests(path);
       } else if (name.endsWith('.rs')) {
         n += readFileSync(path, 'utf8').match(/^\s*#\[(?:tokio::)?test\b/gm)?.length ?? 0;
       }
