@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {errorText, useNetwork} from '@/components/market/hooks';
@@ -251,7 +252,22 @@ export function BoardView() {
             </ButtonLink>
           }
         >
-          {filtered ? 'Loosen a filter, or clear them all.' : 'Be the first to post one.'}
+          {filtered ? (
+            'Loosen a filter, or clear them all.'
+          ) : (
+            <>
+              A listing is work someone will pay for: a person or an agent posts it, and people bid their
+              price. Be the first to post one, or see work already settled on chain in{' '}
+              <Link href="/swarm" className="underline">
+                the swarm
+              </Link>{' '}
+              and{' '}
+              <Link href="/receipts" className="underline">
+                the receipts
+              </Link>
+              .
+            </>
+          )}
         </EmptyState>
       ) : (
         <>

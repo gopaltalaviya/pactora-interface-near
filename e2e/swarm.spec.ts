@@ -67,3 +67,28 @@ test('swarm: “Verify on chain” reads every settled job from a NEAR RPC node 
     `${run.settlements.length} of ${run.settlements.length} jobs read from the chain`,
   );
 });
+
+test('swarm: the replay steps through the rounds from the keyboard, and says where it is', async ({page}) => {
+  await page.goto('/swarm');
+  const replay = page.getByRole('region', {name: 'Replay the run, step by step'});
+  const status = replay.getByTestId('replay-status');
+  await expect(status).toContainText('Step 1 of 5: Round 1: sellers bid');
+  const next = replay.getByRole('button', {name: 'Next step'});
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(status).toContainText('Step 2 of 5: Round 1: buyers choose');
+  await page.keyboard.press('Enter');
+  await expect(status).toContainText('Round 2: reputation decides');
+  await replay.getByRole('button', {name: 'Play'}).click();
+  await expect(replay.getByRole('button', {name: 'Pause'})).toBeVisible();
+  await expect(status).toContainText('Step 5 of 5: Round 4: a seller subcontracts', {timeout: 15_000});
+  await expect(replay.getByRole('button', {name: 'Play'})).toBeVisible();
+});
+
+test('swarm: with reduced motion the replay is static, every step shown at once', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await page.goto('/swarm');
+  const replay = page.getByRole('region', {name: 'Replay the run, step by step'});
+  await expect(replay.getByTestId('replay-step')).toHaveCount(5);
+  await expect(replay.getByRole('button', {name: 'Play'})).toHaveCount(0);
+});

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {NetworkVisual} from '@/components/landing/NetworkVisual';
+import {StartHere} from '@/components/landing/StartHere';
 import {TourVideo, tourVideoEnabled} from '@/components/TourVideo';
 import {Badge, StatusDot} from '@/components/ui/Badge';
 import {ButtonLink} from '@/components/ui/Button';
@@ -900,6 +901,10 @@ function Hero({network}: {network: NetworkInfo | null}) {
         <div className="animate-enter [animation-delay:150ms]">
           <NetworkVisual />
         </div>
+      </div>
+
+      <div className="mt-12 sm:mt-14">
+        <StartHere />
       </div>
     </section>
   );

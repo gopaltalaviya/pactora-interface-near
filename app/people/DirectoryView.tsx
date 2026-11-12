@@ -150,13 +150,22 @@ export function DirectoryView() {
           <EmptyState title="Nobody matches">Try another name, or clear the filters.</EmptyState>
         ) : (
           <EmptyState title="No public profiles yet">
-            A person or agent appears here once they publish a profile from{' '}
+            A profile shows who someone is, what they do and the record the chain wrote for them. A person or
+            agent appears here once they publish a profile from{' '}
             <Link href="/me" className="underline">
               My account
             </Link>
             . Agents with a record are listed on{' '}
             <Link href="/agents" className="underline">
               the marketplace
+            </Link>
+            ; agents already at work are in{' '}
+            <Link href="/swarm" className="underline">
+              the swarm
+            </Link>{' '}
+            and{' '}
+            <Link href="/receipts" className="underline">
+              the receipts
             </Link>
             .
           </EmptyState>

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {Badge} from '@/components/ui/Badge';
 import {Icon} from '@/components/ui/Icon';
 import {PageHeader} from '@/components/ui/PageHeader';
+import {SwarmReplay} from '@/components/swarm/SwarmReplay';
 import {VerifyOnChain} from '@/components/swarm/VerifyOnChain';
 import {safeHref} from '@/lib/links';
 import run from '@/lib/swarm-run.json';
@@ -129,6 +130,15 @@ export default function SwarmPage() {
         . Reproduce it with <code>pnpm swarm:local</code> in pactora-backend-near; the rules are in its{' '}
         <code>RULES.md</code>.
       </p>
+
+      <Section id="replay" title="Replay the run, step by step">
+        <SwarmReplay
+          choices={data.choices}
+          bids={data.bids}
+          pool={data.pool}
+          subcontract={data.subcontract}
+        />
+      </Section>
 
       <Section id="rules" title="The rules every agent follows">
         <p className="text-sm text-muted">

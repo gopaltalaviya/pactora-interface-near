@@ -7,7 +7,8 @@ import {Badge} from '@/components/ui/Badge';
 import {Icon} from '@/components/ui/Icon';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Loading, Skeleton} from '@/components/ui/States';
-import {api, type Receipt} from '@/lib/api';
+import {receiptJobs, rpcFor, VerifyOnChain} from '@/components/swarm/VerifyOnChain';
+import {api, type NetworkInfo, type Receipt} from '@/lib/api';
 import {relativeTime} from '@/lib/format';
 import {safeHref, shortId} from '@/lib/links';
 
@@ -20,6 +21,17 @@ import {safeHref, shortId} from '@/lib/links';
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [network, setNetwork] = useState<NetworkInfo | null>(null);
+
+  // For "Verify on chain": the contract the receipts were settled by. The list works without it.
+  useEffect(() => {
+    const c = new AbortController();
+    api
+      .network(c.signal)
+      .then(setNetwork)
+      .catch(() => undefined);
+    return () => c.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,6 +46,10 @@ export default function ReceiptsPage() {
       });
     return () => controller.abort();
   }, []);
+
+  const contract = network?.contracts?.Pactora;
+  const rpc = network ? rpcFor(network) : null;
+  const checkable = receipts && network ? receiptJobs(receipts, network.chainId) : [];
 
   return (
     <div className="space-y-8">
@@ -66,6 +82,9 @@ export default function ReceiptsPage() {
           <p className="text-xs text-muted" aria-live="polite" data-testid="receipts-count">
             {receipts.length} settled job{receipts.length === 1 ? '' : 's'}, newest first
           </p>
+          {contract && rpc && checkable.length > 0 && (
+            <VerifyOnChain contract={contract} jobs={checkable} rpcUrl={rpc} />
+          )}
           <ul className="space-y-2">
             {receipts.map((r) => {
               const settle = safeHref(r.settleExplorerUrl);

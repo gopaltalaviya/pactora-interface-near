@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {compareJob, VerifyOnChain} from './VerifyOnChain';
+import {compareJob, receiptJobs, rpcFor, TESTNET_RPC, VerifyOnChain} from './VerifyOnChain';
 
 afterEach(() => {
   cleanup();
@@ -72,5 +72,45 @@ describe('VerifyOnChain', () => {
     expect((await screen.findByTestId('swarm-verify-result')).textContent).toContain(
       'Cannot reach the NEAR RPC node',
     );
+  });
+});
+
+describe('receiptJobs', () => {
+  const receipt = {
+    chainJobId: '5000',
+    chainId: 'near:testnet',
+    path: 'escrow' as const,
+    amount: '20000',
+    resultHash: 'cd',
+  };
+
+  it('checks each receipt of this network that has a chain job id, by its amount and result hash', () => {
+    expect(
+      receiptJobs(
+        [
+          receipt,
+          {...receipt, chainJobId: null},
+          {...receipt, chainJobId: ''},
+          {...receipt, chainJobId: '7', chainId: 'near:mainnet'},
+        ],
+        'near:testnet',
+      ),
+    ).toEqual([{chainJobId: '5000', amount: '20000', resultHash: 'cd'}]);
+  });
+
+  it('does not compare the result hash of a direct payment: the chain never holds one', () => {
+    expect(receiptJobs([{...receipt, path: 'direct'}], 'near:testnet')).toEqual([
+      {chainJobId: '5000', amount: '20000', resultHash: null},
+    ]);
+  });
+});
+
+describe('rpcFor', () => {
+  it('reads testnet through the same public node as /swarm, and any other network through its own', () => {
+    expect(rpcFor({nearNetworkId: 'testnet', rpcUrls: ['https://rpc.testnet.near.org']})).toBe(TESTNET_RPC);
+    expect(rpcFor({nearNetworkId: 'sandbox', rpcUrls: ['http://127.0.0.1:3030']})).toBe(
+      'http://127.0.0.1:3030',
+    );
+    expect(rpcFor({nearNetworkId: 'sandbox', rpcUrls: []})).toBeNull();
   });
 });

@@ -36,6 +36,33 @@ export function compareJob(want: Expected, got: ChainJob | null): Check {
   return {chainJobId: id, ok: true};
 }
 
+/** The parts of a `GET /v1/receipts` entry a chain check needs. */
+interface ReceiptLike {
+  chainJobId: string | null;
+  chainId: string;
+  path: 'escrow' | 'direct';
+  amount: string;
+  resultHash: string | null;
+}
+
+/**
+ * The receipts of one network that name a chain job, as jobs to check. A
+ * direct payment's job settles in one call with no result on chain (the
+ * delivery is recorded off-chain), so only its state and amount are compared.
+ */
+export function receiptJobs(receipts: ReceiptLike[], chainId: string): Expected[] {
+  return receipts.flatMap((r) =>
+    r.chainJobId && r.chainId === chainId
+      ? [{chainJobId: r.chainJobId, amount: r.amount, resultHash: r.path === 'direct' ? null : r.resultHash}]
+      : [],
+  );
+}
+
+/** Testnet is read through the public node /swarm uses; another network through its first RPC URL. */
+export function rpcFor(network: {nearNetworkId: string; rpcUrls: string[]}): string | null {
+  return network.nearNetworkId === 'testnet' ? TESTNET_RPC : (network.rpcUrls[0] ?? null);
+}
+
 type Status =
   {kind: 'idle'} | {kind: 'busy'} | {kind: 'done'; checks: Check[]} | {kind: 'error'; message: string};
 

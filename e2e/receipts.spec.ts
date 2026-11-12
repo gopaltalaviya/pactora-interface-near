@@ -1,4 +1,4 @@
-import {expect, test} from '@playwright/test';
+import {expect, test, type Page} from '@playwright/test';
 import {MOCK_API} from './helpers';
 
 /**
@@ -77,4 +77,60 @@ test('job page: the Receipt card shows both hashes, the transaction count and th
   await expect(page.getByTestId('receipt-cli')).toHaveText(
     `near contract call-function as-read-only pactora.testnet get_job json-args '{"job_id": 5000}' network-config testnet now`,
   );
+});
+
+/** Answers `get_job` on the public testnet RPC node the browser reads, with `job(id)`. */
+async function chainAnswers(page: Page, job: (id: number) => unknown) {
+  const asked: {contract: string; id: number}[] = [];
+  await page.route('https://test.rpc.fastnear.com/**', async (route) => {
+    const params = JSON.parse(route.request().postData() ?? '{}').params;
+    const id = JSON.parse(Buffer.from(params.args_base64, 'base64').toString()).job_id as number;
+    asked.push({contract: params.account_id, id});
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'pactora',
+        result: {result: [...Buffer.from(JSON.stringify(job(id)))]},
+      }),
+    });
+  });
+  return asked;
+}
+
+test('receipts: “Verify on chain” reads each receipt’s job from the Pactora contract in the browser', async ({
+  page,
+}) => {
+  const asked = await chainAnswers(page, () => ({
+    state: 'Settled',
+    amount: '20000',
+    result_hash: 'cd'.repeat(32),
+  }));
+  await page.goto('/receipts');
+  await page.getByRole('button', {name: 'Verify on chain'}).click();
+  await expect(page.getByTestId('swarm-verify-result')).toHaveText(
+    '1 of 1 jobs read from the chain: Settled, with the same amount and result hash.',
+  );
+  // The contract named by GET /v1/network, and the receipt's chain job id.
+  expect(asked).toEqual([{contract: 'pactora.testnet', id: 5000}]);
+});
+
+test('receipts: a chain that disagrees with a receipt is reported, job by job', async ({page}) => {
+  await chainAnswers(page, () => ({state: 'Settled', amount: '1', result_hash: 'cd'.repeat(32)}));
+  await page.goto('/receipts');
+  await page.getByRole('button', {name: 'Verify on chain'}).click();
+  await expect(page.getByTestId('swarm-verify-result')).toContainText('0 of 1 jobs');
+  await expect(page.getByText('chain job 5000: amount is 1')).toBeVisible();
+});
+
+test('receipts: no “Verify on chain” when no receipt has a chain job id', async ({page}) => {
+  await page.route(`${MOCK_API}/v1/receipts*`, async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    for (const r of body.receipts) r.chainJobId = null;
+    await route.fulfill({response: res, json: body});
+  });
+  await page.goto('/receipts');
+  await expect(page.getByTestId('receipt')).toHaveCount(1);
+  await expect(page.getByRole('button', {name: 'Verify on chain'})).toHaveCount(0);
 });
