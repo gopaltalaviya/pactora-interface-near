@@ -67,8 +67,8 @@ Built from 2026-11-05 on, in [this history](https://github.com/gopaltalaviya/pac
 - **New: two captioned videos** (below) and a live-chain browser suite that runs every flow on a local
   NEAR node in five browsers (`e2e-live/`).
 
-> **Disclosure (rules Q-002, Q-003).** Pactora existed before this hackathon as an EVM product on
-> **Monad** (formerly AGENTX: Solidity contracts, built for Monad Metropolis). That code is this repository's first commit,
+> **Disclosure (rules Q-002, Q-003).** Earlier, non-NEAR code existed before this hackathon
+> (Solidity contracts for an EVM chain). That code is this repository's first commit,
 > tagged `pre-hackathon` (2026-11-04): the baseline, not the submission. Only the NEAR work after it is submitted, dated in the
 > history: [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission)
 > (the tag is added at submission; until then [`pre-hackathon...human-work`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...human-work)).
