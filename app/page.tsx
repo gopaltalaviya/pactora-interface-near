@@ -738,7 +738,7 @@ export default function LandingPage() {
             tone="live"
             items={[
               'Contract ownership handed to the arbiter DAO, the deployer’s key removed',
-              'The NEAR AI judge’s attestation checked on live calls, then written on chain',
+              'The NEAR AI judge on by default, with the TEE quote in NEAR AI’s report verified too',
               'An uptime monitor on the public status endpoint',
               'An external audit, then NEAR mainnet: same code, new configuration',
             ]}
