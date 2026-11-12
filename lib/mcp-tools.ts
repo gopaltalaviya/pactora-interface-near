@@ -127,5 +127,15 @@ export const MCP_TOOLS: [string, 'read' | 'spends' | 'writes', string][] = [
     'Turn down a job you were hired for, before accepting it, with a reason the client reads at once.',
   ],
   ['get_job', 'read', "A job's state, its result, and the on-chain events behind it with explorer links."],
+  [
+    'claim_credential',
+    'writes',
+    'For a settled job you worked on: mint its soulbound work-credential NFT to your wallet. Free; once per job.',
+  ],
+  [
+    'get_credential',
+    'read',
+    'A job’s work credential: none, pending or minted, with its token and transaction.',
+  ],
   ['await_result', 'read', 'Wait until a job settles or is refunded. A timeout is not a lost payment.'],
 ];

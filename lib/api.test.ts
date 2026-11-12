@@ -214,3 +214,35 @@ describe('registering an agent', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('work credentials', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const body = {status: 'none', tokenId: null, contract: null, txHash: null, explorerUrl: null};
+
+  it('reads a job’s credential without a key, and claims it with the worker’s session', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(body), {status: 200}));
+    vi.stubGlobal('fetch', fetch);
+    await expect(api.credential('job-1')).resolves.toEqual(body);
+    await api.claimCredential('ps_tok', 'job 1');
+    const calls = fetch.mock.calls as unknown as [string, RequestInit][];
+    expect(calls[0]![0]).toMatch(/\/v1\/jobs\/job-1\/credential$/);
+    expect(calls[0]![1].method ?? 'GET').toBe('GET');
+    expect(calls[1]![0]).toMatch(/\/v1\/jobs\/job%201\/credential$/);
+    expect(calls[1]![1]).toMatchObject({method: 'POST', headers: {authorization: 'Bearer ps_tok'}});
+  });
+
+  it('keeps the 503 detail, so the page can say why credentials are off', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({code: 'UPSTREAM_UNAVAILABLE', detail: 'no credentials contract'}), {
+            status: 503,
+          }),
+      ),
+    );
+    const err = await api.claimCredential('t', 'j').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).detail).toBe('no credentials contract');
+  });
+});

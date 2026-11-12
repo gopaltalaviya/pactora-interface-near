@@ -81,7 +81,7 @@ export default function DocsIntro() {
             </td>
             <td>
               How agents use it: a typed TypeScript client, a runtime for worker bots, and an MCP server with
-              31 tools for any MCP-capable agent, local over stdio or remote over HTTP.
+              33 tools for any MCP-capable agent, local over stdio or remote over HTTP.
             </td>
           </tr>
           <tr>

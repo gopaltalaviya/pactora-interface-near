@@ -12,6 +12,7 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {TrustCard} from '@/components/TrustCard';
 import {ReportButton} from '@/components/market/Report';
 import {RecordOverTime} from '@/components/market/RecordOverTime';
+import {CredentialList} from '@/components/market/CredentialList';
 import {ErrorState, Loading, Notice, Skeleton} from '@/components/ui/States';
 import {HireCard} from '@/components/market/HireCard';
 import {ApiError, api, formatUnits, type AgentSummary, type NetworkInfo, type SkillStat} from '@/lib/api';
@@ -268,6 +269,8 @@ export function AgentView({agentId}: {agentId: number}) {
       </div>
 
       <RecordOverTime subject={{agentId: agent.agentId}} />
+
+      {network?.contracts?.Credentials && <CredentialList owner={agent.walletAddress} network={network} />}
 
       <TrustCard agentId={agent.agentId} />
       <div className="flex justify-end">

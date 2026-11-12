@@ -17,6 +17,7 @@ import {SpendSummary} from '@/components/money/SpendSummary';
 import {Countdown} from '@/components/ui/Countdown';
 import {DeliveryPanels, useDelivery} from '@/components/market/Evidence';
 import {PartyReviewCard} from '@/components/market/Profile';
+import {CredentialCard} from '@/components/market/CredentialCard';
 import {utc} from '@/components/market/ListingCard';
 import {Badge} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
@@ -286,6 +287,18 @@ export function JobView({jobId}: {jobId: string}) {
       {party && session.status === 'in' && job.state === 'settled' && (
         <PartyReviewCard jobId={job.jobId} attempt={attempt} />
       )}
+
+      {/* The worker's work credential, only where the network issues them (feature/work-credentials). */}
+      {party === 'worker' &&
+        session.status === 'in' &&
+        job.state === 'settled' &&
+        token?.network.contracts.Credentials && (
+          <CredentialCard
+            jobId={job.jobId}
+            contract={token.network.contracts.Credentials}
+            explorer={token.explorer}
+          />
+        )}
 
       <Timeline job={job} stream={stream} />
     </div>

@@ -12,6 +12,12 @@ const RUN_ID = '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b';
 const JOB_ID = '9b1c2d3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e';
 const EXPLORER = 'https://testnet.nearblocks.io';
 const HOSTILE = 'javascript:alert(1)';
+/**
+ * The work-credentials contract. NOT in `network.contracts` by default — a
+ * network without it must look exactly as before; e2e/credentials.spec.ts adds
+ * it per page by routing /v1/network.
+ */
+const CREDENTIALS = 'credentials.pactora.testnet';
 
 const network = {
   // The GET /v1/network shape of NEAR-WIRE §4.
@@ -1235,6 +1241,37 @@ async function market(req, res, url) {
   if ((await profileRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await feedRoutes(req, res, path, account, me, url)) !== null) return;
   if ((await delivery(req, res, path, me)) !== null) return;
+
+  // Work credentials (feature/work-credentials, the API's routes/credentials.ts): GET is public;
+  // POST is the worker's, once the job settled, and idempotent. A job marked by
+  // /__test/job/:id/credential/unavailable answers 503, as a server with no minter does.
+  const cred = /^\/v1\/jobs\/([^/]+)\/credential$/.exec(path);
+  if (cred) {
+    const j = jobs.get(cred[1]);
+    if (!j) return problem(res, 404, 'NOT_FOUND', 'no such job');
+    const view = () =>
+      j.credential ?? {status: 'none', tokenId: null, contract: null, txHash: null, explorerUrl: null};
+    if (req.method === 'GET') return send(res, 200, view());
+    if (req.method !== 'POST') return problem(res, 405, 'METHOD_NOT_ALLOWED', 'GET or POST');
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    if (j.worker !== me) return problem(res, 403, 'FORBIDDEN', 'only the job’s worker claims its credential');
+    if (j.state !== 'settled') return problem(res, 409, 'INVALID_STATE', 'the job has not settled on chain');
+    if (j.credentialUnavailable)
+      return send(res, 503, {
+        code: 'UPSTREAM_UNAVAILABLE',
+        detail: 'no credentials minter is configured on this network',
+      });
+    if (j.credential) return send(res, 200, view());
+    const txHash = `MINT${String(++counter).padStart(4, '0')}`;
+    j.credential = {
+      status: 'minted',
+      tokenId: j.chainJobId,
+      contract: CREDENTIALS,
+      txHash,
+      explorerUrl: `${EXPLORER}/txns/${txHash}`,
+    };
+    return send(res, 202, view());
+  }
 
   const jobMatch = /^\/v1\/jobs\/([^/]+)(\/events|\/person-actions\/(?:prepare|confirm))?$/.exec(path);
   if (jobMatch) {
@@ -2991,6 +3028,13 @@ async function hooks(req, res, url) {
     else standingOf.set(hold[1], hold[2]);
     kycOf.delete(hold[1]);
     return send(res, 200, {account: hold[1], standing: hold[2]});
+  }
+  const credOff = /^\/__test\/job\/([^/]+)\/credential\/unavailable$/.exec(url.pathname);
+  if (credOff) {
+    const j = jobs.get(credOff[1]);
+    if (!j) return send(res, 404, {code: 'NOT_FOUND', detail: 'no job'});
+    j.credentialUnavailable = true;
+    return send(res, 200, {ok: true});
   }
   const theirs = /^\/__test\/job\/([^/]+)\/their-review\/(client|worker)$/.exec(url.pathname);
   if (theirs) {

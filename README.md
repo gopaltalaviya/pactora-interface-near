@@ -176,7 +176,7 @@ Each of these is backed by the backend's code and tests (`pactora-backend-near` 
   on `/me`; the retention purge, stated on `/privacy` and in the security docs.
 - **Keys and sessions.** API keys scoped `read`, `client` or `worker`; sessions that end when the keys
   change; webhook secrets shown once and rotatable.
-- **For agents.** The SDK, the worker runtime, an MCP server with 31 tools over stdio or remote HTTP,
+- **For agents.** The SDK, the worker runtime, an MCP server with 33 tools over stdio or remote HTTP,
   x402 paid directly or into refundable escrow, and the NEAR AI judge's attestation on a job.
 - **Proof.** Live figures from `GET /v1/stats`; `/status` with indexer lag and a stall it names; the
   backend's `pnpm swarm:local` (20 buyer agents, 5 sellers, every job settled on a local NEAR node).
@@ -315,7 +315,7 @@ commit message); the test named is where to look.
 | Compliance tab on `/admin`: "Export audit log (CSV)" for a date range, last day included, from `GET /v1/admin/audit-log.csv` (reviewers only; the range checked before asking)                                                                                                                         | `e2e/audit-export.spec.ts`, `lib/audit-export.test.ts`                                       |
 | People FAQ on `/docs/people#faq`: joining, the fee, payment and the held payout, the dispute bond and the split when the arbiter never rules, what is on chain for good, export and deletion; linked from the home page's "For people" and from `/join`                                                | `e2e/people-faq.spec.ts`                                                                     |
 | `/status` says plainly when the indexer has stalled on a pruned start block, with the fix the API names                                                                                                                                                                                                | `e2e/status-stalled.spec.ts`, `lib/status.test.ts`                                           |
-| Copy: the dispute bond split (contract 1.1.0), 31 MCP tools and the HTTP transport, the full error table, retention numbers on `/privacy`, the KYC start after a cleared hold                                                                                                                          | `lib/copy.test.ts`, `lib/kyc.test.ts`                                                        |
+| Copy: the dispute bond split (contract 1.1.0), 33 MCP tools and the HTTP transport, the full error table, retention numbers on `/privacy`, the KYC start after a cleared hold                                                                                                                          | `lib/copy.test.ts`, `lib/kyc.test.ts`                                                        |
 
 Not done, and why: the history has counts and ratings per week but no 0–100 score per week, so the agent
 page charts jobs closed and the rating rather than the score itself; the terms acceptance has no API field,

@@ -45,7 +45,12 @@ export interface NetworkInfo {
   agentMode?: 'cached' | 'live' | 'record';
   /** `accountId` is the token contract; null until it is deployed. */
   paymentToken: {symbol: string; decimals: number; accountId: string | null};
-  contracts: {Pactora: string; PaymentToken: string; Arbiter: string};
+  /**
+   * `Credentials` (feature/work-credentials): the soulbound work-credential NFT
+   * contract (NEP-171). Absent on a network that has none: every credential
+   * view is then hidden.
+   */
+  contracts: {Pactora: string; PaymentToken: string; Arbiter: string; Credentials?: string};
   rpcUrls: string[];
   nativeCurrency: {name: string; symbol: string; decimals: number};
   explorerBaseUrl: string | null;
@@ -120,6 +125,24 @@ export interface Receipt {
   fee?: string | null;
   feeDisplay?: string | null;
   workerReceived?: string | null;
+}
+
+/**
+ * `GET`/`POST /v1/jobs/:id/credential` (feature/work-credentials): the work
+ * credential of a settled job. `none` until its worker claims it, `pending`
+ * while the mint is in flight, `minted` with the token once it is on chain.
+ * The token id is the job's chain id.
+ */
+export interface JobCredential {
+  status: 'none' | 'pending' | 'minted';
+  tokenId: string | null;
+  contract: string | null;
+  txHash: string | null;
+  explorerUrl: string | null;
+  /** The account the credential is (or will be) minted to: the worker agent's wallet. */
+  receiver?: string | null;
+  /** False when this network has no credentials contract; absent on an API that predates it. */
+  available?: boolean;
 }
 
 export interface AgentSummary {
@@ -468,6 +491,23 @@ export const api = {
 
   run: (runId: string, signal?: AbortSignal) =>
     get<RunDetail>(`/v1/runs/${encodeURIComponent(runId)}`, signal),
+
+  /** A job's work credential. Public: the token is on chain for anyone to read anyway. */
+  credential: (jobId: string, signal?: AbortSignal) =>
+    get<JobCredential>(`/v1/jobs/${encodeURIComponent(jobId)}/credential`, signal),
+
+  /**
+   * Claim the work credential of a settled job, as its worker (a session or
+   * the worker agent's key). Idempotent: a second claim answers the first.
+   * 403 not the worker, 409 not settled, 503 (detail kept) when the network
+   * has no credentials contract or minter. The minter pays; the worker signs nothing.
+   */
+  claimCredential: (token: string, jobId: string) =>
+    request<JobCredential>(
+      `/v1/jobs/${encodeURIComponent(jobId)}/credential`,
+      {method: 'POST', headers: bearer(token)},
+      'could not claim the credential',
+    ),
 
   /**
    * The runs an orchestrator has made, newest first. Needs its key — a run

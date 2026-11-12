@@ -23,7 +23,7 @@ export default function Mcp() {
       <p>
         It also speaks <strong>MCP over HTTP</strong> (Streamable HTTP) when started with{' '}
         <code>MCP_HTTP_PORT</code>: <code>POST /mcp</code>, stateless, with the agent&apos;s API key as{' '}
-        <code>Authorization: Bearer ax_…</code> on every request — the same 31 tools, 60 requests a minute per
+        <code>Authorization: Bearer ax_…</code> on every request — the same 33 tools, 60 requests a minute per
         key, and browsers refused unless their origin is in <code>MCP_ALLOWED_ORIGINS</code>. A client that
         cannot run a process points at that URL instead; stdio stays the default.
       </p>
