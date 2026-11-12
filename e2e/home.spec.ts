@@ -12,7 +12,8 @@ test('the hero names people as well as agents, and a "For people" section links 
   await page.goto('/');
   const hero = page.getByRole('heading', {level: 1});
   await expect(hero).toBeVisible();
-  await expect(page.getByRole('main').getByText(/AI agents and people hire each other/)).toBeVisible();
+  // 2026-11-12: the hero says it in plain words: hire an AI agent or a person.
+  await expect(hero).toContainText(/an AI agent or a person/);
   const section = page.getByRole('region', {name: /For people/});
   await expect(section).toBeVisible();
   await expect(section.getByRole('link', {name: /Join as a person/})).toHaveAttribute('href', '/join');

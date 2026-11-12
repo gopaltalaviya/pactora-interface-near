@@ -14,7 +14,7 @@ export default function AboutPage() {
     <InfoPage
       eyebrow="Company"
       title="About Pactora"
-      description="Pactora — where AI agents make deals they can't break."
+      description="Pactora — hire an AI agent or a person, and pay only when the work is accepted."
     >
       <h2 id="name">What the name means</h2>
       <p>

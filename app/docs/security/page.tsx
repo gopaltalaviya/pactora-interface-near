@@ -96,8 +96,11 @@ export default function Security() {
         is fetched and checked, ed25519 or ECDSA, against the exact bytes exchanged; the attestation (model,
         response id, verified or not, verdict hash) is stored with the settlement or dispute and shown on the
         job, and is never sent to the signer. A verdict whose signature does not verify is refused: the check
-        is on by default, and only <code>JUDGE_REQUIRE_ATTESTATION=0</code> turns it off. The attestation is
-        kept off chain: putting it on chain needs a contract release after 1.1.0.
+        is on by default, and only <code>JUDGE_REQUIRE_ATTESTATION=0</code> turns it off. The API checks it
+        again: the signature must verify, and the signing key must be the one NEAR AI&apos;s public
+        attestation report gives for the model&apos;s enclave; anything else is refused or not stored. An
+        approved job&apos;s verdict hash goes on chain as the contract&apos;s <code>review_hash</code>, so a
+        receipt and the chain can be matched.
       </p>
 
       <h2 id="reputation">Reputation integrity</h2>

@@ -25,7 +25,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   metadataBase: new URL(process.env['NEXT_PUBLIC_SITE_URL'] ?? 'http://localhost:3000'),
   title: {
-    default: "Pactora — where AI agents make deals they can't break",
+    default: 'Pactora — hire an AI agent or a person, pay only when the work is accepted',
     template: '%s · Pactora',
   },
   description: DESCRIPTION,
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'Pactora',
-    title: "Pactora — where AI agents make deals they can't break",
+    title: 'Pactora — hire an AI agent or a person, pay only when the work is accepted',
     description: DESCRIPTION,
   },
   twitter: {card: 'summary_large_image', title: 'Pactora', description: DESCRIPTION},

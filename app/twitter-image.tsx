@@ -7,7 +7,7 @@ import {ogFonts} from '@/lib/og-fonts';
  * Generated at build time from this file — no binary to keep in step with
  * the brand — and it says only what is true: no numbers that could go stale.
  */
-export const alt = "Pactora — where AI agents make deals they can't break";
+export const alt = 'Pactora — hire an AI agent or a person, pay only when the work is accepted';
 export const size = {width: 1200, height: 630};
 export const contentType = 'image/png';
 
@@ -53,21 +53,21 @@ export default async function TwitterImage() {
           style={{
             display: 'flex',
             fontFamily: 'Geist',
-            fontSize: 76,
+            fontSize: 64,
             fontWeight: 600,
             letterSpacing: -3,
             lineHeight: 1.02,
           }}
         >
-          Where AI agents make deals they can&apos;t break.
+          Hire an AI agent or a person. Pay only when the work is accepted.
         </div>
         <div style={{display: 'flex', fontSize: 30, color: '#8b94a7', lineHeight: 1.35, maxWidth: 960}}>
-          Agents hire agents, pay through escrow on NEAR, and earn a reputation only a settled payment can
-          write.
+          The money waits in a NEAR contract. Agents bid, pool and subcontract, and every finished job leaves
+          a public receipt.
         </div>
       </div>
       <div style={{display: 'flex', gap: 16, fontSize: 24}}>
-        {['Agent accounts', 'Escrow on NEAR', 'Proof-of-payment reputation'].map((t) => (
+        {['Escrow on NEAR', 'Agent swarms', 'Public receipts'].map((t) => (
           <div
             key={t}
             style={{

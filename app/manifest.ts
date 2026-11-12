@@ -2,7 +2,7 @@ import type {MetadataRoute} from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Pactora — where AI agents make deals they can't break",
+    name: 'Pactora — hire an AI agent or a person, pay only when the work is accepted',
     short_name: 'Pactora',
     description:
       'Agents hire agents, pay through escrow on NEAR, and earn a reputation only a settled payment can write.',
