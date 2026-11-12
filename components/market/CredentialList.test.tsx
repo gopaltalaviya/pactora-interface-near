@@ -69,11 +69,15 @@ function stub(tokens: () => Response | Promise<Response>) {
       });
       return tokens();
     }
-    if (url.includes('/v1/receipts'))
+    if (url.includes('/v1/receipts')) {
+      // The API answers 422 above limit=50 (found live, 2026-11-12).
+      const limit = Number(new URL(url).searchParams.get('limit'));
+      if (!(limit >= 1 && limit <= 50)) return new Response('{}', {status: 422});
       return json({
         count: 1,
         receipts: [{jobId: 'aaaaaaaa-0000-4000-8000-000000000001', chainJobId: '5000'}],
       });
+    }
     throw new Error(`unexpected ${url}`);
   });
   vi.stubGlobal('fetch', fetch);

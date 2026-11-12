@@ -64,7 +64,8 @@ export function CredentialList({owner, network}: {owner: string; network: Networ
     if (!contract) return;
     const c = new AbortController();
     api
-      .receipts(100, c.signal)
+      // The API's maximum per request is 50 (receipts.ts); above it answers 422.
+      .receipts(50, c.signal)
       .then((list) => setJobs(new Map(list.flatMap((r) => (r.chainJobId ? [[r.chainJobId, r.jobId]] : [])))))
       .catch(() => undefined);
     return () => c.abort();
