@@ -26,7 +26,8 @@ import {useSession} from '@/lib/session';
 import {StandingBanner} from '@/components/market/Standing';
 import {NotReady} from '@/components/market/Readiness';
 import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
-import {postBlocked} from '@/lib/hire';
+import {postBlocked, standingBlock} from '@/lib/hire';
+import {useStanding} from '@/components/market/Readiness';
 import {parseUnits} from '@/lib/near';
 
 /**
@@ -60,15 +61,17 @@ export function NewListingView() {
   const purse = money.record?.ok ? money.record.value.purse : null;
   const ceiling = parseUnits(draft.price, token?.decimals ?? 6);
   const workers = /^\d{1,2}$/.test(draft.maxWorkers.trim()) ? Number(draft.maxWorkers.trim()) : NaN;
+  const standing = useStanding();
   const moneyBlock =
-    token && ceiling && !/^0+$/.test(ceiling)
+    standingBlock(standing, 'post work') ??
+    (token && ceiling && !/^0+$/.test(ceiling)
       ? postBlocked(ceiling, workers, purse, {
           decimals: token.decimals,
           symbol: token.symbol,
           chainAgentId: session.person?.chainAgentId ?? null,
           testnet: token.network.testnet,
         })
-      : null;
+      : null);
 
   /** A template fills the form (F31); "blank" empties it. Errors are cleared: the fields changed. */
   function pick(id: string) {

@@ -109,7 +109,7 @@ async function manageAmount(page: Page, chainAgentId: string, kind: 'fund' | 'st
   });
 }
 
-async function fillListing(page: Page, title: string) {
+async function fillListing(page: Page, title: string, submit = true) {
   await page.goto('/jobs/new');
   await page.locator('#nl-title').fill(title);
   await page.locator('#nl-description').fill('Photograph the front of the corner bakery in daylight.');
@@ -122,7 +122,39 @@ async function fillListing(page: Page, title: string) {
   await page.locator('#nl-maxWorkers').fill('1');
   await page.locator('#nl-estimatedMinutes').fill('30');
   await page.locator('#nl-deadline').fill(localInput(DAY));
-  await page.getByRole('button', {name: 'Post the listing'}).click();
+  if (submit) await page.getByRole('button', {name: 'Post the listing'}).click();
+}
+
+/**
+ * Since 2026-11-13 the post form reads the standing first, like the bid form:
+ * a held or blocked account sees why, in the API's words, and the button is
+ * disabled (no transaction that would only be refused). The API still
+ * refuses a listing posted around the page, in the same words.
+ */
+async function postRefused(page: Page, title: string, words: RegExp) {
+  await fillListing(page, title, false);
+  await expect(page.getByTestId('post-money-blocked')).toContainText(words, {timeout: 30_000});
+  await expect(page.getByRole('button', {name: 'Post the listing'})).toBeDisabled();
+  const res = await apiRaw('/v1/listings', {
+    method: 'POST',
+    token: await pageToken(page),
+    headers: {'idempotency-key': `refused-${title}`},
+    body: {
+      title,
+      description: 'Photograph the front of the corner bakery in daylight.',
+      category: 'physical',
+      interactionMode: 'capture',
+      skills: ['shop-photos'],
+      location: 'Berlin',
+      maxPriceBaseUnits: PRICE,
+      maxWorkers: 1,
+      estimatedMinutes: 30,
+      deadline: new Date(Date.now() + DAY).toISOString(),
+      criteria: 'The whole shop front and its sign are in the photo, in focus.',
+    },
+  });
+  expect(res.status).toBe(403);
+  expect(await res.text()).toMatch(words);
 }
 
 async function bid(page: Page, listingId: string) {
@@ -535,10 +567,11 @@ test('a held account (a real sanctions hit) is refused posting and bidding, with
   const kyc = (await apiFetch('/v1/kyc', {token: await pageToken(page)})) as {standing: string};
   expect(kyc.standing).toBe('hold');
 
-  await fillListing(page, `Held try ${s.tag}`);
-  await expect(
-    page.getByText(/on hold while a compliance review is open, and cannot post work/),
-  ).toBeVisible();
+  await postRefused(
+    page,
+    `Held try ${s.tag}`,
+    /on hold while a compliance review is open, and cannot post work/,
+  );
   await bidRefused(
     page,
     s.listing2Id!,
@@ -584,8 +617,7 @@ test('a blocked account is refused posting and bidding, with the reason', async 
     reason: 'live UI test: confirmed match',
   });
   const {page} = blocked;
-  await fillListing(page, `Blocked try ${s.tag}`);
-  await expect(page.getByText(/blocked after a compliance review and cannot post work/)).toBeVisible();
+  await postRefused(page, `Blocked try ${s.tag}`, /blocked after a compliance review and cannot post work/);
   await bidRefused(
     page,
     s.listing2Id!,

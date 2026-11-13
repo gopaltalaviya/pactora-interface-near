@@ -183,6 +183,29 @@ export function spendBlocked(
  * purse. Other open listings hold part of the allowance too, which this page
  * does not know, so this is the least the API will ask for: a definite no.
  */
+/**
+ * The account's standing, before any money check (2026-11-13, found by the
+ * real-chain browser suite): an account on hold or blocked cannot post or
+ * bid at all, so telling it to fund its purse first would mislead it. The
+ * words are the API's own (apps/api/src/compliance.ts requireClear).
+ */
+export function standingBlock(
+  standing: 'clear' | 'hold' | 'blocked' | null,
+  what: 'post work' | 'apply for work',
+): MoneyBlock | null {
+  if (standing === 'hold')
+    return {
+      reason: `This account is on hold while a compliance review is open, and cannot ${what} until it is cleared.`,
+      fixes: [{href: '/me#settings', label: 'Your identity check'}],
+    };
+  if (standing === 'blocked')
+    return {
+      reason: `This account is blocked after a compliance review and cannot ${what}.`,
+      fixes: [{href: '/me#settings', label: 'Your identity check'}],
+    };
+  return null;
+}
+
 export function postBlocked(
   ceiling: string,
   maxWorkers: number,

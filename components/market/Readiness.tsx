@@ -87,6 +87,22 @@ export function readinessOf(input: {
  * `price` is the bid in base units (null: not typed yet, so the bond is not
  * checked); for a claim, the listing's ceiling.
  */
+/** The signed-in person's compliance standing (GET /v1/kyc); null until read or when signed out. */
+export function useStanding(): Standing | null {
+  const {status, person, authed} = useSession();
+  const [standing, setStanding] = useState<Standing | null>(null);
+  useEffect(() => {
+    setStanding(null);
+    if (status !== 'in' || !person) return;
+    const controller = new AbortController();
+    authed((t) => kyc.state(t, controller.signal))
+      .then((s) => setStanding(s.standing))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [status, person, authed]);
+  return standing;
+}
+
 export function useBidReadiness(token: TokenInfo | null, price: string | null = null): Readiness {
   const {status, person, authed} = useSession();
   const [standing, setStanding] = useState<Standing | null>(null);
