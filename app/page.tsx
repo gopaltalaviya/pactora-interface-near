@@ -4,6 +4,8 @@ import Link from 'next/link';
 import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {NetworkVisual} from '@/components/landing/NetworkVisual';
 import {StartHere} from '@/components/landing/StartHere';
+import {TokenName} from '@/components/money/TokenName';
+import {SwarmExtra} from '@/components/landing/SwarmExtra';
 import {TourVideo, tourVideoEnabled} from '@/components/TourVideo';
 import {Badge, StatusDot} from '@/components/ui/Badge';
 import {ButtonLink} from '@/components/ui/Button';
@@ -11,6 +13,7 @@ import {CodeTabs} from '@/components/ui/Code';
 import {Icon, type IconName} from '@/components/ui/Icon';
 import {CountUp, Reveal} from '@/components/ui/Motion';
 import {api, formatUnits, type AgentSummary, type NetworkInfo, type Stats} from '@/lib/api';
+import {liveFigures} from '@/lib/figures';
 import {safeHref} from '@/lib/links';
 import {displayAccount} from '@/lib/near';
 
@@ -316,18 +319,7 @@ export default function LandingPage() {
     return () => c.abort();
   }, []);
 
-  const fromAgents = stats === null;
-  const listed = stats ? stats.agents + stats.people : fromAgents ? (agents?.length ?? null) : null;
-  const settled = stats
-    ? stats.jobsSettledOnChain
-    : fromAgents
-      ? (agents?.reduce((n, a) => n + a.completed, 0) ?? null)
-      : null;
-  const proven = stats
-    ? stats.participantsWithRecord
-    : fromAgents
-      ? (agents?.filter((a) => a.completed + a.failed > 0).length ?? null)
-      : null;
+  const figures = liveFigures(stats, agents);
 
   return (
     <div className="-mt-8 space-y-28 sm:-mt-10 sm:space-y-36">
@@ -368,25 +360,26 @@ export default function LandingPage() {
           aria-labelledby="tour-heading"
           className="mx-auto max-w-4xl scroll-mt-24 space-y-6"
         >
-          <SectionHead id="tour-heading" eyebrow="Watch" title="Pactora in ninety seconds, captioned." />
+          <SectionHead id="tour-heading" eyebrow="Watch" title="Pactora in under two minutes, captioned." />
           <TourVideo which="overview" />
         </section>
       )}
 
       {/* ── Live proof ───────────────────────────────────────────────────── */}
       <section aria-label="Live on NEAR" className="space-y-6">
-        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-edge bg-edge md:grid-cols-4">
-          <ProofFigure label={stats ? 'Agents and people listed' : 'Agents listed'} value={listed} />
-          <ProofFigure label="Jobs settled on chain" value={settled} />
-          <ProofFigure
-            label={stats ? 'Participants with a track record' : 'Agents with a track record'}
-            value={proven}
-          />
+        <dl
+          data-testid="live-figures"
+          className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-edge bg-edge md:grid-cols-4"
+        >
+          <ProofFigure testId="figure-listed" {...figures.listed} />
+          <ProofFigure testId="figure-settled" {...figures.settled} />
+          <ProofFigure testId="figure-with-record" {...figures.withRecord} />
           <ProofFigure
             label="Protocol fee"
             text={network ? `${(network.protocolFeeBps / 100).toFixed(2)}%` : null}
           />
         </dl>
+        <SwarmExtra className="text-center" />
         <Contracts network={network} />
       </section>
 
@@ -861,11 +854,18 @@ function Hero({network}: {network: NetworkInfo | null}) {
             <span className="text-brand">Pay only when the work is accepted.</span>
           </h1>
 
-          <p className="max-w-xl text-lg leading-relaxed text-muted">
-            The money waits in a NEAR contract, not with a platform. The worker stakes a bond, a 2-of-3 DAO
-            settles disputes, and every finished job leaves a public receipt anyone can check. Swarms of
-            agents bid on work by rule, pool their money to buy bigger jobs, and subcontract to each other.
+          <p className="max-w-xl text-lg leading-relaxed text-muted" data-testid="hero-lead">
+            The money waits in a NEAR contract until the work is accepted. Every finished job leaves a public
+            receipt anyone can check.
           </p>
+          {network?.testnet !== false && (
+            <p className="max-w-xl text-sm text-muted" data-testid="token-note">
+              <abbr title="mock USDC" className="font-medium text-text no-underline">
+                mUSDC
+              </abbr>{' '}
+              is a test stablecoin on NEAR testnet; nothing here is real money.
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-3">
             <ButtonLink href={video ? '#tour' : '/demo'} variant="primary" className="h-11 px-5">
@@ -884,17 +884,26 @@ function Hero({network}: {network: NetworkInfo | null}) {
               : 'The demo page runs one with your own key, or opens a recorded run with every transaction linked.'}
           </p>
 
-          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted">
-            {[
-              'Every finished job has a public receipt',
-              'Agents and people, on either side',
-              'Open source',
-            ].map((t) => (
-              <li key={t} className="flex items-center gap-1.5">
-                <Icon name="check" className="size-3.5 text-settled" />
-                {t}
-              </li>
-            ))}
+          <ul className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted">
+            <li className="flex items-center gap-1.5">
+              <Icon name="check" className="size-3.5 text-settled" />
+              <Link href="/receipts" className="inline-flex min-h-6 items-center text-accent hover:underline">
+                Verify a receipt on chain
+              </Link>
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Icon name="check" className="size-3.5 text-settled" />
+              <Link
+                href="/docs/concepts"
+                className="inline-flex min-h-6 items-center text-accent hover:underline"
+              >
+                How it works: bonds, deadlines, the dispute council
+              </Link>
+            </li>
+            <li className="flex items-center gap-1.5">
+              <Icon name="check" className="size-3.5 text-settled" />
+              Agents and people, on either side · open source
+            </li>
           </ul>
         </div>
 
@@ -910,10 +919,20 @@ function Hero({network}: {network: NetworkInfo | null}) {
   );
 }
 
-function ProofFigure({label, value, text}: {label: string; value?: number | null; text?: string | null}) {
+function ProofFigure({
+  label,
+  value,
+  text,
+  testId,
+}: {
+  label: string;
+  value?: number | null;
+  text?: string | null;
+  testId?: string;
+}) {
   const shown = text !== undefined ? text : value;
   return (
-    <div className="bg-surface/90 px-5 py-6">
+    <div className="bg-surface/90 px-5 py-6" data-testid={testId}>
       <dd className="display text-3xl sm:text-4xl">
         {shown === null || shown === undefined ? (
           // aria-label on a role-less span is invalid ARIA (axe:
@@ -971,7 +990,7 @@ function Contracts({network}: {network: NetworkInfo | null}) {
       {network.minJobAmount && (
         <span>
           · smallest job {formatUnits(network.minJobAmount, network.paymentToken.decimals)}{' '}
-          {network.paymentToken.symbol}
+          <TokenName network={network} />
         </span>
       )}
     </div>

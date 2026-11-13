@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {useCallback, useEffect, useId, useRef, useState} from 'react';
+import {useCallback, useEffect, useId, useRef, useState, type ReactNode} from 'react';
 import {RunTrace, type TraceToken} from '@/components/RunTrace';
 import {ModelFailureNotice, ModelLimitedNotice, isModelFailure} from '@/components/ModelNotice';
 import {StepList} from '@/components/StepList';
@@ -23,10 +23,14 @@ import {
   type ModelStatus,
   type NetworkInfo,
   type RunDetail,
+  type Stats,
   type RunEvent,
   type StreamState,
 } from '@/lib/api';
+import {liveFigures} from '@/lib/figures';
 import {shortId} from '@/lib/links';
+import {SwarmExtra} from '@/components/landing/SwarmExtra';
+import {TokenName} from '@/components/money/TokenName';
 
 /**
  * The live demo.
@@ -74,7 +78,7 @@ const GUIDE: {icon: IconName; title: string; body: string; link?: {href: string;
   {
     icon: 'sparkle',
     title: 'Give it a goal',
-    body: 'Paste the key above, pick an example or write your own sentence, and press Run (or Ctrl+Enter).',
+    body: 'Paste the key in the form, pick an example or write your own sentence, and press Run (or Ctrl+Enter).',
   },
   {
     icon: 'activity',
@@ -111,6 +115,8 @@ export default function DemoPage() {
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
   const [model, setModel] = useState<ModelStatus | null>(null);
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
+  // The same source and labels as the home page (UX audit 2026-11-13), so the two never disagree.
+  const [stats, setStats] = useState<Stats | null | undefined>(undefined);
   const token: TraceToken | null = network?.paymentToken ?? null;
   const examples = examplesFor(network);
   const cached = network?.agentMode === 'cached';
@@ -132,6 +138,12 @@ export default function DemoPage() {
       .agents({rank: 'balanced', limit: 50}, controller.signal)
       .then(setAgents)
       .catch(() => undefined);
+    api
+      .stats(controller.signal)
+      .then(setStats)
+      .catch(() => {
+        if (!controller.signal.aborted) setStats(null);
+      });
     // Whether the AI model is out of its free quota right now, so a judge is
     // told before pressing Run rather than after a failed run.
     api
@@ -165,12 +177,17 @@ export default function DemoPage() {
           setFinished(true);
           // The figures at the top are the marketplace's, written by the
           // indexer from settlements a few blocks behind the head — so read
-          // them again shortly after, and watch them count up to this run.
-          for (const delay of [4_000, 12_000]) {
+          // them again shortly after, and watch them count up to this run
+          // (/v1/stats is cached for 30 s, hence the last read).
+          for (const delay of [4_000, 12_000, 35_000]) {
             setTimeout(() => {
               api
                 .agents({rank: 'balanced', limit: 50})
                 .then(setAgents)
+                .catch(() => undefined);
+              api
+                .stats()
+                .then(setStats)
                 .catch(() => undefined);
             }, delay);
           }
@@ -233,8 +250,8 @@ export default function DemoPage() {
     detail?.error ??
     (typeof failedEvent?.payload['detail'] === 'string' ? failedEvent.payload['detail'] : null);
 
-  const proven = agents?.filter((a) => a.completed + a.failed > 0).length ?? 0;
-  const settledJobs = agents?.reduce((sum, a) => sum + a.completed, 0) ?? 0;
+  const figures = liveFigures(stats, agents);
+  const figuresReady = figures.listed.value !== null && figures.listed.value > 0;
 
   return (
     <div className="space-y-16">
@@ -264,178 +281,213 @@ export default function DemoPage() {
         </div>
 
         {/* Real figures from the API, or nothing — never a placeholder number. */}
-        {agents && agents.length > 0 && (
-          <dl className="mx-auto grid max-w-2xl grid-cols-3 gap-3 pt-4">
-            <HeroFigure label="agents listed" value={agents.length} />
-            <HeroFigure label="with settled history" value={proven} />
-            <HeroFigure label="jobs settled" value={settledJobs} />
-          </dl>
+        {figuresReady && (
+          <div className="space-y-2 pt-4">
+            <dl
+              data-testid="live-figures"
+              className="mx-auto grid max-w-3xl grid-cols-1 gap-3 sm:grid-cols-3"
+            >
+              <HeroFigure testId="figure-listed" {...figures.listed} />
+              <HeroFigure testId="figure-settled" {...figures.settled} />
+              <HeroFigure testId="figure-with-record" {...figures.withRecord} />
+            </dl>
+            <SwarmExtra />
+          </div>
         )}
       </section>
 
-      {/* ── Console ──────────────────────────────────────────────────────── */}
-      {model?.state === 'limited' && !runId && <ModelLimitedNotice model={model} />}
-      <Reveal>
-        <Card className="relative overflow-hidden p-0">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent"
-          />
-          <form
-            className="space-y-5 p-5 sm:p-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (canRun) void start();
-            }}
-          >
-            <Field
-              label="Goal"
-              htmlFor={ids.goal}
-              hint={
-                <span className="flex justify-between gap-3">
-                  <span>Say what you want done, in one sentence. Ctrl+Enter runs it.</span>
-                  <span className="tabular">{goal.length}</span>
-                </span>
-              }
-            >
-              <TextArea
-                id={ids.goal}
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && canRun) {
-                    e.preventDefault();
-                    void start();
-                  }
-                }}
-                rows={2}
-                disabled={running}
-                placeholder="What do you want done?"
-              />
-            </Field>
-
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted">Or start from an example</p>
-              {cached && (
-                <p className="text-xs text-muted" data-testid="cached-note">
-                  This server replays recorded model answers (no AI quota is spent), so it offers only the
-                  goal it has a recording for. Any other sentence needs a server running a live model.
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {examples.map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    title={example}
-                    aria-label={`Use example: ${example}`}
-                    aria-pressed={goal === example}
-                    onClick={() => setGoal(example)}
-                    disabled={running}
-                    className={
-                      'max-w-full truncate rounded-full border px-3 py-1.5 text-xs transition-all duration-200 active:scale-[0.97] disabled:opacity-40 sm:max-w-[20rem] ' +
-                      (goal === example
-                        ? 'border-accent/60 bg-accent/10 text-text'
-                        : 'border-edge text-muted hover:border-edge-strong hover:text-text')
-                    }
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-              <Field
-                label="Orchestrator API key"
-                htmlFor={ids.key}
-                hintId={ids.keyNote}
-                hint={
-                  // Said plainly rather than in a tooltip: a page that quietly
-                  // keeps a credential is a page nobody should paste one into.
-                  <>
-                    The key is used for this request only — it is never stored, and the run spends under that
-                    agent&apos;s own spending caps, which the signer enforces. No key yet?{' '}
-                    <Link href="/register" className="text-accent hover:underline">
-                      Register an agent
-                    </Link>
-                    .
-                  </>
-                }
-              >
-                <SecretInput
-                  id={ids.key}
-                  value={apiKey}
-                  onChange={setApiKey}
-                  disabled={running}
-                  aria-describedby={ids.keyNote}
-                  placeholder="Orchestrator API key (ax_…)"
-                />
-              </Field>
-              <Button
-                type="submit"
-                disabled={!canRun}
-                loading={starting || running}
-                className="sm:mt-[1.625rem] sm:min-w-28"
-              >
-                {running ? 'Running…' : starting ? 'Starting…' : 'Run'}
-              </Button>
-            </div>
-
-            {error && (
-              <ErrorState
-                title="The run did not start"
-                action={
-                  <Button variant="secondary" size="sm" onClick={() => void start()} disabled={!canRun}>
-                    <Icon name="refresh" className="size-3.5" /> Try again
-                  </Button>
-                }
-              >
-                {error}
-              </ErrorState>
-            )}
-          </form>
-        </Card>
-      </Reveal>
-
-      {/* ── No key: the walkthrough instead ─────────────────────────────── */}
+      {/* ── No key: the ways in that need none, first (UX audit 2026-11-13) ── */}
       {!runId && (
         <section aria-labelledby="watch-heading" className="space-y-4">
           <h2 id="watch-heading" className="text-lg font-semibold">
-            No key? Watch instead
+            No key? Watch a recorded run, see the swarm, verify receipts
           </h2>
-          <p className="text-sm" data-testid="demo-receipts-link">
+          <ul className="grid gap-3 sm:grid-cols-3">
+            {[
+              {
+                href: tourVideoEnabled() ? '#recording' : '/runs',
+                label: 'Watch a recorded run',
+                body: 'Every flow on a local NEAR chain, captioned: a run, a person hired, a dispute ruled.',
+              },
+              {
+                href: '/swarm',
+                label: 'See the swarm',
+                body: 'Agents bid, pool and subcontract on NEAR testnet; check every job from your browser.',
+              },
+              {
+                href: '/receipts',
+                label: 'Verify receipts',
+                body: 'Jobs settled on NEAR testnet, each with its hashes and the transaction that paid.',
+              },
+            ].map((w) => (
+              <li
+                key={w.href}
+                className="flex flex-col gap-2 rounded-xl border border-edge bg-surface/80 p-4"
+              >
+                <Link
+                  href={w.href}
+                  className="inline-flex min-h-6 items-center gap-1 self-start text-sm font-semibold text-accent hover:underline"
+                >
+                  {w.label} <Icon name="arrowRight" className="size-3.5" />
+                </Link>
+                <p className="text-xs leading-relaxed text-muted">{w.body}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-muted" data-testid="demo-receipts-link">
             <Link href="/receipts" className="text-accent hover:underline">
               See the jobs agents have already settled on NEAR testnet
             </Link>
-            , each with its hashes and transactions. Or{' '}
-            <Link href="/swarm" className="text-accent hover:underline">
-              watch a swarm of agents trade by rule
+            , or open one of the{' '}
+            <Link href="/runs" className="text-accent hover:underline">
+              past runs
             </Link>
-            : bids, a pooled purchase, a subcontract chain. No key needed.
+            . None of it needs a key.
           </p>
-          {tourVideoEnabled() ? (
-            <>
-              <p className="text-sm text-muted">
-                A captioned recording on a local NEAR chain: an agent run, an agent hiring a person, a direct
-                hire, a dispute the DAO council rules, and the safety tools. Or open one of the{' '}
-                <Link href="/runs" className="text-accent hover:underline">
-                  past runs
-                </Link>
-                .
-              </p>
-              <TourVideo which="demo" />
-            </>
-          ) : (
-            <p className="text-sm text-muted">
-              A run needs an orchestrator&apos;s API key, because it spends from that agent&apos;s wallet.
-              Without one, open one of the{' '}
-              <Link href="/runs" className="text-accent hover:underline">
-                past runs
-              </Link>
-              : each keeps its full trace, the verdicts and a transaction link for every payment.
-            </p>
-          )}
+        </section>
+      )}
+
+      {/* ── Console ──────────────────────────────────────────────────────── */}
+      {model?.state === 'limited' && !runId && <ModelLimitedNotice model={model} />}
+      <section aria-labelledby="run-heading" className="space-y-4">
+        <h2 id="run-heading" className="text-lg font-semibold">
+          Have an orchestrator key? Start a run
+        </h2>
+        <Reveal>
+          <Card className="relative overflow-hidden p-0">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent"
+            />
+            <form
+              className="space-y-5 p-5 sm:p-6"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (canRun) void start();
+              }}
+            >
+              <Field
+                label="Goal"
+                htmlFor={ids.goal}
+                hint={
+                  <span className="flex justify-between gap-3">
+                    <span>Say what you want done, in one sentence. Ctrl+Enter runs it.</span>
+                    <span className="tabular">{goal.length}</span>
+                  </span>
+                }
+              >
+                <TextArea
+                  id={ids.goal}
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && canRun) {
+                      e.preventDefault();
+                      void start();
+                    }
+                  }}
+                  rows={2}
+                  disabled={running}
+                  placeholder="What do you want done?"
+                />
+              </Field>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted">Or start from an example</p>
+                {cached && (
+                  <p className="text-xs text-muted" data-testid="cached-note">
+                    This server replays recorded model answers (no AI quota is spent), so it offers only the
+                    goal it has a recording for. Any other sentence needs a server running a live model.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {examples.map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      title={example}
+                      aria-label={`Use example: ${example}`}
+                      aria-pressed={goal === example}
+                      onClick={() => setGoal(example)}
+                      disabled={running}
+                      className={
+                        'max-w-full truncate rounded-full border px-3 py-1.5 text-xs transition-all duration-200 active:scale-[0.97] disabled:opacity-40 sm:max-w-[20rem] ' +
+                        (goal === example
+                          ? 'border-accent/60 bg-accent/10 text-text'
+                          : 'border-edge text-muted hover:border-edge-strong hover:text-text')
+                      }
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                <Field
+                  label="Orchestrator API key"
+                  htmlFor={ids.key}
+                  hintId={ids.keyNote}
+                  hint={
+                    // Said plainly rather than in a tooltip: a page that quietly
+                    // keeps a credential is a page nobody should paste one into.
+                    <>
+                      The key is used for this request only — it is never stored, and the run spends under
+                      that agent&apos;s own spending caps, which the signer enforces. No key yet?{' '}
+                      <Link href="/register" className="text-accent hover:underline">
+                        Register an agent
+                      </Link>
+                      .
+                    </>
+                  }
+                >
+                  <SecretInput
+                    id={ids.key}
+                    value={apiKey}
+                    onChange={setApiKey}
+                    disabled={running}
+                    aria-describedby={ids.keyNote}
+                    placeholder="Orchestrator API key (ax_…)"
+                  />
+                </Field>
+                <Button
+                  type="submit"
+                  disabled={!canRun}
+                  loading={starting || running}
+                  className="sm:mt-[1.625rem] sm:min-w-28"
+                >
+                  {running ? 'Running…' : starting ? 'Starting…' : 'Run'}
+                </Button>
+              </div>
+
+              {error && (
+                <ErrorState
+                  title="The run did not start"
+                  action={
+                    <Button variant="secondary" size="sm" onClick={() => void start()} disabled={!canRun}>
+                      <Icon name="refresh" className="size-3.5" /> Try again
+                    </Button>
+                  }
+                >
+                  {error}
+                </ErrorState>
+              )}
+            </form>
+          </Card>
+        </Reveal>
+      </section>
+
+      {/* ── The recording, for a visitor without a key ─────────────────── */}
+      {!runId && tourVideoEnabled() && (
+        <section id="recording" aria-labelledby="recording-heading" className="scroll-mt-24 space-y-4">
+          <h2 id="recording-heading" className="text-lg font-semibold">
+            A recorded run
+          </h2>
+          <p className="text-sm text-muted">
+            A captioned recording on a local NEAR chain: an agent run, an agent hiring a person, a direct
+            hire, a dispute the DAO council rules, and the safety tools.
+          </p>
+          <TourVideo which="demo" />
         </section>
       )}
 
@@ -533,7 +585,7 @@ export default function DemoPage() {
         <Reveal className="space-y-2 text-center">
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-accent">New here?</p>
           <h2 id="guide-heading" className="display text-3xl">
-            Your first run, in three steps
+            Your own run, in three steps
           </h2>
         </Reveal>
         <ol className="grid gap-4 md:grid-cols-3">
@@ -572,7 +624,12 @@ export default function DemoPage() {
               {network.minJobAmount && (
                 <Fact
                   label="Smallest job"
-                  value={`${formatUnits(network.minJobAmount, network.paymentToken.decimals)} ${network.paymentToken.symbol}`}
+                  value={
+                    <>
+                      {formatUnits(network.minJobAmount, network.paymentToken.decimals)}{' '}
+                      <TokenName network={network} />
+                    </>
+                  }
                   hint="the escrow refuses anything cheaper"
                 />
               )}
@@ -596,11 +653,14 @@ export default function DemoPage() {
   );
 }
 
-function HeroFigure({label, value}: {label: string; value: number}) {
+function HeroFigure({label, value, testId}: {label: string; value: number | null; testId?: string}) {
   return (
-    <div className="rounded-xl border border-edge bg-surface/60 px-3 py-3 backdrop-blur-sm">
+    <div
+      className="rounded-xl border border-edge bg-surface/60 px-3 py-3 backdrop-blur-sm"
+      data-testid={testId}
+    >
       <dd className="tabular text-2xl font-semibold">
-        <CountUp value={value} />
+        <CountUp value={value ?? 0} />
       </dd>
       <dt className="text-xs text-muted">{label}</dt>
     </div>
@@ -618,7 +678,7 @@ function Figure({label, value, tone = ''}: {label: string; value: number; tone?:
   );
 }
 
-function Fact({label, value, hint}: {label: string; value: string; hint: string}) {
+function Fact({label, value, hint}: {label: string; value: ReactNode; hint: string}) {
   return (
     <div className="rounded-xl border border-edge bg-surface/60 px-4 py-3">
       <dt className="text-xs text-muted">{label}</dt>

@@ -36,9 +36,9 @@ test('the live figures count people too: settled jobs and participants with a re
   // The mock's /v1/stats says 12 settled jobs and 5 participants; the agents
   // list alone would say 3 and 1.
   await expect(figures.getByText('12', {exact: true})).toBeVisible();
-  await expect(figures).toContainText(/with a track record/);
+  await expect(figures).toContainText(/Agents and people in a settled job, as client or worker/);
   await expect(figures.getByText('5', {exact: true})).toBeVisible();
-  await expect(figures).toContainText(/Agents and people listed|Participants/);
+  await expect(figures).toContainText(/Agents and people listed/);
 });
 
 test('"Start here": three numbered steps under the hero lead to the swarm, a receipt and the demo', async ({

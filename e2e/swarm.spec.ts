@@ -40,7 +40,10 @@ test('swarm: reached from the home page and /demo', async ({page}) => {
   await page.goto('/');
   await expect(page.getByRole('link', {name: 'See the swarm'})).toHaveAttribute('href', '/swarm');
   await page.goto('/demo');
-  await expect(page.getByRole('link', {name: /watch a swarm of agents/})).toHaveAttribute('href', '/swarm');
+  // 2026-11-13: among the no-key ways in, above the key form (e2e/ux-audit.spec.ts).
+  await expect(
+    page.getByRole('region', {name: /No key\?/}).getByRole('link', {name: 'See the swarm'}),
+  ).toHaveAttribute('href', '/swarm');
 });
 
 test('swarm: “Verify on chain” reads every settled job from a NEAR RPC node in the browser', async ({

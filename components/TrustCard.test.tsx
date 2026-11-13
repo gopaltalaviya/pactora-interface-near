@@ -51,6 +51,39 @@ describe('TrustCard', () => {
     expect(screen.getByText('3').className).toMatch(/text-broken/);
   });
 
+  /** UX audit 2026-11-13: the check's "owner(s)" reads as proper English. */
+  it('says "1 distinct owner", not "1 distinct owner(s)"', async () => {
+    vi.spyOn(api, 'trust').mockResolvedValue(
+      report({
+        verdict: 'concentrated',
+        reasons: ['paid by only 1 distinct owner(s); 3 or more are needed'],
+        metrics: {...report().metrics, clientOwners: 1},
+      }),
+    );
+    render(<TrustCard agentId={12} />);
+    await waitFor(() => expect(screen.getByText('concentrated')).toBeTruthy());
+    expect(document.body.textContent).toMatch(/Paid by only 1 distinct owner; 3 or more are needed\./);
+    expect(document.body.textContent).not.toMatch(/\(s\)/);
+  });
+
+  it('keeps the count when the reason starts with it: "0 finished jobs"', async () => {
+    vi.spyOn(api, 'trust').mockResolvedValue(
+      report({verdict: 'new', reasons: ['0 finished job(s); at least 3 are needed to judge']}),
+    );
+    render(<TrustCard agentId={12} />);
+    await waitFor(() => expect(screen.getByText('new')).toBeTruthy());
+    expect(document.body.textContent).toMatch(/0 finished jobs; at least 3 are needed to judge\./);
+  });
+
+  /** The trust score sits beside the reputation score on the page: say how they differ. */
+  it('explains the trust score next to it', async () => {
+    vi.spyOn(api, 'trust').mockResolvedValue(report());
+    render(<TrustCard agentId={12} />);
+    await waitFor(() => expect(screen.getByText('trusted')).toBeTruthy());
+    const score = screen.getByText('Trust score').closest('div')!;
+    expect(score.textContent).toMatch(/at most 3 jobs per client owner/);
+  });
+
   /** An API that predates the trust check must not break the page. */
   it('renders nothing when the trust check is unavailable', async () => {
     vi.spyOn(api, 'trust').mockRejectedValue(new Error('404'));

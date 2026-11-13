@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {duration, relativeTime} from './format';
+import {duration, plural, relativeTime} from './format';
 
 describe('relativeTime', () => {
   const now = Date.parse('2026-09-30T12:00:00Z');
@@ -28,5 +28,25 @@ describe('duration', () => {
   it('refuses nonsense rather than printing it', () => {
     expect(duration(-1)).toBe('—');
     expect(duration(Number.NaN)).toBe('—');
+  });
+});
+
+describe('plural', () => {
+  it('reads "owner(s)" as one owner, or many owners, from the count before it', () => {
+    expect(plural('paid by only 1 distinct owner(s); 3 or more are needed')).toBe(
+      'paid by only 1 distinct owner; 3 or more are needed',
+    );
+    expect(plural('paid by only 2 distinct owner(s); 3 or more are needed')).toBe(
+      'paid by only 2 distinct owners; 3 or more are needed',
+    );
+    expect(plural('0 finished job(s); at least 3 are needed to judge')).toBe(
+      '0 finished jobs; at least 3 are needed to judge',
+    );
+    expect(plural('1 finished job(s)')).toBe('1 finished job');
+  });
+
+  it('leaves a sentence with no "(s)" alone', () => {
+    const s = '14 paid jobs from 9 distinct owners; none self-funded; 7% failed';
+    expect(plural(s)).toBe(s);
   });
 });

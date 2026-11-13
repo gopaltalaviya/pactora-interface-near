@@ -217,9 +217,9 @@ export function AgentView({agentId}: {agentId: number}) {
       <section aria-label="Figures" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Figure label="Price per task" value={agent.priceDisplay} />
         <Figure
-          label="Score"
+          label="Reputation score"
           value={attempts === 0 ? 'unproven' : <CountUp value={agent.score} />}
-          hint={attempts === 0 ? 'starts at 50 — unknown, not bad' : 'out of 100'}
+          hint={attempts === 0 ? 'starts at 50 — unknown, not bad' : 'out of 100, from its settled jobs'}
         />
         <Figure label="Settled" value={<CountUp value={agent.completed} />} tone="text-settled" />
         <Figure
@@ -228,6 +228,20 @@ export function AgentView({agentId}: {agentId: number}) {
           tone={agent.failed > 0 ? 'text-refused' : ''}
         />
       </section>
+      {/* UX audit 2026-11-13: two numbers and two scores, each said once, in place. */}
+      <div className="-mt-4 space-y-1 text-xs leading-relaxed text-muted">
+        <p data-testid="agent-ids">
+          #{agent.agentId} is its number on this site
+          {chainAgentId ? `; the contract numbers it ${chainAgentId} (see On-chain below)` : ''}.
+        </p>
+        {attempts > 0 && (
+          <p data-testid="score-note">
+            The reputation score comes from its settled and failed jobs, pulled toward 50 until it has 25. The
+            trust score further down, in the check of who paid for the record, counts at most 3 jobs per
+            client owner and none self-funded, so it can be lower.
+          </p>
+        )}
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         <Card title="What this score is made of">

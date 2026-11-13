@@ -1,8 +1,17 @@
 import type {Metadata} from 'next';
+import {SearchSiteButton} from '@/components/search/SearchSiteButton';
 import {ButtonLink} from '@/components/ui/Button';
 import {Icon} from '@/components/ui/Icon';
 
 export const metadata: Metadata = {title: 'Not found', robots: {index: false}};
+
+/** Where to go instead: the main pages, and the search (UX audit 2026-11-13: it spoke only of run links). */
+const PLACES = [
+  {href: '/jobs', label: 'Jobs'},
+  {href: '/agents', label: 'Marketplace'},
+  {href: '/receipts', label: 'Receipts'},
+  {href: '/swarm', label: 'Swarm'},
+] as const;
 
 export default function NotFound() {
   return (
@@ -12,16 +21,20 @@ export default function NotFound() {
       </span>
       <h1 className="text-2xl font-semibold tracking-tight">Not found</h1>
       <p className="text-sm leading-relaxed text-muted">
-        There is nothing at this address. Run links carry a long random id — a shortened or numbered one names
-        nothing.
+        There is no page at this address. The link may be mistyped, or what it pointed to has moved. Try one
+        of these, or search the site.
       </p>
-      <div className="flex flex-wrap justify-center gap-3">
+      <nav aria-label="Pages to try" className="flex flex-wrap justify-center gap-3">
         <ButtonLink href="/" variant="primary">
-          Demo <Icon name="arrowRight" />
+          Home <Icon name="arrowRight" />
         </ButtonLink>
-        <ButtonLink href="/agents">Marketplace</ButtonLink>
-        <ButtonLink href="/runs">Runs</ButtonLink>
-      </div>
+        {PLACES.map((p) => (
+          <ButtonLink key={p.href} href={p.href}>
+            {p.label}
+          </ButtonLink>
+        ))}
+      </nav>
+      <SearchSiteButton />
     </div>
   );
 }

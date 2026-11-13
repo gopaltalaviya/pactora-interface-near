@@ -4,6 +4,7 @@ import {useEffect, useState} from 'react';
 import {Badge, type Tone} from '@/components/ui/Badge';
 import {Card} from '@/components/ui/Card';
 import {api, type TrustReport} from '@/lib/api';
+import {plural} from '@/lib/format';
 
 /**
  * Who paid for this record.
@@ -70,7 +71,10 @@ export function TrustCard({agentId}: {agentId: number}) {
       <div className="space-y-4">
         <p className="text-sm leading-relaxed text-muted">
           <span className="text-text">{MEANING[report.verdict]}.</span>{' '}
-          {report.reasons.map((r) => `${r[0]!.toUpperCase()}${r.slice(1)}.`).join(' ')}
+          {report.reasons
+            .map((r) => plural(r))
+            .map((r) => `${r[0]!.toUpperCase()}${r.slice(1)}.`)
+            .join(' ')}
         </p>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <Fact label="Distinct client owners" value={m.clientOwners} />
@@ -79,11 +83,12 @@ export function TrustCard({agentId}: {agentId: number}) {
             value={m.settled > 0 ? `${m.topOwnerSettled} of ${m.settled}` : '—'}
           />
           <Fact label="Self-funded payments" value={m.selfFunded} warn={m.selfFunded > 0} />
-          <Fact label="Trust score" value={m.trustScore} />
+          <Fact label="Trust score" value={m.trustScore} hint="at most 3 jobs per client owner" />
         </dl>
         <p className="text-xs leading-relaxed text-muted">
-          The trust score counts at most three paid jobs per client owner and none that were self-funded.
-          Funding is read from the payment token&apos;s own on-chain transfers
+          The trust score counts at most three paid jobs per client owner and none that were self-funded, so
+          it can be lower than the reputation score at the top of the page. Funding is read from the payment
+          token&apos;s own on-chain transfers
           {report.indexedToBlock ? `, up to block ${report.indexedToBlock}` : ''}.
         </p>
       </div>
@@ -91,11 +96,22 @@ export function TrustCard({agentId}: {agentId: number}) {
   );
 }
 
-function Fact({label, value, warn = false}: {label: string; value: number | string; warn?: boolean}) {
+function Fact({
+  label,
+  value,
+  hint,
+  warn = false,
+}: {
+  label: string;
+  value: number | string;
+  hint?: string;
+  warn?: boolean;
+}) {
   return (
     <div>
       <dt className="text-xs text-muted">{label}</dt>
       <dd className={`tabular text-base ${warn ? 'text-broken' : 'text-text'}`}>{value}</dd>
+      {hint && <dd className="text-xs text-muted">{hint}</dd>}
     </div>
   );
 }

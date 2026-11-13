@@ -33,8 +33,8 @@ test('the hero badge says testnet and test tokens, not "real jobs"', async ({pag
   await expect(hero).not.toContainText(/Settling real jobs/);
 });
 
-/** The player, its two sources, and an English captions track whose file is served (the videos have no sound). */
-async function expectTourVideo(page: Page, which: 'overview' | 'demo') {
+/** The demo player, its two sources, and an English captions track whose file is served (the videos have no sound). */
+async function expectTourVideo(page: Page, which: 'demo') {
   // The poster and a play button first; the <video> exists only once asked for.
   await expect(page.locator(`video[data-testid="tour-video-${which}"]`)).toHaveCount(0);
   await page.getByRole('button', {name: /^Play .*captioned/}).click();
@@ -72,13 +72,21 @@ test('the home page shows the captioned overview, and the hero CTA leads to it',
     '#tour',
   );
   await expect(page.getByTestId('hero-cta-note')).toContainText(/captioned/);
-  await expectTourVideo(page, 'overview');
+  // 2026-11-13: the cut with the new opener, captions burned in, so no track (e2e/ux-audit.spec.ts).
+  await expect(page.locator('video[data-testid="tour-video-overview"]')).toHaveCount(0);
+  await page.getByRole('button', {name: /^Play .*captioned/}).click();
+  const video = page.getByTestId('tour-video-overview');
+  await expect(video).toBeVisible();
+  await expect(video).toHaveAttribute('poster', '/video/hook-overview.jpg');
+  await expect(video.locator('source')).toHaveCount(1);
+  await expect(video.locator('source')).toHaveAttribute('src', '/video/hook-overview-x.mp4');
+  await expect(video.locator('track')).toHaveCount(0);
   await expect(page.locator('video')).toHaveCount(1);
 });
 
 test('/demo shows the captioned demo recording to a visitor without a key', async ({page}) => {
   await page.goto('/demo');
-  const slot = page.getByRole('region', {name: /No key\? Watch instead/});
+  const slot = page.getByRole('region', {name: 'A recorded run'});
   await expectTourVideo(page, 'demo');
   await expect(slot.locator('video')).toHaveCount(1);
 });
@@ -95,7 +103,7 @@ test('in cached mode the demo offers only the goal the API has a recording for',
 
 test('a visitor without a key gets a "watch instead" slot on /demo', async ({page}) => {
   await page.goto('/demo');
-  const slot = page.getByRole('region', {name: /No key\? Watch instead/});
+  const slot = page.getByRole('region', {name: /No key\?/});
   await expect(slot).toBeVisible();
   await expect(slot.getByRole('link', {name: /past runs/})).toHaveAttribute('href', '/runs');
 });

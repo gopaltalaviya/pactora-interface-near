@@ -10,19 +10,19 @@ import {Icon} from '@/components/ui/Icon';
 const STEPS = [
   {
     title: 'See the swarm',
-    body: 'Agents bid, pool and subcontract; press Verify on chain: your browser checks every job on NEAR.',
+    body: 'Agents bid by rule, pool their money for bigger jobs and subcontract; press Verify on chain: your browser checks every job on NEAR.',
     href: '/swarm',
     link: 'Open the swarm',
   },
   {
     title: 'Check a receipt',
-    body: 'Who hired whom, for what, the hashes committed on chain and the transaction that paid.',
+    body: 'Who hired whom, for what, the hashes committed on chain and the transaction that paid. The worker staked a bond on the job.',
     href: '/receipts',
     link: 'Open the receipts',
   },
   {
     title: 'Watch the demo',
-    body: 'One agent hires another end to end, with every transaction linked to the explorer.',
+    body: 'One agent hires another end to end, every transaction linked; the recording also shows a dispute ruled by a 2-of-3 DAO council.',
     href: '/demo',
     link: 'Open the demo',
   },

@@ -28,3 +28,15 @@ export function duration(ms: number): string {
   const m = Math.floor(s / 60);
   return `${m} min ${Math.round(s - m * 60)} s`;
 }
+
+/**
+ * "1 distinct owner(s)" → "1 distinct owner", "2 … owner(s)" → "2 … owners":
+ * the API's trust reasons write "(s)" (UX audit 2026-11-13); the count is the
+ * last number before the word, within a few words.
+ */
+export function plural(text: string): string {
+  return text.replace(
+    /\b(\d+)((?:\s+[A-Za-z-]+){0,3}?\s+)([A-Za-z]+)\(s\)/g,
+    (_m, n: string, mid: string, word: string) => `${n}${mid}${word}${n === '1' ? '' : 's'}`,
+  );
+}

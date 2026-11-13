@@ -68,36 +68,40 @@ function Node({
   sub,
   right,
   stroke,
-}: Pt & {kind: Kind; name: string; sub: string; right?: string; stroke: string}) {
+}: Pt & {kind: Kind; name: string; sub: [string, string]; right?: string; stroke: string}) {
   return (
     <g>
       <rect
         x={x - 74}
-        y={y - 31}
+        y={y - 36}
         width="148"
-        height="62"
+        height="72"
         rx="14"
         fill="var(--color-surface)"
         stroke={stroke}
         strokeOpacity="0.7"
       />
-      <Glyph x={x - 56} y={y - 9} kind={kind} />
-      <text x={x - 44} y={y - 5} className="fill-text" style={{fontSize: 12, fontWeight: 600}}>
+      <Glyph x={x - 56} y={y - 16} kind={kind} />
+      <text x={x - 44} y={y - 11} className="fill-text" style={{fontSize: 13, fontWeight: 600}}>
         {name}
       </text>
       {right && (
         <text
           x={x + 62}
-          y={y - 5}
+          y={y - 11}
           textAnchor="end"
           className="fill-settled"
-          style={{fontSize: 10.5, fontVariantNumeric: 'tabular-nums'}}
+          style={{fontSize: 12, fontVariantNumeric: 'tabular-nums'}}
         >
           {right}
         </text>
       )}
-      <text x={x - 62} y={y + 16} className="fill-muted" style={{fontSize: 9.5}}>
-        {kind} · {sub}
+      {/* 12 px or more (UX audit 2026-11-13: these were 9.5 and 10.5): the line splits in two to fit. */}
+      <text x={x - 62} y={y + 8} className="fill-muted" style={{fontSize: 12}}>
+        {sub[0]}
+      </text>
+      <text x={x - 62} y={y + 24} className="fill-muted" style={{fontSize: 12}}>
+        {sub[1]}
       </text>
     </g>
   );
@@ -192,20 +196,20 @@ export function NetworkVisual() {
               y={HUB.y + 14}
               textAnchor="middle"
               className="fill-chain"
-              style={{fontSize: 10.5, fontFamily: 'var(--font-mono)'}}
+              style={{fontSize: 12, fontFamily: 'var(--font-mono)'}}
             >
               NEAR · escrow
             </text>
           </g>
 
           {CLIENTS.map((c) => (
-            <Node key={c.name} {...c} sub={c.line} stroke="var(--color-accent)" />
+            <Node key={c.name} {...c} sub={[c.kind, c.line]} stroke="var(--color-accent)" />
           ))}
           {WORKERS.map((w) => (
             <Node
               key={w.name}
               {...w}
-              sub={`${w.price} mUSDC · ${w.skill}`}
+              sub={[`${w.kind} · ${w.skill}`, `${w.price} mUSDC`]}
               right={String(w.score)}
               stroke="var(--color-edge-strong)"
             />
@@ -229,14 +233,14 @@ export function NetworkVisual() {
         {/* Floating receipts — what a viewer should take away. */}
         <div
           aria-hidden
-          className="float absolute -left-2 top-0 hidden rounded-xl border border-edge bg-surface/90 px-3 py-2 text-[11px] shadow-xl backdrop-blur sm:block"
+          className="float absolute -left-2 top-0 hidden rounded-xl border border-edge bg-surface/90 px-3 py-2 text-xs shadow-xl backdrop-blur sm:block"
           style={{animationDelay: '-2s'}}
         >
           <span className="text-muted">escrow</span> <span className="tabular text-text">locked 0.04</span>
         </div>
         <div
           aria-hidden
-          className="float absolute -right-2 bottom-0 hidden rounded-xl border border-settled/30 bg-surface/90 px-3 py-2 text-[11px] shadow-xl backdrop-blur sm:block"
+          className="float absolute -right-2 bottom-0 hidden rounded-xl border border-settled/30 bg-surface/90 px-3 py-2 text-xs shadow-xl backdrop-blur sm:block"
           style={{animationDelay: '-4s'}}
         >
           <span className="text-settled">✓ settled</span>{' '}

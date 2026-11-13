@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import {useRouter} from 'next/navigation';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActionFeedback,
@@ -76,6 +77,7 @@ export function JobView({jobId}: {jobId: string}) {
   const [stream, setStream] = useState<StreamState | 'connecting'>('connecting');
   const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
+  const router = useRouter();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -85,11 +87,23 @@ export function JobView({jobId}: {jobId: string}) {
         setJob(j);
         setError(null);
       })
-      .catch((err: unknown) => {
-        if (!controller.signal.aborted) setError(describeError(err));
+      .catch(async (err: unknown) => {
+        if (controller.signal.aborted) return;
+        const view = describeError(err);
+        // A listing's id opened as a job (UX audit 2026-11-13: it dead-ended
+        // here): if the API knows it as a listing, go there instead.
+        if (view.notFound) {
+          const listing = await market.listing(jobId, undefined, controller.signal).catch(() => null);
+          if (controller.signal.aborted) return;
+          if (listing) {
+            router.replace(`/jobs/listing/${encodeURIComponent(jobId)}`);
+            return;
+          }
+        }
+        setError(view);
       });
     return () => controller.abort();
-  }, [jobId, attempt]);
+  }, [jobId, attempt, router]);
 
   // Something happened to the job: ask again, once for a burst of frames.
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
