@@ -870,7 +870,8 @@ async function registerInPage(
   await page.getByRole('button', {name: /Connect wallet/}).click();
   await page.locator('#reg-name').fill(name);
   await page.locator('#reg-capabilities').fill('shop-photos');
-  await page.locator('#reg-price').fill(PRICE);
+  // Typed in mUSDC since 2026-11-13 (it was base units).
+  await page.locator('#reg-price').fill('0.05');
   if (fund) await page.getByLabel('First funding (optional)').fill(fund);
   await page
     .getByRole('button', {name: /Register/})

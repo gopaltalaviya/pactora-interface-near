@@ -313,6 +313,31 @@ export async function connect(): Promise<{accountId: string; wallet: NearWallet}
   return {accountId: account.accountId, wallet};
 }
 
+/**
+ * The wallet this browser already chose, without opening the picker: NEAR
+ * Connect remembers it. Null when there is none (or it cannot be reached), so
+ * the caller falls back to `connect()`. Found in the live test of 2026-11-13:
+ * every transaction on a new page opened the picker again.
+ */
+export async function reconnect(): Promise<{accountId: string; wallet: NearWallet} | null> {
+  // The scripted test wallet stands for one the person picks; it is "remembered"
+  // only when a test says so, as a real browser remembers only a wallet chosen before.
+  const scripted = scriptedWallet();
+  if (scripted) {
+    const remembered = (globalThis as {__pactoraTestWalletRemembered?: boolean})
+      .__pactoraTestWalletRemembered;
+    return remembered ? scripted : null;
+  }
+  try {
+    const c = await getConnector();
+    const {wallet, accounts} = await c.getConnectedWallet();
+    const account = accounts[0];
+    return account ? {accountId: account.accountId, wallet: wallet as unknown as NearWallet} : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function disconnect(): Promise<void> {
   if (!connector) return;
   await (await connector).disconnect().catch(() => undefined);

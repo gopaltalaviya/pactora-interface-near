@@ -168,6 +168,41 @@ const nx = (f: Fix | undefined): {next?: Fix} => (f ? {next: f} : {});
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** The panel's lines, in reading order. Pure: the component only lays them out. */
+/**
+ * The record's lines worded for an agent the signed-in person owns, not for
+ * the person: "Your purse is empty, so you cannot fund a job" sat under an
+ * agent's purse on its manage page (live test, 2026-11-13). The wallet lines
+ * stay "your": the wallet is the person's.
+ */
+export function forAgent(line: MoneyLine): MoneyLine {
+  const RECORD = new Set(['purse', 'daily', 'stake', 'storage', 'escrow', 'bonds']);
+  if (!RECORD.has(line.id)) return line;
+  const say = (t: string) =>
+    t
+      .replace('NEAR for your Pactora records', "NEAR for this agent's records")
+      .replace('Pays for the jobs you hire', 'Pays for the jobs this agent hires')
+      .replace(
+        'Your purse is empty, so you cannot fund a job',
+        "This agent's purse is empty, so it cannot fund a job",
+      )
+      .replace('Your daily cap less what you spent', 'Its daily cap less what it spent')
+      .replace('You have spent your daily cap', 'It has spent its daily cap')
+      .replace('Your bond as a worker', 'Its bond as a worker')
+      .replace('keeps you hireable', 'keeps it hireable')
+      .replace('each job you accept', 'each job it accepts')
+      .replace('nobody can hire you', 'nobody can hire this agent')
+      .replace('the space your record and your jobs take', 'the space its record and its jobs take')
+      .replace('Add storage before you hire', 'Add storage before it hires')
+      .replace('jobs you hired', 'jobs this agent hired')
+      .replace('jobs you work', 'jobs this agent works');
+  return {
+    ...line,
+    label: say(line.label),
+    meaning: say(line.meaning),
+    ...(line.advice !== undefined ? {advice: say(line.advice)} : {}),
+  };
+}
+
 export function moneyLines(input: MoneyInput): MoneyLine[] {
   const {network: n, wallet, record, jobs, chainAgentId} = input;
   const {symbol, decimals} = n.paymentToken;

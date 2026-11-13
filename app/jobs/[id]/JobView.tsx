@@ -1,5 +1,7 @@
 'use client';
 
+import type {IconName} from '@/components/ui/Icon';
+import {KindBadge} from '@/components/ui/Kind';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {useCallback, useEffect, useRef, useState} from 'react';
@@ -66,6 +68,17 @@ const ACTION_LABEL: Record<PersonAction, string> = {
   dispute: 'Dispute the result',
   cancel: 'Cancel and refund',
   decline: 'Decline the job',
+};
+
+/** The icon beside each action, so the main one reads at a glance (owner's request, 2026-11-13). */
+const ACTION_ICON: Record<PersonAction, IconName> = {
+  create: 'wallet',
+  accept: 'check',
+  submit: 'upload',
+  approve: 'check',
+  dispute: 'alert',
+  cancel: 'x',
+  decline: 'x',
 };
 
 export function JobView({jobId}: {jobId: string}) {
@@ -239,7 +252,7 @@ export function JobView({jobId}: {jobId: string}) {
             <Badge tone={jobTone(job.state)} dot>
               {words.label}
             </Badge>
-            {party && <Badge tone="chain">You are the {party}</Badge>}
+            {party && <KindBadge kind="person" label={`You are the ${party}`} />}
           </>
         }
       />
@@ -296,7 +309,9 @@ export function JobView({jobId}: {jobId: string}) {
           <DisputeEvidenceCard jobId={job.jobId} party={party} jobState={job.state} attempt={attempt} />
         )}
       {job.judge && <JudgeCard judge={job.judge} />}
-      {job.result !== null && job.result !== undefined && <ResultCard result={job.result} />}
+      {job.result !== null && job.result !== undefined && (
+        <ResultCard result={job.result} drafts={delivery.drafts?.drafts ?? null} />
+      )}
 
       {party && session.status === 'in' && job.state === 'settled' && (
         <PartyReviewCard jobId={job.jobId} attempt={attempt} />
@@ -325,7 +340,20 @@ export function JobView({jobId}: {jobId: string}) {
  * scrolling pane is focusable and named, so a keyboard reaches it (axe:
  * scrollable-region-focusable).
  */
-function ResultCard({result}: {result: unknown}) {
+function ResultCard({
+  result,
+  drafts,
+}: {
+  result: unknown;
+  drafts: {round: number; snapshotHash: string; snapshot: {text: string}}[] | null;
+}) {
+  // A listing job delivers its accepted draft: the result names it by hash, and
+  // its text is what was paid for (live test, 2026-11-13: only the ids showed).
+  const snapshot =
+    result && typeof result === 'object' && 'snapshotHash' in result
+      ? String((result as {snapshotHash: unknown}).snapshotHash)
+      : null;
+  const accepted = snapshot ? (drafts?.find((d) => d.snapshotHash === snapshot) ?? null) : null;
   const fields =
     result && typeof result === 'object' && !Array.isArray(result)
       ? Object.entries(result as Record<string, unknown>).filter(
@@ -334,7 +362,13 @@ function ResultCard({result}: {result: unknown}) {
       : [];
   return (
     <Card title="Delivered result" labelledBy="result">
-      {fields.length > 0 && (
+      {accepted && (
+        <div className="mb-3 space-y-1 text-sm" data-testid="result-draft">
+          <p className="text-xs text-muted">The accepted draft, round {accepted.round}</p>
+          <p className="whitespace-pre-wrap break-words">{accepted.snapshot.text}</p>
+        </div>
+      )}
+      {fields.length > 0 && !accepted && (
         <dl className="mb-3 space-y-2 text-sm">
           {fields.map(([k, v]) => (
             <div key={k}>
@@ -775,6 +809,7 @@ function Actions({
                   <Button
                     key={a}
                     variant={a === 'cancel' ? 'danger' : 'primary'}
+                    icon={ACTION_ICON[a]}
                     disabled={pending || blocked(a) !== null}
                     onClick={() => {
                       setOpen(null);

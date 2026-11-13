@@ -1,5 +1,6 @@
 'use client';
 
+import {KindBadge} from '@/components/ui/Kind';
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {errorText, useNetwork} from '@/components/market/hooks';
@@ -12,6 +13,7 @@ import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Skeleton} from '@/components/ui/States';
 import {ReportButton} from '@/components/market/Report';
 import {RecordOverTime} from '@/components/market/RecordOverTime';
+import {useSession} from '@/lib/session';
 import {ApiError, api} from '@/lib/api';
 import {agentHref, manageHref} from '@/lib/links';
 import {displayAccount} from '@/lib/near';
@@ -27,6 +29,7 @@ export function ProfileView({profileId}: {profileId: string}) {
   // That agent's own account, which holds its work credentials.
   const [marketWallet, setMarketWallet] = useState<string | null>(null);
   const network = useNetwork()?.network ?? null;
+  const session = useSession();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -100,9 +103,7 @@ export function ProfileView({profileId}: {profileId: string}) {
         description={p.headline || undefined}
         actions={
           <>
-            <Badge tone={p.kind === 'person' ? 'live' : 'chain'}>
-              {p.kind === 'person' ? 'Person' : 'Agent'}
-            </Badge>
+            <KindBadge kind={p.kind === 'person' ? 'person' : 'agent'} />
             {p.availability && <Badge tone="settled">Open to work</Badge>}
             {p.hireable === false && <Badge tone="refused">Not hireable yet</Badge>}
           </>
@@ -165,9 +166,16 @@ export function ProfileView({profileId}: {profileId: string}) {
               )}
             </div>
           )}
-          <div className="pt-2">
-            <ReportButton targetType="person" targetId={p.profileId} what="this profile" />
-          </div>
+          {/* Not on your own profile (live test, 2026-11-13). */}
+          {!(
+            session.person &&
+            p.chainAgentId !== null &&
+            String(p.chainAgentId) === session.person.chainAgentId
+          ) && (
+            <div className="pt-2">
+              <ReportButton targetType="person" targetId={p.profileId} what="this profile" />
+            </div>
+          )}
           {p.kind === 'agent' && p.chainAgentId && (
             <p className="flex flex-wrap gap-x-4 gap-y-1">
               {marketId !== null && (

@@ -1,5 +1,6 @@
 'use client';
 
+import {KindBadge} from '@/components/ui/Kind';
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
@@ -187,9 +188,7 @@ export function DirectoryView() {
                   </Link>
                   <span className="flex items-center gap-1.5">
                     {p.availability && <Badge tone="settled">Open to work</Badge>}
-                    <Badge tone={p.kind === 'person' ? 'live' : 'chain'}>
-                      {p.kind === 'person' ? 'Person' : 'Agent'}
-                    </Badge>
+                    <KindBadge kind={p.kind === 'person' ? 'person' : 'agent'} />
                   </span>
                 </div>
                 {p.headline && <p className="mt-1 text-sm text-muted">{p.headline}</p>}

@@ -16,6 +16,7 @@ import {agentHref, manageHref, safeHref} from '@/lib/links';
 import {displayAccount, formatYocto, parseUnits, subAccount} from '@/lib/near';
 import {
   connect,
+  reconnect,
   fundTransaction,
   REGISTRATION_AMOUNTS,
   registerOnChain,
@@ -94,7 +95,18 @@ export default function RegisterPage() {
   const [accountEdited, setAccountEdited] = useState(false);
   const [description, setDescription] = useState('');
   const [capabilities, setCapabilities] = useState('market-research');
-  const [price, setPrice] = useState('20000');
+  // Typed in the token's units like the rest of the site; the API gets base units
+  // (live test, 2026-11-13: "20000" here meant 0.02, nowhere else on the site).
+  const [priceText, setPriceText] = useState('0.02');
+  const priceDecimals = network?.paymentToken.decimals ?? 6;
+  const parsedPrice = priceText.trim() === '' ? '' : parseUnits(priceText, priceDecimals);
+  const price = parsedPrice ?? '';
+  // A plain number that is only too large for a u128 is "too large", not "not a number".
+  const priceNumber =
+    /^\d+(\.\d+)?$/.test(priceText.trim()) && (priceText.split('.')[1] ?? '').length <= priceDecimals;
+  const priceOversize = priceText.trim() !== '' && parsedPrice === null && priceNumber;
+  const priceInvalid = priceText.trim() !== '' && parsedPrice === null && !priceNumber;
+  const setPrice = (base: string) => setPriceText(formatUnits(base, priceDecimals));
   // F20: an optional first Fund deposit, signed right after register_agent assigns the id.
   const [fundAmount, setFundAmount] = useState('');
   const [funded, setFunded] = useState(false);
@@ -106,6 +118,20 @@ export default function RegisterPage() {
       .network()
       .then(setNetwork)
       .catch(() => setError('The API is unreachable.'));
+  }, []);
+
+  // Signed in already: the wallet chosen then is the owner, without the picker
+  // (live test, 2026-11-13: the page said "Connect a wallet" to a signed-in person).
+  useEffect(() => {
+    let live = true;
+    void reconnect().then((r) => {
+      if (!live || !r) return;
+      walletRef.current = r.wallet;
+      setOwner((o) => o ?? r.accountId);
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -154,7 +180,7 @@ export default function RegisterPage() {
   const nameTooLong = name.length > 64;
   const descTooLong = description.length > 1000;
   const tooManyCaps = parsedCaps.length > 16;
-  const priceTooBig = price.length > 39; // u128
+  const priceTooBig = price.length > 39 || priceOversize; // u128
   let cardUri: string | null = null;
   let cardError: string | undefined;
   if (name.trim() && parsedCaps.length > 0 && badCaps.length === 0 && !tooManyCaps && !nameTooLong) {
@@ -210,7 +236,8 @@ export default function RegisterPage() {
   if (descTooLong) missing.push('Shorten the description');
   if (parsedCaps.length === 0) missing.push('Add at least one capability');
   else if (badCaps.length > 0 || tooManyCaps) missing.push('Fix the capabilities');
-  if (price === '') missing.push('Set a price');
+  if (priceInvalid) missing.push('Fix the price');
+  else if (price === '') missing.push('Set a price');
   else if (priceTooLow) missing.push('Raise the price to the escrow minimum');
   else if (priceTooBig) missing.push('Lower the price');
   if (fundError) missing.push('Fix the first funding amount');
@@ -461,12 +488,14 @@ export default function RegisterPage() {
               label="Price per task"
               htmlFor="reg-price"
               hintId="reg-price-hint"
-              hint={
-                network
-                  ? `Base units — ${network.paymentToken.symbol} has ${network.paymentToken.decimals} decimals, so 20000 is 0.02.`
-                  : 'Base units.'
+              hint={network ? `In ${network.paymentToken.symbol}, like 0.02.` : 'Like 0.02.'}
+              error={
+                priceInvalid
+                  ? `A number like 0.02, with at most ${priceDecimals} decimal places.`
+                  : priceTooBig
+                    ? 'That is larger than the escrow can hold (a u128).'
+                    : undefined
               }
-              error={priceTooBig ? 'That is larger than the escrow can hold (a u128).' : undefined}
               warning={
                 priceTooLow && minimum !== undefined && network
                   ? `Below the escrow minimum of ${formatUnits(minimum, network.paymentToken.decimals)} ${network.paymentToken.symbol} — the escrow refuses any job cheaper than that, so this agent could never be hired.`
@@ -476,20 +505,14 @@ export default function RegisterPage() {
               <TextInput
                 id="reg-price"
                 mono
-                value={price}
-                onChange={(e) => setPrice(e.target.value.replace(/\D/g, ''))}
+                value={priceText}
+                onChange={(e) => setPriceText(e.target.value.replace(/[^\d.]/g, ''))}
                 disabled={busy}
-                inputMode="numeric"
+                inputMode="decimal"
                 autoComplete="off"
-                invalid={priceTooLow}
+                invalid={priceTooLow || priceInvalid}
                 aria-describedby="reg-price-hint"
-                actions={
-                  token && price ? (
-                    <span className="tabular mr-2 text-xs text-muted">
-                      = {formatUnits(price, token.decimals)} {token.symbol}
-                    </span>
-                  ) : undefined
-                }
+                actions={token ? <span className="mr-2 text-xs text-muted">{token.symbol}</span> : undefined}
               />
             </Field>
             {presets.length > 0 && token && (

@@ -9,6 +9,9 @@
 
 const KEY = (account: string) => `pactora.terms.${account}`;
 
+/** The version of the terms and privacy drafts a person accepts at /join (their draft date). */
+export const TERMS_VERSION = '2026-11-01';
+
 export function recordTermsAcceptance(account: string, now: () => Date = () => new Date()): void {
   try {
     window.localStorage.setItem(KEY(account), now().toISOString());

@@ -1,5 +1,6 @@
 'use client';
 
+import {KindBadge} from '@/components/ui/Kind';
 import {useEffect, useState} from 'react';
 import {Badge, StatusDot, Tag} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
@@ -188,11 +189,18 @@ export function AgentView({agentId}: {agentId: number}) {
           <div className="space-y-3">
             {agent.description && <p className="[overflow-wrap:anywhere]">{agent.description}</p>}
             <div className="flex flex-wrap items-center gap-2">
+              <KindBadge kind="agent" label="AI agent" />
               {agent.capabilities.map((c) => (
                 <Tag key={c}>{c}</Tag>
               ))}
-              <Badge tone={agent.active ? 'settled' : 'refused'} dot>
-                {agent.active ? 'accepting work' : 'not accepting work'}
+              {/* "accepting work" only when the chain would let it be hired: a stake below the
+                  minimum read "accepting work" beside "not hireable" (live test, 2026-11-13). */}
+              <Badge tone={agent.active && hireable !== false ? 'settled' : 'refused'} dot>
+                {!agent.active
+                  ? 'not accepting work'
+                  : hireable === false
+                    ? 'not hireable: stake below the minimum'
+                    : 'accepting work'}
               </Badge>
             </div>
           </div>
@@ -287,9 +295,12 @@ export function AgentView({agentId}: {agentId: number}) {
       {network?.contracts?.Credentials && <CredentialList owner={agent.walletAddress} network={network} />}
 
       <TrustCard agentId={agent.agentId} />
-      <div className="flex justify-end">
-        <ReportButton targetType="agent" targetId={String(agent.agentId)} what="this agent" />
-      </div>
+      {/* Not on your own agent (live test, 2026-11-13). */}
+      {owns !== true && (
+        <div className="flex justify-end">
+          <ReportButton targetType="agent" targetId={String(agent.agentId)} what="this agent" />
+        </div>
+      )}
 
       {agent.skills && agent.skills.length > 0 && <SkillTable skills={agent.skills} />}
 

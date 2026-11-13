@@ -5,6 +5,8 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {errorText, SignInGate, useMe, useNetwork} from '@/components/market/hooks';
 import {ListingCard, utc} from '@/components/market/ListingCard';
 import {Badge, Tag} from '@/components/ui/Badge';
+import {AgentHealthBadges, useAgentHealth} from '@/components/market/AgentHealth';
+import {KindIcon} from '@/components/ui/Kind';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card, Stat} from '@/components/ui/Card';
 import {Select} from '@/components/ui/Field';
@@ -36,7 +38,7 @@ import {useLandOn} from '@/components/ui/useLandOn';
 import {nearFaucetOf} from '@/lib/balances';
 import {describeError} from '@/lib/errors';
 import {useSession} from '@/lib/session';
-import {termsAcceptedAt} from '@/lib/terms';
+import {termsAcceptedAt, TERMS_VERSION} from '@/lib/terms';
 
 /**
  * One signed-in person's page, in five tabs (docs/27 §4: one long page was
@@ -111,11 +113,11 @@ export function MeView() {
           <>
             {/* Posting needs a person record: offered only to someone who has one. */}
             {session.status === 'in' && session.person && (
-              <ButtonLink href="/jobs/new" size="sm">
+              <ButtonLink icon="plus" href="/jobs/new" size="sm">
                 Post a listing
               </ButtonLink>
             )}
-            <ButtonLink href="/jobs" size="sm">
+            <ButtonLink icon="list" href="/jobs" size="sm">
               Browse jobs
             </ButtonLink>
           </>
@@ -183,7 +185,8 @@ function Signed({onDeleted}: {onDeleted: (what: string) => void}) {
           <>
             <Overview />
             <MyMoney />
-            {person && <FaucetCard />}
+            {/* Any signed-in account may claim (routes/faucet.ts), person record or not. */}
+            <FaucetCard />
             <MyAgents />
           </>
         )}
@@ -230,8 +233,24 @@ function JoinFirst({what}: {what: string}) {
 
 function Overview() {
   const token = useNetwork();
-  const {account} = useSession();
+  const {account, authed} = useSession();
   const {me, error, reload} = useMe();
+  // An acceptance this browser holds but the account does not (accounts that joined
+  // before 2026-11-13): recorded on the account once, then read back from the API.
+  const backfill =
+    me?.person && me.person.terms && !me.person.terms.acceptedAt && account ? termsAcceptedAt(account) : null;
+  useEffect(() => {
+    if (!backfill) return;
+    let live = true;
+    void authed((t) => market.acceptTerms(t, TERMS_VERSION))
+      .then(() => {
+        if (live) reload();
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [backfill, authed, reload]);
   const units = (base: string) =>
     token ? amountDisplay(base, token.decimals, token.symbol) : `${base} base units`;
 
@@ -257,7 +276,9 @@ function Overview() {
       </div>
     );
   }
-  const accepted = account ? termsAcceptedAt(account) : null;
+  // On the account when the API holds it; else this browser's record (older accounts).
+  const onAccount = me.person?.terms?.acceptedAt ?? null;
+  const accepted = onAccount ?? (account ? termsAcceptedAt(account) : null);
   return (
     <>
       <Card title="Overview" labelledBy="overview">
@@ -291,7 +312,9 @@ function Overview() {
           {accepted && (
             <div>
               <dt className="text-muted">Terms accepted</dt>
-              <dd data-testid="terms-accepted">{utc(accepted)} (recorded by this browser)</dd>
+              <dd data-testid="terms-accepted">
+                {utc(accepted)} ({onAccount ? 'recorded on your account' : 'recorded by this browser'})
+              </dd>
             </div>
           )}
         </dl>
@@ -343,6 +366,12 @@ function Overview() {
  * (the API's id) and its manage page (the contract's id). The person record
  * is shown above, so it is left out here.
  */
+/** Paused, not hireable, or low on storage: read from the chain (live test, 2026-11-13). */
+function MyAgentHealth({active, chainAgentId}: {active: boolean; chainAgentId: string | null}) {
+  const network = useNetwork()?.network ?? null;
+  return <AgentHealthBadges active={active} health={useAgentHealth(chainAgentId, network)} />;
+}
+
 function MyAgents() {
   const {authed} = useSession();
   const [rows, setRows] = useState<MyAgent[] | null>(null);
@@ -383,10 +412,14 @@ function MyAgents() {
         {rows.map((a) => (
           <li key={a.agentId} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span className="flex flex-wrap items-center gap-2">
+              <KindIcon kind="agent" />
               <Link href={agentHref(a.agentId)} className="font-medium text-accent underline">
                 {a.name}
               </Link>
-              <Badge tone={a.active ? 'settled' : 'refused'}>{a.active ? 'accepting work' : 'paused'}</Badge>
+              <MyAgentHealth
+                active={a.active}
+                chainAgentId={a.chainAgentId ? String(a.chainAgentId) : null}
+              />
             </span>
             {a.chainAgentId ? (
               <Link
@@ -477,7 +510,7 @@ function MyListings() {
           icon="search"
           title={`You have no ${status} listings`}
           action={
-            <ButtonLink href="/jobs/new" size="sm">
+            <ButtonLink icon="plus" href="/jobs/new" size="sm">
               Post a listing
             </ButtonLink>
           }
@@ -1110,7 +1143,7 @@ function FaucetCard() {
             The faucet has given out all it may today. Try again after midnight UTC.
           </p>
         ) : (
-          <Button size="sm" disabled={busy} loading={busy} onClick={() => void take()}>
+          <Button icon="coins" size="sm" disabled={busy} loading={busy} onClick={() => void take()}>
             Claim test tokens
           </Button>
         )}

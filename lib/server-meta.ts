@@ -10,8 +10,11 @@ import {API_URL} from './api';
 export async function readForMetadata<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_URL}${path}`, {
-      signal: AbortSignal.timeout(1_500),
-      next: {revalidate: 60},
+      // 3 s, not 1.5: from the hosting region the API can take longer, and a
+      // refresh that times out leaves the old value cached, so a renamed
+      // profile kept its old title for hours (live test, 2026-11-13).
+      signal: AbortSignal.timeout(3_000),
+      next: {revalidate: 30},
     });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {

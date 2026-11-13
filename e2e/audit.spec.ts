@@ -109,7 +109,8 @@ for (const width of [1024, 1280, 1440, 1600]) {
       // 1536 (2xl) signed in, where the account menu takes its room; below
       // that it lives in the hero, the footer and the phone menu. Checked
       // away from the breakpoints: Firefox counts its scrollbar out of them.
-      const cta = banner.getByRole('link', {name: 'Register an agent'});
+      // Signed in as a person, the button is "Post a listing" (live test, 2026-11-13).
+      const cta = banner.getByRole('link', {name: signed ? 'Post a listing' : 'Register an agent'});
       if (width > (signed ? 1536 : 1280)) {
         await expect(cta).toBeVisible();
         expect((await cta.boundingBox())!.height).toBeLessThanOrEqual(40);

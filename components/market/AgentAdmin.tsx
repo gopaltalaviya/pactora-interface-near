@@ -10,6 +10,7 @@ import {CopyButton} from '@/components/ui/CopyButton';
 import {Field, SecretInput, Select, TextInput} from '@/components/ui/Field';
 import {Notice} from '@/components/ui/States';
 import {formatUnits} from '@/lib/api';
+import {parseUnits} from '@/lib/near';
 import {
   deliveryLine,
   keys,
@@ -305,11 +306,14 @@ export function AgentEditCard({
     if (name.trim()) patch.name = name.trim();
     if (description.trim()) patch.description = description.trim();
     if (price.trim()) {
-      if (!/^\d{1,39}$/.test(price.trim())) {
-        setProblem('The price is in base units: digits only.');
+      const base = parseUnits(price, decimals);
+      if (base === null || base === '0') {
+        setProblem(
+          `The price is in ${symbol || 'the token'}: a number like 0.02, with at most ${decimals} decimal places.`,
+        );
         return;
       }
-      patch.pricePerTask = price.trim();
+      patch.pricePerTask = base;
     }
     if (active) patch.active = active === 'yes';
     if (Object.keys(patch).length === 0) {
@@ -373,13 +377,14 @@ export function AgentEditCard({
               autoComplete="off"
             />
           </Field>
-          <Field label={`Price per task (base units of ${symbol || 'the token'})`} htmlFor="edit-price">
+          <Field label={`Price per task (${symbol || 'the token'})`} htmlFor="edit-price">
             <TextInput
               id="edit-price"
               mono
-              inputMode="numeric"
+              inputMode="decimal"
+              placeholder="0.02"
               value={price}
-              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
               autoComplete="off"
             />
           </Field>

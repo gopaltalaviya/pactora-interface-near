@@ -178,6 +178,30 @@ test('manage: the wallet beside Fund and Stake, Max fills an amount, and when mo
   await expect(panel(page).getByTestId('money-token')).toContainText('7.5 USDC');
 });
 
+// Found in the manual live test of 2026-11-13: 6 mUSDC typed into Fund with 5
+// in the wallet left the button enabled; the transaction would only fail on
+// chain, after the wallet prompt and the gas. Over the known most, say so and
+// send nothing.
+test('manage: an amount over what you hold is refused in the form, and no transaction goes out', async ({
+  page,
+}, info) => {
+  const account = await asPerson(page, info, 'overmax');
+  await mockChain(page, {owner: account});
+  await page.goto('/agents/177/manage');
+  const fund = page.getByRole('region', {name: 'Fund the purse'});
+  await expect(fund).toContainText('In your wallet: 7.5 USDC.');
+  await fund.getByLabel(/Amount/).fill('8');
+  await expect(fund).toContainText('More than you have: at most 7.5 USDC.');
+  await expect(fund.getByRole('button', {name: 'Fund', exact: true})).toBeDisabled();
+  const withdraw = page.getByRole('region', {name: 'Withdraw from the purse'});
+  await withdraw.getByLabel(/Amount/).fill('3');
+  await expect(withdraw).toContainText('More than you have: at most 2.5 USDC.');
+  await expect(withdraw.getByRole('button', {name: 'Withdraw', exact: true})).toBeDisabled();
+  await fund.getByLabel(/Amount/).fill('7.5');
+  await expect(fund.getByRole('button', {name: 'Fund', exact: true})).toBeEnabled();
+  expect(await methods(page)).toEqual([]);
+});
+
 test('manage: a frozen agent says what it means, and its owner can unfreeze it', async ({page}, info) => {
   const account = await asPerson(page, info, 'frozen');
   await mockChain(page, {owner: account, frozen: true});

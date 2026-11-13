@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import {ApiError, api, type PersonRef} from './api';
-import {connect, disconnect, signChallenge, type NearWallet} from './wallet';
+import {connect, disconnect, reconnect, signChallenge, type NearWallet} from './wallet';
 
 /**
  * Who is signed in on this tab.
@@ -213,7 +213,9 @@ export function SessionProvider({children}: {children: ReactNode}) {
     if (walletRef.current) return walletRef.current;
     const account = stored?.account;
     if (!account) throw new Error('Sign in first.');
-    const connected = await connect();
+    // The wallet chosen at sign-in, when the browser still has it; the picker only if not.
+    const remembered = await reconnect();
+    const connected = remembered?.accountId === account ? remembered : await connect();
     if (connected.accountId !== account) {
       throw new Error(
         `The wallet is connected as ${connected.accountId}, not ${account}. Switch accounts and try again.`,

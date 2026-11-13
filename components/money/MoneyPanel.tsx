@@ -9,6 +9,7 @@ import {Skeleton} from '@/components/ui/States';
 import {useLandOn} from '@/components/ui/useLandOn';
 import type {NetworkInfo} from '@/lib/api';
 import {
+  forAgent,
   moneyLines,
   openJobsMoney,
   readRecord,
@@ -167,6 +168,7 @@ export function MoneyPanel({
   title = 'Your money',
   description = 'Where your money is, read from the chain and the API just now, and what each part is for.',
   id = 'money',
+  subject = 'you',
 }: {
   network: NetworkInfo | null;
   money: MoneyState;
@@ -176,6 +178,8 @@ export function MoneyPanel({
   only?: string[];
   title?: string;
   description?: string;
+  /** Whose record the purse and stake lines are: the person's own ("you") or an agent's they own. */
+  subject?: 'you' | 'agent';
   id?: string;
 }) {
   // Arrived from a link to #money (an error's next step): bring the panel into view once it has lines.
@@ -189,7 +193,7 @@ export function MoneyPanel({
         wallet: money.wallet,
         record: money.record,
         jobs: money.jobs,
-      })
+      }).map((l) => (subject === 'agent' ? forAgent(l) : l))
     : [];
   const lines = only ? all.filter((l) => only.includes(l.id)) : all;
   const attention = lines.filter((l) => l.status !== 'ok').length;

@@ -101,7 +101,7 @@ test('critical: register refuses what the API would refuse — before the wallet
   await page.getByLabel('Capabilities').fill(Array.from({length: 17}, (_, i) => `cap-${i}`).join(','));
   await expect(page.getByText(/16 capabilities at most/)).toBeVisible();
   await page.getByLabel('Capabilities').fill('market-research');
-  await page.getByLabel(/Price per task/).fill('9'.repeat(40));
+  await page.getByLabel(/Price per task/).fill('9'.repeat(39));
   await expect(page.getByText(/larger than the escrow can hold/)).toBeVisible();
 });
 

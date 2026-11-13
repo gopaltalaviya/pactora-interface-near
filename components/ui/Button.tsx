@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import {Icon, type IconName} from './Icon';
 import type {ComponentProps, ReactNode} from 'react';
 
 /**
@@ -52,8 +53,14 @@ export function Button({
   className = '',
   children,
   disabled,
+  icon,
   ...rest
-}: ComponentProps<'button'> & {variant?: Variant; size?: Size; loading?: boolean}) {
+}: ComponentProps<'button'> & {
+  variant?: Variant;
+  size?: Size;
+  loading?: boolean;
+  icon?: IconName | undefined;
+}) {
   return (
     <button
       type="button"
@@ -62,7 +69,7 @@ export function Button({
       aria-busy={loading || undefined}
       className={buttonClass(variant, size, className)}
     >
-      {loading && <Spinner />}
+      {loading ? <Spinner /> : icon ? <Icon name={icon} className="size-4" /> : null}
       {children}
     </button>
   );
@@ -74,15 +81,19 @@ export function ButtonLink({
   size = 'md',
   className = '',
   children,
+  icon,
 }: {
   href: string;
   variant?: Variant;
   size?: Size;
   className?: string;
   children: ReactNode;
+  /** A leading icon (decorative: the text names the link). */
+  icon?: IconName | undefined;
 }) {
   return (
     <Link href={href} className={buttonClass(variant, size, className)}>
+      {icon && <Icon name={icon} className="size-4" />}
       {children}
     </Link>
   );

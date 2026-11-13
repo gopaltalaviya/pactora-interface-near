@@ -474,6 +474,7 @@ export function NewListingView() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <Button
+                  icon="plus"
                   type="submit"
                   loading={busy}
                   disabled={session.status !== 'in' || moneyBlock !== null}

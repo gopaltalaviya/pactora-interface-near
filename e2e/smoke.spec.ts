@@ -214,7 +214,9 @@ test('register explains NEAR Connect and validates before signing', async ({page
   await page.getByLabel(/Agent account/).fill('Research.Bot');
   await expect(page.getByText(/lowercase letters, digits/)).toBeVisible();
   await expect(page.getByText(/0\.5 NEAR to the agent account and 0\.1 NEAR for storage/)).toBeVisible();
-  await page.getByLabel(/Price per task/).fill('500');
+  // In the token's units since 2026-11-13 (it was base units: 500 = 0.0005).
+  await expect(page.getByLabel(/Price per task/)).toHaveValue('0.02');
+  await page.getByLabel(/Price per task/).fill('0.0005');
   await expect(page.getByText(/Below the escrow minimum of 0.01 USDC/)).toBeVisible();
   expect(errors).toEqual([]);
 });

@@ -229,3 +229,45 @@ describe('nearFaucetOf', () => {
     expect(nearFaucetOf({faucetUrls: [], testnet: false})).toBeNull();
   });
 });
+
+// Live test, 2026-11-13: an agent's manage page said "Your purse is empty, so
+// you cannot fund a job" under the agent's purse.
+describe('forAgent', () => {
+  it('words the record lines for the agent, and leaves the wallet lines as the person’s', async () => {
+    const {forAgent} = await import('./balances');
+    const purse = forAgent({
+      id: 'purse',
+      label: 'Purse',
+      value: '0 mUSDC',
+      meaning: 'Pays for the jobs you hire: each one moves its price from here into escrow.',
+      status: 'low',
+      advice: 'Your purse is empty, so you cannot fund a job. Move mUSDC from your wallet into it.',
+    });
+    expect(purse.meaning).toBe(
+      'Pays for the jobs this agent hires: each one moves its price from here into escrow.',
+    );
+    expect(purse.advice).toBe(
+      "This agent's purse is empty, so it cannot fund a job. Move mUSDC from your wallet into it.",
+    );
+    const stake = forAgent({
+      id: 'stake',
+      label: 'Stake (unlocked)',
+      value: '0 mUSDC',
+      meaning:
+        'Your bond as a worker: at least 10 mUSDC unlocked keeps you hireable, and each job you accept locks a share of it.',
+      status: 'low',
+      advice: 'Below the minimum, nobody can hire you. Add at least 10 mUSDC.',
+    });
+    expect(stake.meaning).toContain('Its bond as a worker');
+    expect(stake.meaning).toContain('keeps it hireable');
+    expect(stake.advice).toBe('Below the minimum, nobody can hire this agent. Add at least 10 mUSDC.');
+    const wallet = {
+      id: 'token',
+      label: 'mUSDC in your wallet',
+      value: '4 mUSDC',
+      meaning: 'x',
+      status: 'ok' as const,
+    };
+    expect(forAgent(wallet)).toBe(wallet);
+  });
+});

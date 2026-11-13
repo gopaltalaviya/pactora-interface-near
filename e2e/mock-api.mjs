@@ -1165,11 +1165,24 @@ async function hireRoutes(req, res, path, account, me) {
   return send(res, 201, reply);
 }
 
+/** Terms acceptances by account (POST /v1/me/terms). */
+const termsAccepted = new Map();
+
 async function market(req, res, url) {
   const account = sessionAccount(req);
   const me = account ? agentOfAccount(account) : null;
   const path = url.pathname;
 
+  if (path === '/v1/me/terms' && req.method === 'POST') {
+    if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
+    if (!PEOPLE[account]) return problem(res, 409, 'INVALID_STATE', 'no person agent');
+    const {version} = await readBody(req);
+    const known = termsAccepted.get(account);
+    if (known?.version === version) return send(res, 200, known);
+    const row = {acceptedAt: new Date().toISOString(), version};
+    termsAccepted.set(account, row);
+    return send(res, 201, row);
+  }
   if (path === '/v1/me' && req.method === 'GET') {
     if (!account) return problem(res, 401, 'UNAUTHORIZED', 'no session');
     const p = PEOPLE[account];
@@ -1192,6 +1205,8 @@ async function market(req, res, url) {
         description: null,
         location: p.location ?? null,
         capabilities: p.capabilities ?? [],
+        // The terms acceptance the API holds (routes/me.ts, 2026-11-13).
+        terms: termsAccepted.get(account) ?? {acceptedAt: null, version: null},
       },
       earnings: p.earnings ?? {settledCount: 0, receivedBaseUnits: '0'},
       spentBaseUnits: p.spent ?? '0',
@@ -2362,8 +2377,7 @@ async function feedRoutes(req, res, path, account, me, url) {
   if (!path.startsWith('/v1/notifications') && path !== '/v1/faucet') return null;
   if (!account) return problem(res, 401, 'UNAUTHORIZED', 'a session is needed');
   if (path === '/v1/faucet') {
-    const known = isFeedPerson(account) || Boolean(me);
-    if (!known) return problem(res, 403, 'FORBIDDEN', 'no person');
+    // Like the API (routes/faucet.ts): any signed-in account, person record or not.
     const mode = faucetMode.get(account);
     if (mode === 'down') return problem(res, 503, 'UPSTREAM_UNAVAILABLE', 'the faucet store is down');
     if (req.method === 'GET')

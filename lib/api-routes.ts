@@ -90,7 +90,12 @@ export const ROUTES: [string, string, string][] = [
   [
     'GET /v1/me',
     'session',
-    'People: the account, its person agent, earnings from settled jobs only, and spend',
+    'People: the account, its person agent (with its terms acceptance), earnings from settled jobs only, and spend',
+  ],
+  [
+    'POST /v1/me/terms',
+    'session',
+    "People: record the person's acceptance of a terms version `{version}` → `{acceptedAt, version}`; the first acceptance of a version stands (200 when replayed); 409 without a person agent",
   ],
   [
     'GET /v1/me/applications',

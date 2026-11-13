@@ -6,16 +6,18 @@ import {Badge} from '@/components/ui/Badge';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card, Stat} from '@/components/ui/Card';
 import {Field, TextInput} from '@/components/ui/Field';
+import {Icon, type IconName} from '@/components/ui/Icon';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import {ApiError, api, formatUnits, type NetworkInfo} from '@/lib/api';
 import {readAgent, type AgentOnChain} from '@/lib/chain';
-import {agentHref, safeHref} from '@/lib/links';
+import {agentHref, manageHref, safeHref} from '@/lib/links';
 import {displayAccount, formatYocto, parseUnits} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {signInHref} from '@/lib/signin-next';
 import {AgentEditCard, KeyCard, ReissueCard, WebhooksCard} from '@/components/market/AgentAdmin';
 import {MoneyPanel, useMoney} from '@/components/money/MoneyPanel';
+import {storageLow} from '@/components/market/AgentHealth';
 import {useLandOn} from '@/components/ui/useLandOn';
 import {
   acceptWalletTransaction,
@@ -68,6 +70,8 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   // The API serves at most 100 a page (it refused 200, so the lookup never found one).
   const [listed, setListed] = useState<{agentId: string; name: string} | null>(null);
   const apiAgentId = listed?.agentId ?? null;
+  /** The marketplace agent whose # is this page's number, when that is a different agent. */
+  const [marketTwin, setMarketTwin] = useState<{name: string; chainAgentId: string} | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -76,6 +80,16 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
       .then((list) => {
         const found = list.find((a) => String(a.chainAgentId ?? '') === chainAgentId);
         if (found) setListed({agentId: String(found.agentId), name: found.name});
+        // This page is addressed by the CONTRACT's id; a marketplace number in the
+        // URL opened a different agent (live test, 2026-11-13). Point to the right page.
+        const sameNumber = list.find(
+          (a) => String(a.agentId) === chainAgentId && String(a.chainAgentId ?? '') !== chainAgentId,
+        );
+        setMarketTwin(
+          sameNumber?.chainAgentId != null
+            ? {name: sameNumber.name, chainAgentId: String(sameNumber.chainAgentId)}
+            : null,
+        );
       })
       .catch(() => undefined);
     return () => controller.abort();
@@ -142,17 +156,20 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
       try {
         // Built first: a malformed amount is refused before the wallet is asked.
         const tx = build();
-        const wallet = await session.ensureWallet();
-        const sent = await sendTransaction(wallet, session.account, tx, label);
+        const signer = await session.ensureWallet();
+        const sent = await sendTransaction(signer, session.account, tx, label);
         setDone({label, txHash: sent.txHash});
         setAttempt((n) => n + 1);
+        // The wallet's own balances too: they stayed as before the send until
+        // Refresh (live test, 2026-11-13).
+        wallet.reload();
       } catch (err) {
         setError(message(err));
       } finally {
         setBusy(null);
       }
     },
-    [session],
+    [session, wallet],
   );
 
   const back = ownPerson
@@ -216,6 +233,25 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const now = Math.floor(Date.now() / 1000);
   const minStake = network.minStake;
   const explorer = network.explorerBaseUrl;
+  /** The outcome of a send, shown in the card that made it (live test, 2026-11-13: it was at the top of the page). */
+  const doneIn = (label: string) =>
+    done?.label === label ? <DoneNote label={done.label} txHash={done.txHash} explorer={explorer} /> : null;
+  const storageCard = pactora ? (
+    <AmountCard
+      id="storage"
+      title="Add storage"
+      hint="NEAR that pays for this agent’s records. Anyone can top it up; it stays with the agent."
+      button="Deposit"
+      result={doneIn('Storage deposit')}
+      unit="NEAR"
+      decimals={24}
+      disabled={busy !== null}
+      busy={busy === 'Storage deposit'}
+      onSubmit={(yocto) =>
+        send('Storage deposit', () => storageDepositTransaction(pactora, chainAgentId, yocto))
+      }
+    />
+  ) : null;
   const walletRead = wallet.wallet?.token ?? null;
   const walletLine = walletRead
     ? walletRead.ok
@@ -263,7 +299,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
       />
 
       {error && <ErrorState title="That did not go through">{error}</ErrorState>}
-      {done && (
+      {done && !INLINE_DONE.has(done.label) && (
         <Notice tone="live">
           <p role="status">
             {done.label} sent.
@@ -285,6 +321,18 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
         </Notice>
       )}
       {loadError && <ErrorState title={loadError} />}
+      {marketTwin && (
+        <Notice>
+          <p data-testid="manage-id-twin">
+            This page is on-chain agent {chainAgentId}. Looking for {marketTwin.name}, #{chainAgentId} on the
+            marketplace? It is on-chain agent {marketTwin.chainAgentId}:{' '}
+            <Link href={manageHref(marketTwin.chainAgentId)} className="underline">
+              open its manage page
+            </Link>
+            .
+          </p>
+        </Notice>
+      )}
 
       {session.status === 'loading' ? null : !isOwner ? (
         <Notice>
@@ -382,6 +430,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
           account={session.account}
           chainAgentId={chainAgentId}
           title={ownPerson ? 'Your money' : 'Money: your wallet and this agent'}
+          subject={ownPerson ? 'you' : 'agent'}
           description="Your wallet (what Fund and Stake draw on) and this record, read from the chain just now."
         />
       )}
@@ -448,6 +497,19 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
             Storage held for {ownPerson ? 'your record' : 'this agent'}:{' '}
             {data.storage ? `${formatYocto(data.storage)} NEAR` : 'not read'}.
           </p>
+          {data.storage && /^\d+$/.test(data.storage) && storageLow(BigInt(data.storage)) && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-refused" data-testid="storage-low">
+              <Icon name="alert" className="mt-px size-3.5" />
+              <span>
+                Storage is almost used up. Each new job needs a little; without it the contract refuses the
+                next job.{' '}
+                <a href="#storage-card" className="underline">
+                  Add storage
+                </a>
+                .
+              </span>
+            </p>
+          )}
         </Card>
       </div>
 
@@ -459,6 +521,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
             hint={`Moves ${symbol} from your account into the purse. ${walletLine}`}
             max={walletToken}
             button="Fund"
+            result={doneIn('Fund')}
             unit={symbol}
             decimals={decimals}
             disabled={busy !== null || !tokenId}
@@ -477,6 +540,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
             }
             max={walletToken}
             button="Stake"
+            result={doneIn('Stake')}
             unit={symbol}
             decimals={decimals}
             disabled={busy !== null || !tokenId}
@@ -546,6 +610,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
                 }
               />
             )}
+            {doneIn('Request unstake')}
           </Card>
           <AmountCard
             id="withdraw"
@@ -553,26 +618,21 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
             hint={`Sends ${symbol} to your account.`}
             max={purse?.balance ?? null}
             button="Withdraw"
+            result={doneIn('Withdraw')}
             unit={symbol}
             decimals={decimals}
             disabled={busy !== null || !purse || purse.balance === '0'}
             busy={busy === 'Withdraw'}
             onSubmit={(amount) => send('Withdraw', () => withdrawTransaction(pactora, chainAgentId, amount))}
           />
-          <AmountCard
-            id="storage"
-            title="Add storage"
-            hint="NEAR that pays for this agent’s records. Anyone can top it up; it stays with the agent."
-            button="Deposit"
-            unit="NEAR"
-            decimals={24}
-            disabled={busy !== null}
-            busy={busy === 'Storage deposit'}
-            onSubmit={(yocto) =>
-              send('Storage deposit', () => storageDepositTransaction(pactora, chainAgentId, yocto))
-            }
-          />
+          {storageCard}
         </div>
+      )}
+
+      {/* Anyone may top up an agent's storage (the contract allows it); it was owner-only
+          on this page (live test, 2026-11-13). */}
+      {!isOwner && session.status === 'in' && pactora && (
+        <div className="grid gap-4 md:grid-cols-2">{storageCard}</div>
       )}
 
       {isOwner && !tokenId && (
@@ -650,6 +710,10 @@ function AmountForm({
   const [text, setText] = useState('');
   const base = text.trim() === '' ? null : parseUnits(text, decimals);
   const invalid = text.trim() !== '' && (base === null || base === '0');
+  // Over the known most (wallet, purse or unlocked stake): the chain would only refuse it,
+  // after the wallet prompt and the gas (manual live test, 2026-11-13).
+  const knownMax = max !== null && /^\d{1,40}$/.test(max) ? BigInt(max) : null;
+  const over = !invalid && base !== null && knownMax !== null && BigInt(base) > knownMax;
   // Cleared once the transaction went out: a stale amount under "Fund sent." read as not sent (L18).
   const wasBusy = useRef(false);
   useEffect(() => {
@@ -661,14 +725,20 @@ function AmountForm({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (base && base !== '0') onSubmit(base);
+        if (base && base !== '0' && !over) onSubmit(base);
       }}
     >
       <Field
         label={`Amount (${unit})`}
         htmlFor={`${id}-amount`}
         hintId={`${id}-hint`}
-        error={invalid ? `A positive number with at most ${decimals} decimal places, like 1.5.` : undefined}
+        error={
+          invalid
+            ? `A positive number with at most ${decimals} decimal places, like 1.5.`
+            : over && max !== null
+              ? `More than you have: at most ${formatUnits(max, decimals)} ${unit}.`
+              : undefined
+        }
       >
         <TextInput
           id={`${id}-amount`}
@@ -677,12 +747,18 @@ function AmountForm({
           autoComplete="off"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          invalid={invalid}
+          invalid={invalid || over}
           placeholder="1.5"
         />
       </Field>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" loading={busy} disabled={disabled || !base || base === '0'}>
+        <Button
+          type="submit"
+          size="sm"
+          loading={busy}
+          disabled={disabled || !base || base === '0' || over}
+          icon={BUTTON_ICON[button]}
+        >
           {button}
         </Button>
         {max !== null && /^\d{1,40}$/.test(max) && max !== '0' && (
@@ -718,11 +794,55 @@ function AmountCard({
   busy: boolean;
   onSubmit: (base: string) => void;
   max?: string | null;
+  /** What the last send from this card did, shown under its form. */
+  result?: ReactNode;
 }) {
+  const {result, ...form} = rest;
   return (
     <Card title={title} description={hint} labelledBy={`${id}-card`}>
-      <AmountForm id={id} {...rest} />
+      <AmountForm id={id} {...form} />
+      {result}
     </Card>
+  );
+}
+
+/** The icon beside each amount action's label. */
+const BUTTON_ICON: Record<string, IconName | undefined> = {
+  Fund: 'coins',
+  Stake: 'shield',
+  'Request unstake': 'minus',
+  Withdraw: 'wallet',
+  Deposit: 'plus',
+};
+
+const INLINE_DONE = new Set(['Fund', 'Stake', 'Request unstake', 'Withdraw', 'Storage deposit']);
+
+function DoneNote({
+  label,
+  txHash,
+  explorer,
+}: {
+  label: string;
+  txHash: string | null;
+  explorer: string | null;
+}) {
+  const href = txHash && explorer ? safeHref(`${explorer}/txns/${txHash}`) : null;
+  return (
+    <p role="status" className="mt-3 flex items-center gap-1.5 text-sm text-settled" data-testid="card-done">
+      <Icon name="check" className="size-4" />
+      <span>
+        {label} sent.
+        {href ? (
+          <>
+            {' '}
+            <a className="underline" href={href} target="_blank" rel="noreferrer">
+              View the transaction
+            </a>
+            .
+          </>
+        ) : null}
+      </span>
+    </p>
   );
 }
 

@@ -140,10 +140,15 @@ p a:hover,
 
 /* A keyboard user must always see where they are. Mouse clicks do not show
    the ring (focus-visible), so it costs the recording nothing. The outline
-   follows each element's own corners. */
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+   follows each element's own corners. In the base layer, so a control that
+   draws its own focus (a text field's rounded frame: `outline-none` on the
+   input, `focus-within` on the frame) wins; unlayered, this rule beat the
+   utility and drew a square outline inside the frame (live test, 2026-11-13). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
 @layer base {

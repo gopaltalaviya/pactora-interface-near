@@ -183,6 +183,7 @@ describe('signing in and out', () => {
   it('ensureWallet refuses a wallet connected as a different account', async () => {
     window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored));
     vi.spyOn(api, 'getSession').mockResolvedValue(info);
+    vi.spyOn(wallet, 'reconnect').mockResolvedValue(null);
     vi.spyOn(wallet, 'connect').mockResolvedValue({
       accountId: 'bob.testnet',
       wallet: {} as wallet.NearWallet,
@@ -190,5 +191,36 @@ describe('signing in and out', () => {
     mount();
     await screen.findByText('in:alice.testnet');
     await expect(current.ensureWallet()).rejects.toThrow(/bob.testnet, not alice.testnet/);
+  });
+
+  // Live test, 2026-11-13: every transaction on a new page opened the wallet
+  // picker again, though the person had signed in with that wallet.
+  it('ensureWallet reuses the wallet the browser remembers, without opening the picker', async () => {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored));
+    vi.spyOn(api, 'getSession').mockResolvedValue(info);
+    const remembered = {} as wallet.NearWallet;
+    vi.spyOn(wallet, 'reconnect').mockResolvedValue({accountId: 'alice.testnet', wallet: remembered});
+    const picker = vi.spyOn(wallet, 'connect');
+    mount();
+    await screen.findByText('in:alice.testnet');
+    await expect(current.ensureWallet()).resolves.toBe(remembered);
+    expect(picker).not.toHaveBeenCalled();
+  });
+
+  it('ensureWallet opens the picker when the remembered wallet is another account', async () => {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(stored));
+    vi.spyOn(api, 'getSession').mockResolvedValue(info);
+    vi.spyOn(wallet, 'reconnect').mockResolvedValue({
+      accountId: 'bob.testnet',
+      wallet: {} as wallet.NearWallet,
+    });
+    const chosen = {} as wallet.NearWallet;
+    const picker = vi
+      .spyOn(wallet, 'connect')
+      .mockResolvedValue({accountId: 'alice.testnet', wallet: chosen});
+    mount();
+    await screen.findByText('in:alice.testnet');
+    await expect(current.ensureWallet()).resolves.toBe(chosen);
+    expect(picker).toHaveBeenCalledOnce();
   });
 });

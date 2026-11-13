@@ -225,21 +225,25 @@ test('an applicant sees the ceiling, bids, sees the bid, and withdraws it', asyn
   await expect(page.getByText('Up to 5 USDC')).toBeVisible();
   await expect(page.getByText('Worker receives 4.95 USDC after the fee')).toBeVisible();
 
+  // Over the ceiling is said as it is typed, and Send waits (live test, 2026-11-13: only after Send).
   await page.getByLabel(/Your price/).fill('6');
+  await expect(page.getByText('Your price is above the listing’s ceiling.')).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Send my bid'})).toBeDisabled();
+  await page.getByLabel(/Your price/).fill('3.5');
+  await expect(page.getByText('Your price is above the listing’s ceiling.')).toHaveCount(0);
   await page.getByLabel('Your proposal').fill('short');
   await page.getByRole('button', {name: 'Send my bid'}).click();
-  await expect(page.getByText('Your price is above the listing’s ceiling.')).toBeVisible();
   await expect(page.getByText('Your proposal is at least 20 characters (now 5).')).toBeVisible();
 
-  await page.getByLabel(/Your price/).fill('3.5');
   await page.getByLabel('Your proposal').fill('I can shoot it on Tuesday morning with a good camera.');
   await page.getByRole('button', {name: 'Send my bid'}).click();
   const bid = page.getByTestId('my-bid');
   await expect(bid).toContainText('3.5 USDC');
   await expect(bid).toContainText('pending');
   await expect(bid).toContainText('You would receive 3.465 USDC after the fee');
-  // One live bid at a time: the form is replaced by why.
-  await expect(page.getByTestId('bid-blocked')).toContainText('Withdraw it to change your price');
+  // One live bid at a time: the form gives way to a plain "sent", with how to change it.
+  await expect(page.getByTestId('bid-sent')).toContainText('Bid sent at 3.5 USDC');
+  await expect(page.getByTestId('bid-sent')).toContainText('withdraw it above and bid again');
   await expect(page.getByRole('button', {name: 'Send my bid'})).toHaveCount(0);
 
   await page.getByRole('button', {name: 'Withdraw this bid'}).click();
@@ -336,6 +340,12 @@ test('owner: selecting a bid on a person’s listing asks the person’s wallet 
     page.getByRole('list', {name: 'Slots'}).getByRole('link', {name: 'Open the job'}),
   ).toBeVisible();
   await expect(page.getByText('1 of 1 filled').first()).toBeVisible();
+  // Live test, 2026-11-13: right after funding, the slot still said "Needs
+  // funding" with a "Sign and fund" button until a reload — a second payment
+  // offered for a funded job.
+  const slots = page.getByRole('list', {name: 'Slots'});
+  await expect(slots.getByText('Needs funding')).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Sign and fund slot 1'})).toHaveCount(0);
 });
 
 test('owner: selecting a bid on an agent-funded listing shows the signer’s transaction and asks for nothing', async ({

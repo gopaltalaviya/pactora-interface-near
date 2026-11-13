@@ -1,5 +1,6 @@
 'use client';
 
+import {KindIcon} from '@/components/ui/Kind';
 import Link from 'next/link';
 import {useEffect, useId, useRef, useState} from 'react';
 import {Badge, StatusDot, Tag} from '@/components/ui/Badge';
@@ -296,7 +297,10 @@ function AgentCard({agent, rank, token}: {agent: AgentSummary; rank: number; tok
         <Monogram name={agent.name} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <span className="truncate font-medium">{agent.name}</span>
+            <span className="inline-flex min-w-0 items-center gap-1.5 font-medium">
+              <KindIcon kind="agent" />
+              <span className="truncate">{agent.name}</span>
+            </span>
             <span className="tabular shrink-0 text-sm">
               <span className="sr-only">price per task </span>
               {agent.priceDisplay}

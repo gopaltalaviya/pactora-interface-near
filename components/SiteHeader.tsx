@@ -12,7 +12,7 @@ import {useAdminRoles} from '@/lib/admin-roles';
 import {useSession} from '@/lib/session';
 import {SessionProblem} from '@/components/market/SessionProblem';
 import {displayAccount} from '@/lib/near';
-import {Icon} from './ui/Icon';
+import {Icon, type IconName} from './ui/Icon';
 
 /**
  * The frame's top bar: where you are, where you can go, and which chain the
@@ -93,10 +93,12 @@ function AccountMenu() {
     );
   }
 
-  const items: {href: string; label: string}[] = [
-    {href: '/me', label: 'My account'},
-    ...(person ? [{href: '/notifications', label: 'Notifications'}] : []),
-    ...(roles.length > 0 ? [{href: '/admin', label: 'Admin'}] : []),
+  const items: {href: string; label: string; icon: IconName}[] = [
+    {href: '/me', label: 'My account', icon: 'user'},
+    ...(person ? [{href: '/notifications', label: 'Notifications', icon: 'bell' as const}] : []),
+    ...(person ? [{href: '/jobs/new', label: 'Post a listing', icon: 'plus' as const}] : []),
+    {href: '/register', label: 'Register an agent', icon: 'bot'},
+    ...(roles.length > 0 ? [{href: '/admin', label: 'Admin', icon: 'shield' as const}] : []),
   ];
 
   return (
@@ -112,6 +114,7 @@ function AccountMenu() {
         onClick={() => setOpen((o) => !o)}
         className="inline-flex h-8 max-w-[8rem] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge bg-surface/60 px-2.5 text-xs text-muted transition-colors hover:border-edge-strong hover:bg-raised hover:text-text aria-expanded:border-edge-strong aria-expanded:bg-raised aria-expanded:text-text xl:max-w-[11rem]"
       >
+        <Icon name="user" className="size-3.5" />
         <span className="tabular truncate">{displayAccount(account)}</span>
         <Icon
           name="arrowRight"
@@ -140,7 +143,10 @@ function AccountMenu() {
             className={MENU_ITEM}
             onClick={() => setOpen(false)}
           >
-            {item.label}
+            <span className="inline-flex items-center gap-2">
+              <Icon name={item.icon} className="size-4 opacity-80" />
+              {item.label}
+            </span>
             <Icon name="arrowRight" className="size-3 opacity-60" />
           </Link>
         ))}
@@ -155,7 +161,10 @@ function AccountMenu() {
               .catch(() => router.push('/signin'));
           }}
         >
-          Sign out
+          <span className="inline-flex items-center gap-2">
+            <Icon name="logout" className="size-4 opacity-80" />
+            Sign out
+          </span>
         </button>
       </div>
     </div>
@@ -275,14 +284,18 @@ export function SiteHeader() {
             <NotificationsBell />
             <AccountMenu />
             <Link
-              href="/register"
-              aria-label="Register an agent"
+              // A signed-in person's next step is work to post; a visitor's, an agent to
+              // register (live test, 2026-11-13: it was "Register an agent" for everyone).
+              // Register stays in the account menu.
+              href={person ? '/jobs/new' : '/register'}
+              aria-label={person ? 'Post a listing' : 'Register an agent'}
               // Signed in, the account chip takes the room (NEAR account ids are
               // long): the button waits for 2xl, and the menu still offers it.
               className={`group/cta hidden h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-text px-3 text-xs font-medium text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_6px_18px_-8px_rgb(233_237_245/0.45)] transition-[transform,background-color] duration-200 hover:bg-white active:scale-[0.97] ${status === 'in' ? '2xl:inline-flex' : 'xl:inline-flex'}`}
             >
-              <span className="2xl:hidden">Register</span>
-              <span className="hidden 2xl:inline">Register an agent</span>
+              <Icon name={person ? 'plus' : 'bot'} className="size-3.5" />
+              <span className="2xl:hidden">{person ? 'Post' : 'Register'}</span>
+              <span className="hidden 2xl:inline">{person ? 'Post a listing' : 'Register an agent'}</span>
               <Icon
                 name="arrowRight"
                 className="size-3 transition-transform duration-200 group-hover/cta:translate-x-0.5"

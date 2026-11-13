@@ -28,6 +28,8 @@ import {Field, Select, TextArea, TextInput} from '@/components/ui/Field';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {EmptyState, ErrorState, Notice, Skeleton} from '@/components/ui/States';
 import {ReportButton} from '@/components/market/Report';
+import {useReveal} from '@/components/ui/useReveal';
+import {KindBadge, KindIcon} from '@/components/ui/Kind';
 import {StandingBanner} from '@/components/market/Standing';
 import {spendSummary, workSummary} from '@/lib/fees';
 import {spendBlocked} from '@/lib/hire';
@@ -185,7 +187,13 @@ export function ListingView({listingId}: {listingId: string}) {
 
 function Details({listing, token}: {listing: ListingDetail; token: TokenInfo | null}) {
   const rows: [string, ReactNode][] = [
-    ['Posted by', `${listing.client.name} (${listing.client.kind})`],
+    [
+      'Posted by',
+      <span key="by" className="inline-flex items-center justify-end gap-1.5">
+        {listing.client.name}
+        <KindBadge kind={listing.client.kind === 'person' ? 'person' : 'agent'} />
+      </span>,
+    ],
     ['Deadline', utc(listing.deadline)],
     ['Estimated effort', `${listing.estimatedMinutes} min per worker`],
     ['Location', listing.location || 'Anywhere'],
@@ -247,6 +255,8 @@ function ApplicantPanel({
   const [price, setPrice] = useState('');
   const [proposal, setProposal] = useState('');
   const [errors, setErrors] = useState<{price?: string; proposal?: string}>({});
+  /** The bid just sent, said plainly (live test, 2026-11-13: the page showed only "already have a bid"). */
+  const [sentBid, setSentBid] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [claimed, setClaimed] = useState<Decision | null>(null);
@@ -304,6 +314,12 @@ function ApplicantPanel({
 
   const standing = bidStanding(mine);
   const open = listing.status === 'open';
+  // The price checked as it is typed: over the ceiling was said only after Send,
+  // above the button and out of view (live test, 2026-11-13).
+  const livePriceError = price.trim()
+    ? validateBid(price, 'x'.repeat(LIMITS.proposal.min), {decimals, ceiling: listing.maxPriceBaseUnits})
+        .errors.price
+    : undefined;
 
   async function apply(e: FormEvent) {
     e.preventDefault();
@@ -317,6 +333,7 @@ function ApplicantPanel({
     setBusy('apply');
     try {
       await session.authed((t) => market.apply(t, listing.listingId, body));
+      setSentBid(`${price.trim()}${token?.symbol ? ` ${token.symbol}` : ''}`);
       setPrice('');
       setProposal('');
       refreshNotifications();
@@ -481,7 +498,7 @@ function ApplicantPanel({
             <Field
               label={`Your price${token?.symbol ? ` (${token.symbol})` : ''}`}
               htmlFor="bid-price"
-              error={errors.price}
+              error={errors.price ?? livePriceError}
               hintId="bid-price-hint"
               hint={`At most ${listing.maxPriceDisplay}. The fee comes out of what you receive.`}
             >
@@ -489,7 +506,7 @@ function ApplicantPanel({
                 id="bid-price"
                 inputMode="decimal"
                 value={price}
-                invalid={Boolean(errors.price)}
+                invalid={Boolean(errors.price ?? livePriceError)}
                 onChange={(e) => setPrice(e.target.value)}
                 aria-describedby="bid-price-hint"
                 autoComplete="off"
@@ -524,11 +541,23 @@ function ApplicantPanel({
               only={['stake', 'daily', 'near']}
               id="bid-money"
             />
-            <Button type="submit" loading={busy === 'apply'} disabled={busy !== null || notReady}>
+            <Button
+              icon="send"
+              type="submit"
+              loading={busy === 'apply'}
+              disabled={busy !== null || notReady || livePriceError !== undefined}
+            >
               Send my bid
             </Button>
           </form>
         </Card>
+      ) : sentBid ? (
+        <Notice tone="live">
+          <p role="status" data-testid="bid-sent">
+            Bid sent at {sentBid}. The client sees it now, and you are told when they decide. To change the
+            price, withdraw it above and bid again.
+          </p>
+        </Notice>
       ) : (
         <p
           className="rounded-xl border border-edge bg-surface/80 px-4 py-3 text-sm text-muted"
@@ -641,6 +670,7 @@ function OwnerPanel({
     amount: string;
     amountDisplay: string;
   } | null>(null);
+  const fundStep = useReveal<HTMLDivElement>(funding?.jobId ?? null);
   const [signed, setSigned] = useState<{
     jobId: string;
     txHash: string | undefined;
@@ -661,11 +691,17 @@ function OwnerPanel({
           testnet: token.network.testnet,
         })
       : null;
+  const unfunded = useUnfunded(slots, listing);
   const action = usePersonAction(() => {
     setFunding(null);
     reload();
     ownerMoney.reload();
+    // The slot's own lookup too: it kept "Needs funding · Sign and fund" for a
+    // job just funded, until a reload (live test, 2026-11-13).
+    unfunded.refresh();
   });
+  /** The job the wallet just funded: never offered for funding again, whatever a lookup still says. */
+  const justFunded = action.state.done?.jobId ?? null;
 
   async function simple(label: string, run: (t: string) => Promise<unknown>) {
     setBusy(label);
@@ -683,7 +719,6 @@ function OwnerPanel({
 
   const untouched = listing.slotsFilled === 0;
   const pastDeadline = new Date(listing.deadline).getTime() <= Date.now();
-  const unfunded = useUnfunded(slots, listing);
   const [released, setReleased] = useState<{slot: number; reopened: boolean} | null>(null);
 
   async function release(slot: number, applicationId: string) {
@@ -806,53 +841,56 @@ function OwnerPanel({
       </Card>
 
       {funding && (
-        <Card title="Fund the job" labelledBy="fund">
-          <p className="text-sm text-muted">
-            The bid is selected, but the job is not on chain yet. Signing creates it and puts the money in
-            escrow.
-            {funding.signerId ? ` Your wallet must sign as ${funding.signerId}.` : ''}
-          </p>
-          {/* Before the wallet opens: the method, the contract, the money (held against the prepared call). */}
-          <p className="mt-2 text-xs text-muted" data-testid="will-sign-create">
-            You will sign: create_job on {token?.network.contracts.Pactora ?? 'the Pactora contract'}:{' '}
-            {funding.amountDisplay} into escrow.
-          </p>
-          <div className="mt-3 space-y-3">
-            {token && <SpendSummary rows={spendSummary(funding.amount, token.network)} />}
-            <MoneyPanel
-              network={token?.network ?? null}
-              money={ownerMoney}
-              account={session.account}
-              chainAgentId={session.person?.chainAgentId ?? null}
-              compact
-              only={['purse', 'daily', 'storage', 'near']}
-              id="fund-money"
-            />
-            <NotReady
-              readiness={fundBlock(funding.amount) ?? {reason: null, fixes: []}}
-              testId="fund-blocked"
-            />
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button
-              loading={action.state.busy}
-              disabled={
-                action.state.busy || action.state.pending !== null || fundBlock(funding.amount) !== null
-              }
-              onClick={() =>
-                void action.run(funding.jobId, 'create', {}, {chainJobId: null, amount: funding.amount})
-              }
-            >
-              Sign and fund the job
-            </Button>
-            <Link href={`/jobs/${funding.jobId}`} className="text-sm text-accent underline">
-              Open the job
-            </Link>
-          </div>
-          <div className="mt-3">
-            <ActionFeedback state={action.state} recheck={() => void action.recheck()} />
-          </div>
-        </Card>
+        <div ref={fundStep} className="outline-none" data-testid="fund-step">
+          <Card title="Fund the job" labelledBy="fund">
+            <p className="text-sm text-muted">
+              The bid is selected, but the job is not on chain yet. Signing creates it and puts the money in
+              escrow.
+              {funding.signerId ? ` Your wallet must sign as ${funding.signerId}.` : ''}
+            </p>
+            {/* Before the wallet opens: the method, the contract, the money (held against the prepared call). */}
+            <p className="mt-2 text-xs text-muted" data-testid="will-sign-create">
+              You will sign: create_job on {token?.network.contracts.Pactora ?? 'the Pactora contract'}:{' '}
+              {funding.amountDisplay} into escrow.
+            </p>
+            <div className="mt-3 space-y-3">
+              {token && <SpendSummary rows={spendSummary(funding.amount, token.network)} />}
+              <MoneyPanel
+                network={token?.network ?? null}
+                money={ownerMoney}
+                account={session.account}
+                chainAgentId={session.person?.chainAgentId ?? null}
+                compact
+                only={['purse', 'daily', 'storage', 'near']}
+                id="fund-money"
+              />
+              <NotReady
+                readiness={fundBlock(funding.amount) ?? {reason: null, fixes: []}}
+                testId="fund-blocked"
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                icon="wallet"
+                loading={action.state.busy}
+                disabled={
+                  action.state.busy || action.state.pending !== null || fundBlock(funding.amount) !== null
+                }
+                onClick={() =>
+                  void action.run(funding.jobId, 'create', {}, {chainJobId: null, amount: funding.amount})
+                }
+              >
+                Sign and fund the job
+              </Button>
+              <Link href={`/jobs/${funding.jobId}`} className="text-sm text-accent underline">
+                Open the job
+              </Link>
+            </div>
+            <div className="mt-3">
+              <ActionFeedback state={action.state} recheck={() => void action.recheck()} />
+            </div>
+          </Card>
+        </div>
       )}
 
       {action.state.done && !funding && (
@@ -915,7 +953,7 @@ function OwnerPanel({
               className="flex items-center justify-between rounded-lg border border-edge px-3 py-2 text-sm"
             >
               <span>Slot {s.slot}</span>
-              {s.jobId && unfunded.rows.get(s.jobId) ? (
+              {s.jobId && s.jobId !== justFunded && unfunded.rows.get(s.jobId) ? (
                 <span className="flex flex-wrap items-center justify-end gap-2">
                   <Badge tone="refused">Needs funding</Badge>
                   {funding?.jobId !== s.jobId && (
@@ -972,7 +1010,7 @@ function OwnerPanel({
           // Why a slot's "Sign and fund" is off: the first unfunded slot the purse cannot cover.
           if (funding) return null;
           const blocked = slots
-            .map((s) => (s.jobId ? unfunded.rows.get(s.jobId) : undefined))
+            .map((s) => (s.jobId && s.jobId !== justFunded ? unfunded.rows.get(s.jobId) : undefined))
             .map((row) => (row ? fundBlock(row.amount) : null))
             .find((b) => b !== null);
           return blocked ? (
@@ -1312,7 +1350,10 @@ function Applications({
                 data-testid="bid-card"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{a.applicant.name}</span>
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <KindIcon kind={a.applicant.kind === 'person' ? 'person' : 'agent'} />
+                    {a.applicant.name}
+                  </span>
                   <Badge
                     tone={a.status === 'selected' ? 'settled' : a.status === 'pending' ? 'live' : 'neutral'}
                   >
@@ -1393,7 +1434,10 @@ function Applications({
                     data-testid="bid-row"
                   >
                     <td className="py-3 pr-3">
-                      <div className="font-medium">{a.applicant.name}</div>
+                      <div className="inline-flex items-center gap-1.5 font-medium">
+                        <KindIcon kind={a.applicant.kind === 'person' ? 'person' : 'agent'} />
+                        {a.applicant.name}
+                      </div>
                       <div className="text-xs text-muted">
                         {a.applicant.location || 'no location'} · score {a.applicant.score} ·{' '}
                         {a.applicant.completed} done

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
+import {useReveal} from '@/components/ui/useReveal';
 import {ActionFeedback, errorText, usePersonAction, useNetwork} from '@/components/market/hooks';
 import {Button, ButtonLink} from '@/components/ui/Button';
 import {Card} from '@/components/ui/Card';
@@ -60,6 +61,7 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
   const [busy, setBusy] = useState(false);
   const [hired, setHired] = useState<Hired | null>(null);
   const keyRef = useRef<KeyState | null>(null);
+  const nextStep = useReveal<HTMLDivElement>(hired?.job?.jobId ?? null);
   const action = usePersonAction();
 
   // The prefill follows the token's decimals once the network is known.
@@ -235,6 +237,7 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
             size="sm"
             loading={busy}
             disabled={busy || blocked !== null || !token || moneyBlock !== null}
+            icon="briefcase"
           >
             Hire
           </Button>
@@ -248,7 +251,7 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
           )}
         </form>
       ) : (
-        <div className="space-y-3 text-sm">
+        <div className="space-y-3 text-sm outline-none" ref={nextStep} data-testid="hire-next">
           {mustSign && job && (
             <>
               <p className="text-muted">
@@ -262,6 +265,7 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
               </p>
               {moneyBlock && <NotReady readiness={moneyBlock} testId="hire-money-blocked" />}
               <Button
+                icon="wallet"
                 size="sm"
                 loading={action.state.busy}
                 disabled={action.state.busy || action.state.pending !== null || moneyBlock !== null}

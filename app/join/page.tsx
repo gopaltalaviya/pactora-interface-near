@@ -14,7 +14,8 @@ import {displayAccount, formatYocto} from '@/lib/near';
 import {useSession} from '@/lib/session';
 import {REGISTRATION_AMOUNTS, registerPersonOnChain} from '@/lib/wallet';
 import {signInHref} from '@/lib/signin-next';
-import {recordTermsAcceptance} from '@/lib/terms';
+import {recordTermsAcceptance, TERMS_VERSION} from '@/lib/terms';
+import {market} from '@/lib/market';
 
 /**
  * Join as a person (F2).
@@ -140,6 +141,8 @@ export default function JoinPage() {
           ...(description.trim() ? {description: description.trim()} : {}),
         }),
       );
+      // Also on the account (2026-11-13), not only in this browser; best effort, /me retries.
+      await session.authed((t) => market.acceptTerms(t, TERMS_VERSION)).catch(() => undefined);
       await session.refresh().catch(() => undefined);
       setCreated(person);
     } catch (err) {

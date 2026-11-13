@@ -109,3 +109,18 @@ test('the notifications page passes an accessibility scan', async ({page}, info)
   await expect(page.getByTestId('notification-groups')).toBeVisible();
   await expectNoBlockingViolations(page, 'notifications');
 });
+
+// Found in the manual live test of 2026-11-13: a signed-in account with no
+// person record was told "Get test mUSDC from the faucet", but the link
+// (/me#faucet) led nowhere, since the card was shown to people only. The API
+// (routes/faucet.ts) lets any signed-in account claim; so does the page now.
+test('an account with no person record still gets the faucet card, and can claim', async ({page}, info) => {
+  const account = `newbie-${info.project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${info.workerIndex}.testnet`;
+  await signInAs(page, account);
+  await page.goto('/me#faucet');
+  await expect(page.getByTestId('me-person')).toHaveText('None yet');
+  const card = page.getByRole('region', {name: 'Test tokens'});
+  await expect(card).toContainText('once a day');
+  await card.getByRole('button', {name: 'Claim test tokens'}).click();
+  await expect(card.getByTestId('faucet-sent')).toContainText('from faucet.testnet');
+});

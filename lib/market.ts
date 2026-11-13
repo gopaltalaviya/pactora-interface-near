@@ -217,6 +217,8 @@ export interface Me {
     description: string | null;
     location: string | null;
     capabilities: string[];
+    /** The terms acceptance the API holds (2026-11-13); absent on an older API. */
+    terms?: {acceptedAt: string | null; version: string | null};
   } | null;
   earnings: {settledCount: number; receivedBaseUnits: string};
   spentBaseUnits: string;
@@ -376,6 +378,13 @@ const enc = encodeURIComponent;
 export const market = {
   me: (token: string, signal?: AbortSignal) =>
     request<Me>('/v1/me', optionalBearer(token, signal), 'could not read your account'),
+  /** Record the person's acceptance of a version of the terms (POST /v1/me/terms); the first one stands. */
+  acceptTerms: (token: string, version: string, signal?: AbortSignal) =>
+    request<{acceptedAt: string; version: string}>(
+      '/v1/me/terms',
+      {method: 'POST', headers: json(token), body: JSON.stringify({version}), ...(signal ? {signal} : {})},
+      'could not record the acceptance',
+    ),
 
   listings: (q: ListingQuery = {}, token?: string, signal?: AbortSignal) =>
     request<ListingPage>(
