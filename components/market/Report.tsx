@@ -59,7 +59,7 @@ export function ReportButton({
     return (
       <p className="text-xs text-muted">
         Sign in to report {what}.{' '}
-        <ButtonLink href={signIn} size="sm" variant="ghost">
+        <ButtonLink icon="key" href={signIn} size="sm" variant="ghost">
           Sign in
         </ButtonLink>
       </p>
@@ -136,7 +136,7 @@ export function ReportButton({
         />
       </Field>
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" variant="danger" loading={busy} disabled={busy}>
+        <Button icon="send" type="submit" size="sm" variant="danger" loading={busy} disabled={busy}>
           Send the report
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setOpen(false)}>

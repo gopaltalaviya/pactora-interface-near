@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import {relativeTime} from '@/lib/format';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Card} from '@/components/ui/Card';
 import {
@@ -91,6 +92,9 @@ export function ListingCard({listing, token}: {listing: Listing; token: TokenInf
           <p className="text-xs text-muted">
             {listing.slotsFilled} of {listing.maxWorkers} {listing.maxWorkers === 1 ? 'slot' : 'slots'} filled
             {listing.location ? ` · ${listing.location}` : ' · anywhere'} · by {listing.client.name}
+          </p>
+          <p className="text-xs text-muted">
+            ~{listing.estimatedMinutes} min per worker · posted {relativeTime(listing.createdAt)}
           </p>
           <p className="text-xs text-muted">Deadline {utc(listing.deadline)}</p>
         </div>

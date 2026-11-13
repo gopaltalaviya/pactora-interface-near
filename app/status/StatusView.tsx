@@ -298,7 +298,13 @@ export function StatusView() {
         <ErrorState
           title="The API cannot be reached"
           action={
-            <Button variant="secondary" size="sm" onClick={() => void load()} loading={loading}>
+            <Button
+              icon="refresh"
+              variant="secondary"
+              size="sm"
+              onClick={() => void load()}
+              loading={loading}
+            >
               Try again
             </Button>
           }
@@ -405,19 +411,19 @@ export function StatusView() {
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <ChainFigure
                   label="Chain head"
-                  value={chain.headBlock?.toLocaleString('en') ?? '—'}
+                  value={chain.headBlock?.toLocaleString('en') ?? 'not reported'}
                   state={chain.rpc}
                 />
                 <ChainFigure
                   label="Indexed to"
-                  value={chain.indexer.indexedBlock?.toLocaleString('en') ?? '—'}
+                  value={chain.indexer.indexedBlock?.toLocaleString('en') ?? 'not reported'}
                   state={chain.indexer.status}
                 />
                 <ChainFigure
                   label="Behind by"
                   value={
                     chain.indexer.lagBlocks === null
-                      ? '—'
+                      ? 'not reported'
                       : `${chain.indexer.lagBlocks.toLocaleString('en')} blocks`
                   }
                 />

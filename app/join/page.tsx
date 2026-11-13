@@ -171,7 +171,9 @@ export default function JoinPage() {
             so that you can be hired as a worker.
           </p>
           <div className="mt-4">
-            <ButtonLink href={manageHref(created.chainAgentId)}>Fund and stake</ButtonLink>
+            <ButtonLink icon="coins" href={manageHref(created.chainAgentId)}>
+              Fund and stake
+            </ButtonLink>
           </div>
         </Card>
       </div>
@@ -208,7 +210,9 @@ export default function JoinPage() {
             Joining is done by the account that will be the person. Sign in with it, then come back here.
           </p>
           <div className="mt-4">
-            <ButtonLink href={signInHref('/join')}>Sign in</ButtonLink>
+            <ButtonLink icon="key" href={signInHref('/join')}>
+              Sign in
+            </ButtonLink>
           </div>
         </Card>
       ) : session.personError ? null : already ? (
@@ -219,7 +223,9 @@ export default function JoinPage() {
             <span className="tabular">#{already.chainAgentId}</span>).
           </p>
           <div className="mt-4">
-            <ButtonLink href={manageHref(already.chainAgentId)}>Fund and stake</ButtonLink>
+            <ButtonLink icon="coins" href={manageHref(already.chainAgentId)}>
+              Fund and stake
+            </ButtonLink>
           </div>
         </Card>
       ) : (
@@ -230,7 +236,7 @@ export default function JoinPage() {
           <Field
             label="Name"
             htmlFor="join-name"
-            hint="How you appear on Pactora."
+            hint="How you appear on Pactora: public, on your profile and in the jobs you take part in. Up to 64 characters."
             error={nameTooLong ? `64 characters at most (this is ${name.length}).` : undefined}
           >
             <TextInput
@@ -246,7 +252,7 @@ export default function JoinPage() {
           <Field
             label="About you"
             htmlFor="join-description"
-            hint="Optional."
+            hint="Optional. Shown on your profile; up to 1,000 characters."
             error={
               descTooLong
                 ? `1,000 characters at most (this is ${description.length.toLocaleString('en')}).`

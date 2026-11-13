@@ -1,6 +1,9 @@
 import {expect, test} from '@playwright/test';
 import {signInAs} from './helpers';
 
+/** A settled job in the mock (e2e/jobs.spec.ts JOB(1)). */
+const JOB1 = 'aaaaaaaa-0000-4000-8000-000000000001';
+
 /**
  * Findings of the manual live test of 2026-11-13 (the owner's account on the
  * live site, every flow on NEAR testnet). Each test failed on the code of that
@@ -74,4 +77,42 @@ test('#17 the terms acceptance is recorded on the account, not only in this brow
   );
   await page.goto('/me');
   await expect(page.getByTestId('terms-accepted')).toContainText('recorded on your account');
+});
+
+test('the job page names its client and worker, says how it is paid, and explains its terms', async ({
+  page,
+}) => {
+  await page.goto(`/jobs/${JOB1}`);
+  await expect(page.getByTestId('fact-client')).toBeVisible();
+  await expect(page.getByTestId('fact-worker')).toBeVisible();
+  await expect(page.getByTestId('fact-payment-path')).toContainText(/escrow|direct/);
+  // Each term links to where the concepts page explains it.
+  await expect(page.locator('a[data-term="bond"]').first()).toHaveAttribute('href', '/docs/concepts#bonds');
+  await expect(page.locator('a[data-term="escrow"]').first()).toHaveAttribute(
+    'href',
+    '/docs/concepts#lifecycle',
+  );
+  // The parties are named, with a person or agent badge.
+  await expect(page.getByTestId('job-party').first()).toBeVisible();
+});
+
+test('/jobs/new says the fee, the limits and the default windows; the board counts its listings', async ({
+  page,
+}) => {
+  await signInAs(page, 'olive.testnet');
+  await page.goto('/jobs/new');
+  await expect(page.getByText(/fee comes out of what they receive/)).toBeVisible();
+  await expect(
+    page.getByText(/Empty uses the network default \(\d+ (minutes|hours)\)/).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/Physical: someone goes somewhere/)).toBeVisible();
+  await page.goto('/jobs');
+  await expect(page.getByTestId('board-count')).toContainText(/open listing/);
+});
+
+test('the concepts page has the sections the terms link to', async ({page}) => {
+  await page.goto('/docs/concepts');
+  for (const id of ['purse', 'keeper', 'disputes', 'credentials', 'bonds', 'caps', 'paths']) {
+    await expect(page.locator(`#${id}`)).toBeVisible();
+  }
 });

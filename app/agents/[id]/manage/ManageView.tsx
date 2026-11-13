@@ -56,6 +56,12 @@ const message = (err: unknown) =>
 
 type Done = {label: string; txHash: string | null};
 
+/** A delay in words: days, hours or minutes. */
+function delayText(seconds: number): string {
+  if (seconds % 86_400 === 0) return `${seconds / 86_400} day${seconds === 86_400 ? '' : 's'}`;
+  if (seconds % 3_600 === 0) return `${seconds / 3_600} hour${seconds === 3_600 ? '' : 's'}`;
+  return `${Math.round(seconds / 60)} minutes`;
+}
 export function ManageView({chainAgentId}: {chainAgentId: string}) {
   const session = useSession();
   const pathname = `/agents/${chainAgentId}/manage`;
@@ -199,7 +205,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
         <ErrorState
           title={loadError}
           action={
-            <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+            <Button icon="refresh" variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
               Retry
             </Button>
           }
@@ -561,7 +567,9 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
           />
           <Card
             title="Unstake"
-            description="Leaving the stake takes a delay, and can be cancelled."
+            description={`Leaving the stake takes ${
+              network.withdrawDelaySeconds ? delayText(network.withdrawDelaySeconds) : 'a delay'
+            } before it can be withdrawn, and can be cancelled meanwhile. Stake locked in an open job stays locked.`}
             labelledBy="unstake"
           >
             {stake && stake.pending !== '0' ? (
@@ -678,7 +686,7 @@ export function ManageView({chainAgentId}: {chainAgentId: string}) {
 
       <p className="text-xs text-muted">
         Every action is a transaction your wallet shows before it signs. Testnet only.{' '}
-        <ButtonLink href="/status" size="sm" variant="ghost">
+        <ButtonLink icon="activity" href="/status" size="sm" variant="ghost">
           System status
         </ButtonLink>
       </p>
@@ -870,7 +878,7 @@ function CapsCard({
   return (
     <Card
       title="Spending caps"
-      description="The most the agent can spend on one task and in one day."
+      description="The most it can spend on one job and in a rolling 24 hours. The contract refuses a hire over either cap; the daily one frees up as the last 24 hours roll on."
       labelledBy="caps-card"
     >
       <form
@@ -916,7 +924,7 @@ function CapsCard({
             invalid={(daily !== '' && b === null) || order}
           />
         </Field>
-        <Button type="submit" size="sm" loading={busy} disabled={disabled || bad || order}>
+        <Button icon="check" type="submit" size="sm" loading={busy} disabled={disabled || bad || order}>
           Set caps
         </Button>
       </form>

@@ -1,5 +1,7 @@
 'use client';
 
+import {Term} from '@/components/ui/Term';
+import {Icon, type IconName} from '@/components/ui/Icon';
 import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {errorText, SignInGate, useMe, useNetwork} from '@/components/market/hooks';
@@ -53,12 +55,12 @@ import {termsAcceptedAt, TERMS_VERSION} from '@/lib/terms';
  */
 
 type Tab = 'overview' | 'profile' | 'jobs' | 'listings' | 'settings';
-const TABS: {id: Tab; label: string}[] = [
-  {id: 'overview', label: 'Overview'},
-  {id: 'profile', label: 'Profile'},
-  {id: 'jobs', label: 'Jobs'},
-  {id: 'listings', label: 'Listings'},
-  {id: 'settings', label: 'Settings'},
+const TABS: {id: Tab; label: string; icon: IconName}[] = [
+  {id: 'overview', label: 'Overview', icon: 'activity'},
+  {id: 'profile', label: 'Profile', icon: 'user'},
+  {id: 'jobs', label: 'Jobs', icon: 'briefcase'},
+  {id: 'listings', label: 'Listings', icon: 'list'},
+  {id: 'settings', label: 'Settings', icon: 'settings'},
 ];
 const isTab = (v: string): v is Tab => TABS.some((t) => t.id === v);
 
@@ -81,6 +83,14 @@ function useTab(): [Tab, (t: Tab) => void] {
   return [tab, pick];
 }
 
+/** What a bid's status means, on hover (live audit, 2026-11-13). */
+const BID_STATUS_MEANING: Record<string, string> = {
+  pending: 'Waiting for the client to decide',
+  selected: 'Chosen: a job was created at this price',
+  rejected: 'Not chosen this time',
+  withdrawn: 'You withdrew this bid',
+  expired: 'The listing closed before a decision',
+};
 export function MeView() {
   const session = useSession();
   // The API revokes the session that deleted the account; the result stays on screen regardless.
@@ -172,10 +182,11 @@ function Signed({onDeleted}: {onDeleted: (what: string) => void}) {
             tabIndex={tab === t.id ? 0 : -1}
             onClick={() => pick(t.id)}
             onKeyDown={(e) => onKey(e, i)}
-            className={`min-h-9 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
               tab === t.id ? 'border-accent bg-accent/10 text-text' : 'border-edge text-muted hover:text-text'
             }`}
           >
+            <Icon name={t.icon} className="size-4" />
             {t.label}
           </button>
         ))}
@@ -259,7 +270,7 @@ function Overview() {
       <ErrorState
         title="Could not load your account"
         action={
-          <Button variant="secondary" size="sm" onClick={reload}>
+          <Button icon="refresh" variant="secondary" size="sm" onClick={reload}>
             Retry
           </Button>
         }
@@ -325,7 +336,8 @@ function Overview() {
             </Link>
             <span className="text-muted">
               {' '}
-              · your record&apos;s purse and stake (on-chain #{me.person.chainAgentId})
+              · your record&apos;s <Term name="purse" /> and <Term name="stake" /> (agent #
+              {me.person.chainAgentId} in the Pactora contract)
             </span>
           </p>
         ) : (
@@ -393,7 +405,7 @@ function MyAgents() {
       <ErrorState
         title="Could not load your agents"
         action={
-          <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+          <Button icon="refresh" variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
             Retry
           </Button>
         }
@@ -491,6 +503,7 @@ function MyListings() {
       actions={
         <div className="w-36">
           <Select
+            icon="filter"
             aria-label="Listing status"
             value={status}
             onChange={(e) => setStatus(e.target.value as ListingStatus)}
@@ -527,7 +540,7 @@ function MyListings() {
           </ul>
           {next && (
             <div className="mt-4 flex justify-center">
-              <Button variant="secondary" loading={more} onClick={() => void loadMore()}>
+              <Button icon="chevronDown" variant="secondary" loading={more} onClick={() => void loadMore()}>
                 Load more listings
               </Button>
             </div>
@@ -611,6 +624,7 @@ function MyJobs() {
       actions={
         <div className="w-44">
           <Select
+            icon="filter"
             aria-label="Job status"
             value={status}
             onChange={(e) => pickStatus(isJobFilter(e.target.value) ? e.target.value : '')}
@@ -662,7 +676,7 @@ function MyJobs() {
           </ul>
           {next && (
             <div className="mt-4 flex justify-center">
-              <Button variant="secondary" loading={more} onClick={() => void loadMore()}>
+              <Button icon="chevronDown" variant="secondary" loading={more} onClick={() => void loadMore()}>
                 Load more jobs
               </Button>
             </div>
@@ -751,14 +765,16 @@ function MyBids() {
                       Open the job
                     </Link>
                   )}
-                  <Badge tone={tone(a.status)}>{a.status}</Badge>
+                  <span title={BID_STATUS_MEANING[a.status] ?? a.status}>
+                    <Badge tone={tone(a.status)}>{a.status}</Badge>
+                  </span>
                 </div>
               </li>
             ))}
           </ul>
           {next && (
             <div className="mt-4 flex justify-center">
-              <Button variant="secondary" loading={more} onClick={() => void loadMore()}>
+              <Button icon="chevronDown" variant="secondary" loading={more} onClick={() => void loadMore()}>
                 Load more bids
               </Button>
             </div>
@@ -809,7 +825,7 @@ function SessionsCard() {
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {!confirm ? (
-          <Button size="sm" variant="secondary" onClick={() => setConfirm(true)}>
+          <Button icon="logout" size="sm" variant="secondary" onClick={() => setConfirm(true)}>
             Sign out everywhere
           </Button>
         ) : (
@@ -896,6 +912,7 @@ function YourDataCard({onDeleted}: {onDeleted: (what: string) => void}) {
       <div className="space-y-4 text-sm">
         <div className="flex flex-wrap items-center gap-3">
           <Button
+            icon="download"
             size="sm"
             variant="secondary"
             loading={busy === 'export'}
@@ -911,7 +928,13 @@ function YourDataCard({onDeleted}: {onDeleted: (what: string) => void}) {
         </div>
         <div className="space-y-2 border-t border-edge pt-4">
           {!confirm ? (
-            <Button size="sm" variant="danger" disabled={busy !== null} onClick={() => setConfirm(true)}>
+            <Button
+              icon="trash"
+              size="sm"
+              variant="danger"
+              disabled={busy !== null}
+              onClick={() => setConfirm(true)}
+            >
               Delete my account
             </Button>
           ) : (
@@ -1071,7 +1094,7 @@ function FaucetCard() {
             Meanwhile you can still look around: jobs, agents and receipts need no tokens.
           </p>
           {unavailable === 'unreadable' && (
-            <Button size="sm" variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+            <Button icon="refresh" size="sm" variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
               Try again
             </Button>
           )}

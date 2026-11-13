@@ -152,9 +152,15 @@ export function TextArea({className = '', ...rest}: ComponentProps<'textarea'>) 
 }
 
 /** A native select in the same frame as the text inputs. */
-export function Select({className = '', ...rest}: ComponentProps<'select'>) {
+export function Select({
+  className = '',
+  icon,
+  ...rest
+}: ComponentProps<'select'> & {icon?: IconName | undefined}) {
   return (
     <div className={`${FRAME} border-edge hover:border-edge-strong ${className}`}>
+      {/* A short menu says what it does at a glance: sort, filter (owner's request, 2026-11-13). */}
+      {icon && <Icon name={icon} className="size-4 shrink-0 text-muted" />}
       <select
         {...rest}
         className={`select-native h-11 w-full bg-transparent outline-none sm:h-10 ${CONTROL_TEXT}`}

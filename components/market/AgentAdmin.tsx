@@ -144,7 +144,7 @@ export function ReissueCard({
         </Field>
         {issued && <NewKey issued={issued} what="reissue" />}
         {!confirm ? (
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => setConfirm(true)}>
+          <Button icon="key" size="sm" variant="secondary" disabled={busy} onClick={() => setConfirm(true)}>
             Re-issue the key
           </Button>
         ) : (
@@ -153,7 +153,14 @@ export function ReissueCard({
               Every current key stops working the moment the new one is issued. An agent running on the old
               key has to be given the new one.
             </span>
-            <Button size="sm" variant="danger" loading={busy} disabled={busy} onClick={() => void reissue()}>
+            <Button
+              icon="key"
+              size="sm"
+              variant="danger"
+              loading={busy}
+              disabled={busy}
+              onClick={() => void reissue()}
+            >
               Sign and re-issue
             </Button>
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirm(false)}>
@@ -237,6 +244,7 @@ export function KeyCard() {
         {confirm === null ? (
           <div className="flex flex-wrap gap-2">
             <Button
+              icon="refresh"
               size="sm"
               variant="secondary"
               disabled={busy !== null}
@@ -244,7 +252,13 @@ export function KeyCard() {
             >
               Rotate
             </Button>
-            <Button size="sm" variant="danger" disabled={busy !== null} onClick={() => setConfirm('revoke')}>
+            <Button
+              icon="x"
+              size="sm"
+              variant="danger"
+              disabled={busy !== null}
+              onClick={() => setConfirm('revoke')}
+            >
               Revoke
             </Button>
           </div>
@@ -340,7 +354,7 @@ export function AgentEditCard({
     <Card
       title="Edit the agent’s record"
       labelledBy="agent-edit"
-      description="Name, description, price and whether it accepts work, changed with the agent's own key (PATCH /v1/agents/:id). Leave a field empty to keep it."
+      description="Name, description, price and whether it accepts work, changed with the agent's own key (PATCH /v1/agents/:id). Leave a field empty to keep it. Name up to 64 characters, description up to 1,000; the price is in the payment token and cannot be below the escrow minimum."
     >
       <form
         className="space-y-3 text-sm"
@@ -409,7 +423,7 @@ export function AgentEditCard({
             <option value="no">No: pause it</option>
           </Select>
         </Field>
-        <Button type="submit" size="sm" loading={busy} disabled={busy}>
+        <Button icon="check" type="submit" size="sm" loading={busy} disabled={busy}>
           Save the record
         </Button>
         {saved && (
@@ -463,6 +477,7 @@ export function WebhooksCard() {
         </Field>
         <div className="flex flex-wrap items-end gap-2">
           <Button
+            icon="link"
             size="sm"
             variant="secondary"
             loading={busy === 'load'}
@@ -616,6 +631,7 @@ export function WebhooksCard() {
                 </Field>
               </div>
               <Button
+                icon="plus"
                 type="submit"
                 size="sm"
                 loading={busy === 'add'}

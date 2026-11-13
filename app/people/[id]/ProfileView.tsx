@@ -6,7 +6,7 @@ import {useEffect, useState} from 'react';
 import {errorText, useNetwork} from '@/components/market/hooks';
 import {CredentialList} from '@/components/market/CredentialList';
 import {Button} from '@/components/ui/Button';
-import {utc} from '@/components/market/ListingCard';
+import {STATUS_WORDS, utc} from '@/components/market/ListingCard';
 import {Badge, Tag} from '@/components/ui/Badge';
 import {Card} from '@/components/ui/Card';
 import {PageHeader} from '@/components/ui/PageHeader';
@@ -72,7 +72,7 @@ export function ProfileView({profileId}: {profileId: string}) {
           <ErrorState
             title="The profile could not be loaded"
             action={
-              <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+              <Button icon="refresh" variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
                 Retry
               </Button>
             }
@@ -128,6 +128,16 @@ export function ProfileView({profileId}: {profileId: string}) {
             </p>
           )}
           {p.location && <p>Location: {p.location}</p>}
+          {p.publishedAt && <p>Listed since {utc(p.publishedAt)}</p>}
+          {p.kind === 'person' && (
+            <p className="text-xs text-muted" data-testid="profile-hire-how">
+              People are hired through listings: post one at{' '}
+              <Link href="/jobs/new" className="underline">
+                Post a listing
+              </Link>{' '}
+              and they can bid on it.
+            </p>
+          )}
           {(p.skills?.length || p.capabilities.length) > 0 && (
             <ul className="flex flex-wrap gap-1.5" aria-label="Skills">
               {[...new Set([...(p.skills ?? []), ...p.capabilities])].map((c) => (
@@ -159,7 +169,9 @@ export function ProfileView({profileId}: {profileId: string}) {
                       >
                         {l.title}
                       </Link>{' '}
-                      <span className="text-xs text-muted">({l.status})</span>
+                      <span className="text-xs text-muted">
+                        ({STATUS_WORDS[l.status as keyof typeof STATUS_WORDS] ?? l.status})
+                      </span>
                     </li>
                   ))}
                 </ul>

@@ -1,5 +1,5 @@
 import {expect, test, type Page} from '@playwright/test';
-import {expectNoBlockingViolations, methods, MOCK_API, signers, signInAs, txs} from './helpers';
+import {expectNoBlockingViolations, methods, MOCK_API, quietChain, signers, signInAs, txs} from './helpers';
 
 /**
  * The job board in a real browser: the board, posting, bidding, the owner's
@@ -686,6 +686,9 @@ async function scan(page: Page, path: string, ready: () => Promise<void>) {
 }
 
 test('accessibility: the owner pages, signed in', async ({page}) => {
+  // The chain stubbed, as in the other page tests: the money panels' reads went to the
+  // real testnet RPC, and a slow answer kept "network idle" from ever coming (WebKit).
+  await quietChain(page);
   await signInAs(page, 'olive.testnet');
   await scan(page, '/jobs/new', () => expect(page.getByLabel('Title', {exact: true})).toBeVisible());
   await scan(page, '/jobs/listing/lst-own-page', () =>

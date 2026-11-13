@@ -37,8 +37,10 @@ export default function PageError({error, reset}: {error: Error & {digest?: stri
         <Button onClick={reset}>
           <Icon name="refresh" /> Try again
         </Button>
-        <ButtonLink href="/">Back to the demo</ButtonLink>
-        <ButtonLink href="/status" variant="ghost">
+        <ButtonLink icon="arrowLeft" href="/">
+          Back to the demo
+        </ButtonLink>
+        <ButtonLink icon="activity" href="/status" variant="ghost">
           Check status
         </ButtonLink>
       </div>

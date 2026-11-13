@@ -223,7 +223,7 @@ export function ProfileEditor() {
           <span>Publish: list me in the directory</span>
         </label>
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={busy} loading={busy} onClick={() => void save()}>
+          <Button icon="check" disabled={busy} loading={busy} onClick={() => void save()}>
             Save profile
           </Button>
           {saved && (
@@ -327,7 +327,7 @@ export function PartyReviewCard({jobId, attempt}: {jobId: string; attempt: numbe
                 onChange={(e) => setBody(e.target.value)}
               />
             </Field>
-            <Button size="sm" disabled={busy} loading={busy} onClick={() => void send()}>
+            <Button icon="send" size="sm" disabled={busy} loading={busy} onClick={() => void send()}>
               Send review
             </Button>
           </form>

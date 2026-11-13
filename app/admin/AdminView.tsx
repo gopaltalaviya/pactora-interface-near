@@ -1,5 +1,6 @@
 'use client';
 
+import {Icon, type IconName} from '@/components/ui/Icon';
 import {useCallback, useEffect, useState} from 'react';
 import Link from 'next/link';
 import {errorText, networkPromise, SignInGate, useNetwork} from '@/components/market/hooks';
@@ -44,6 +45,14 @@ import {checkDaoCall, type DaoExpectation} from '@/lib/wallet-guard';
  * is decided by the API on every request; this page only shows the tabs the
  * API says you have.
  */
+
+/** One icon per desk, beside its name. */
+const ADMIN_TAB_ICON: Record<AdminTab, IconName> = {
+  disputes: 'alert',
+  moderation: 'shield',
+  reports: 'list',
+  compliance: 'key',
+};
 export function AdminView() {
   const session = useSession();
   return (
@@ -65,7 +74,7 @@ const isRefusal = (err: unknown) =>
 
 function Retry({onClick}: {onClick: () => void}) {
   return (
-    <Button variant="secondary" size="sm" onClick={onClick}>
+    <Button icon="refresh" variant="secondary" size="sm" onClick={onClick}>
       Retry
     </Button>
   );
@@ -123,9 +132,10 @@ function Console() {
             key={id}
             role="tab"
             aria-selected={tab === id}
-            className={`rounded-lg border px-3 py-1.5 text-sm ${tab === id ? 'border-accent text-text' : 'border-edge text-muted'}`}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${tab === id ? 'border-accent text-text' : 'border-edge text-muted'}`}
             onClick={() => setTab(id)}
           >
+            <Icon name={ADMIN_TAB_ICON[id]} className="size-4" />
             {label}
           </button>
         ))}
@@ -901,7 +911,7 @@ function AuditExport() {
             disabled={busy}
           />
         </Field>
-        <Button type="submit" size="sm" variant="secondary" loading={busy} disabled={busy}>
+        <Button icon="download" type="submit" size="sm" variant="secondary" loading={busy} disabled={busy}>
           Export audit log (CSV)
         </Button>
       </div>

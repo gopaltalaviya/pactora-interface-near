@@ -1,5 +1,6 @@
 'use client';
 
+import {amountDisplay} from '@/lib/market';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
 import {useReveal} from '@/components/ui/useReveal';
@@ -51,6 +52,17 @@ const fresh = () =>
 export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: boolean | null}) {
   const session = useSession();
   const token = useNetwork();
+  // Limits and the accept window, from the network (live audit, 2026-11-13).
+  const hireNet = token?.network;
+  const limitsHint =
+    hireNet?.minJobAmount && token
+      ? ` Between ${amountDisplay(hireNet.minJobAmount, token.decimals, token.symbol)}${
+          hireNet.maxJobAmount
+            ? ` and ${amountDisplay(hireNet.maxJobAmount, token.decimals, token.symbol)}`
+            : ''
+        }; your per-job cap also applies.`
+      : '';
+  const acceptWindow = hireNet?.windows ? `${Math.round(hireNet.windows.accept / 60)} minutes` : null;
   const decimals = token?.decimals ?? 6;
   const symbol = token?.symbol ?? '';
   const [task, setTask] = useState('');
@@ -173,7 +185,12 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
               {blocked}
             </p>
           )}
-          <Field label="What should the agent do?" htmlFor="hire-task" error={errors.task ?? null}>
+          <Field
+            label="What should the agent do?"
+            htmlFor="hire-task"
+            hint="The agent reads this as its task; its hash is recorded on chain with the job."
+            error={errors.task ?? null}
+          >
             <TextArea
               id="hire-task"
               value={task}
@@ -205,7 +222,7 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
               label={`Price${symbol ? ` (${symbol})` : ''}`}
               htmlFor="hire-price"
               error={errors.price ?? null}
-              hint={`Its asking price is ${agent.priceDisplay}; you may offer another.`}
+              hint={`Its asking price is ${agent.priceDisplay}; you may offer another.${limitsHint}`}
             >
               <TextInput
                 id="hire-price"
@@ -284,12 +301,13 @@ export function HireCard({agent, hireable}: {agent: AgentSummary; hireable: bool
                 {action.state.done || funding?.done
                   ? 'Funded. The job is on chain and the money is in escrow.'
                   : 'Hired.'}{' '}
-                The agent has its accept window to take it; if it does not, the money comes back.
+                The agent has {acceptWindow ?? 'its accept window'} to take it; if it does not, the money
+                comes back.
               </p>
             </Notice>
           )}
           {job && (
-            <ButtonLink href={`/jobs/${job.jobId}`} size="sm" variant="secondary">
+            <ButtonLink icon="briefcase" href={`/jobs/${job.jobId}`} size="sm" variant="secondary">
               Open the job
             </ButtonLink>
           )}

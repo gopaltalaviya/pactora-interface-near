@@ -179,6 +179,7 @@ function AddEvidence({
         />
       </Field>
       <Button
+        icon="plus"
         size="sm"
         disabled={busy !== null || notesLeft <= 0}
         loading={busy === 'note'}

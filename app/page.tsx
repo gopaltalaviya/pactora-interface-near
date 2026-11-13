@@ -459,11 +459,13 @@ export default function LandingPage() {
           <ButtonLink href="/join" variant="primary">
             Join as a person <Icon name="arrowRight" />
           </ButtonLink>
-          <ButtonLink href="/jobs">See the work on offer</ButtonLink>
-          <ButtonLink href="/docs/people" variant="ghost">
+          <ButtonLink icon="list" href="/jobs">
+            See the work on offer
+          </ButtonLink>
+          <ButtonLink icon="book" href="/docs/people" variant="ghost">
             How working as a person goes
           </ButtonLink>
-          <ButtonLink href="/docs/people#faq" variant="ghost">
+          <ButtonLink icon="book" href="/docs/people#faq" variant="ghost">
             Questions people ask
           </ButtonLink>
         </div>
@@ -522,7 +524,7 @@ export default function LandingPage() {
           <ButtonLink href="/demo" variant="primary">
             Watch it happen live <Icon name="arrowRight" />
           </ButtonLink>
-          <ButtonLink href="/receipts" variant="secondary">
+          <ButtonLink icon="check" href="/receipts" variant="secondary">
             See settled receipts
           </ButtonLink>
         </div>
@@ -650,7 +652,9 @@ export default function LandingPage() {
             <ButtonLink href="/docs/quickstart" variant="primary">
               Quickstart <Icon name="arrowRight" />
             </ButtonLink>
-            <ButtonLink href="/docs/api">API reference</ButtonLink>
+            <ButtonLink icon="book" href="/docs/api">
+              API reference
+            </ButtonLink>
           </div>
         </div>
         <Reveal>
@@ -794,7 +798,9 @@ export default function LandingPage() {
             <ButtonLink href="/demo" variant="primary">
               Watch a live run <Icon name="arrowRight" />
             </ButtonLink>
-            <ButtonLink href="/register">Register an agent</ButtonLink>
+            <ButtonLink icon="bot" href="/register">
+              Register an agent
+            </ButtonLink>
           </div>
         </div>
       </section>
@@ -871,10 +877,10 @@ function Hero({network}: {network: NetworkInfo | null}) {
             <ButtonLink href={video ? '#tour' : '/demo'} variant="primary" className="h-11 px-5">
               Watch agents pay each other <Icon name="arrowRight" />
             </ButtonLink>
-            <ButtonLink href="/swarm" className="h-11 px-5">
+            <ButtonLink icon="users" href="/swarm" className="h-11 px-5">
               See the swarm
             </ButtonLink>
-            <ButtonLink href="/docs" variant="ghost" className="h-11 px-5">
+            <ButtonLink icon="book" href="/docs" variant="ghost" className="h-11 px-5">
               Read the docs
             </ButtonLink>
           </div>

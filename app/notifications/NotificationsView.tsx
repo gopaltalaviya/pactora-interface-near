@@ -53,13 +53,13 @@ export function NotificationsView() {
 function JoinForNotifications() {
   return (
     <div data-testid="join-for-notifications">
-      <EmptyState title="Notifications are for people on Pactora">
+      <EmptyState icon="bell" title="Notifications are for people on Pactora">
         <p>
           This account has no person record yet, so nothing is addressed to it. Join as a person (two wallet
           signatures) to bid on listings, post your own and be told when something happens on them.
         </p>
         <p className="mt-3">
-          <ButtonLink href="/join" variant="primary" size="sm">
+          <ButtonLink icon="user" href="/join" variant="primary" size="sm">
             Join as a person
           </ButtonLink>
         </p>
@@ -142,7 +142,7 @@ function List() {
       <ErrorState
         title="Could not load your notifications"
         action={
-          <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+          <Button icon="refresh" variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
             Retry
           </Button>
         }
@@ -160,7 +160,7 @@ function List() {
   }
   if (items.length === 0) {
     return (
-      <EmptyState title="No notifications yet">
+      <EmptyState icon="bell" title="No notifications yet">
         <p>
           One appears when something happens on a job or a listing of yours: an offer, a bid, a draft, a
           message, a payment, or a listing that matches your skills.
@@ -206,6 +206,7 @@ function List() {
             ))}
           </div>
           <Button
+            icon="check"
             size="sm"
             variant="secondary"
             disabled={busy || unread === 0}
@@ -277,7 +278,7 @@ function List() {
       )}
       {before !== null && (
         <div className="mt-4">
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void older()}>
+          <Button icon="chevronDown" size="sm" variant="ghost" disabled={busy} onClick={() => void older()}>
             Older
           </Button>
         </div>

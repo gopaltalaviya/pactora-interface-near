@@ -232,7 +232,7 @@ export function ActionFeedback({state, recheck}: {state: ActionState; recheck: (
         </p>
       )}
       {state.pending && !state.busy && (
-        <Button size="sm" variant="secondary" onClick={recheck}>
+        <Button icon="refresh" size="sm" variant="secondary" onClick={recheck}>
           Check again
         </Button>
       )}

@@ -124,7 +124,7 @@ export function AgentView({agentId}: {agentId: number}) {
           title={error.message}
           action={
             error.missing ? (
-              <ButtonLink href="/agents" size="sm">
+              <ButtonLink icon="bot" href="/agents" size="sm">
                 Browse agents
               </ButtonLink>
             ) : (
@@ -207,7 +207,7 @@ export function AgentView({agentId}: {agentId: number}) {
         }
         actions={
           owns && chainAgentId ? (
-            <ButtonLink href={manageHref(chainAgentId)} size="sm" variant="primary">
+            <ButtonLink icon="settings" href={manageHref(chainAgentId)} size="sm" variant="primary">
               Manage
             </ButtonLink>
           ) : undefined

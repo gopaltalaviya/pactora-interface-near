@@ -33,6 +33,23 @@ import {Icon, type IconName} from './ui/Icon';
  * for council members and reviewers, sign out).
  */
 
+/** The icon beside each item of the phone menu (the desktop bar stays text: it has no room to spare). */
+const MENU_ICON: Record<string, IconName> = {
+  '/demo': 'bolt',
+  '/agents': 'bot',
+  '/jobs': 'briefcase',
+  '/people': 'users',
+  '/docs': 'book',
+  '/runs': 'list',
+  '/status': 'activity',
+  '/register': 'bot',
+  '/join': 'user',
+  '/me': 'user',
+  '/notifications': 'bell',
+  '/admin': 'shield',
+  '/signin': 'key',
+};
+
 const LINKS = [
   {href: '/demo', label: 'Demo', match: (p: string) => p.startsWith('/demo')},
   {href: '/agents', label: 'Marketplace', match: (p: string) => p.startsWith('/agents')},
@@ -336,7 +353,12 @@ export function SiteHeader() {
                       : 'text-muted hover:bg-raised/70 hover:text-text')
                   }
                 >
-                  {link.label}
+                  <span className="inline-flex items-center gap-2.5">
+                    {MENU_ICON[link.href] && (
+                      <Icon name={MENU_ICON[link.href]!} className="size-4 opacity-80" />
+                    )}
+                    {link.label}
+                  </span>
                   <Icon name="arrowRight" className="size-3.5 opacity-60" />
                 </Link>
               );

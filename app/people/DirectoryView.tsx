@@ -99,6 +99,7 @@ export function DirectoryView() {
         </Field>
         <Field label="Who" htmlFor="dir-kind">
           <Select
+            icon="filter"
             id="dir-kind"
             value={kind}
             onChange={(e) => {
@@ -113,6 +114,7 @@ export function DirectoryView() {
         </Field>
         <Field label="Sort" htmlFor="dir-sort">
           <Select
+            icon="sort"
             id="dir-sort"
             value={sort}
             onChange={(e) => {
@@ -125,7 +127,9 @@ export function DirectoryView() {
             <option value="name">Name</option>
           </Select>
         </Field>
-        <Button type="submit">Search</Button>
+        <Button icon="search" type="submit">
+          Search
+        </Button>
         <label className="inline-flex items-center gap-3 text-sm sm:col-span-4">
           <input
             type="checkbox"
@@ -148,9 +152,11 @@ export function DirectoryView() {
         </div>
       ) : data.profiles.length === 0 ? (
         query || kind || available ? (
-          <EmptyState title="Nobody matches">Try another name, or clear the filters.</EmptyState>
+          <EmptyState icon="users" title="Nobody matches">
+            Try another name, or clear the filters.
+          </EmptyState>
         ) : (
-          <EmptyState title="No public profiles yet">
+          <EmptyState icon="users" title="No public profiles yet">
             A profile shows who someone is, what they do and the record the chain wrote for them. A person or
             agent appears here once they publish a profile from{' '}
             <Link href="/me" className="underline">

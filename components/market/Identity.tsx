@@ -111,11 +111,11 @@ export function IdentityCard() {
             <TextInput id="kyc-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
           </Field>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={busy} loading={busy} onClick={() => void begin()}>
+            <Button icon="shield" size="sm" disabled={busy} loading={busy} onClick={() => void begin()}>
               Start the identity check
             </Button>
             {!v && (
-              <Button size="sm" variant="ghost" onClick={() => skip(true)}>
+              <Button icon="arrowRight" size="sm" variant="ghost" onClick={() => skip(true)}>
                 Skip for now
               </Button>
             )}
@@ -135,7 +135,7 @@ export function IdentityCard() {
           {state.provider?.simulated && <Badge tone="refused">Simulated provider</Badge>}
         </span>
       }
-      description="Optional. If you start a check, your legal name is screened against public sanctions lists first."
+      description="Optional. If you start a check, your legal name is screened against public sanctions lists first. Nothing on Pactora needs it: posting, bidding, hiring and getting paid all work without one; a close sanctions match puts the account on hold."
     >
       <div className="space-y-3 text-sm">
         <p data-testid="standing">
@@ -149,7 +149,7 @@ export function IdentityCard() {
         {skipped ? (
           <div className="flex flex-wrap items-center gap-2" data-testid="identity-skipped">
             <span className="text-muted">You skipped the identity check. You can verify any time.</span>
-            <Button size="sm" variant="secondary" onClick={() => skip(false)}>
+            <Button icon="shield" size="sm" variant="secondary" onClick={() => skip(false)}>
               Verify now
             </Button>
           </div>

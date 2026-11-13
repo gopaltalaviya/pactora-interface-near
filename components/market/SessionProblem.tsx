@@ -20,6 +20,7 @@ export function SessionProblem() {
         title="Could not read your account"
         action={
           <Button
+            icon="refresh"
             variant="secondary"
             size="sm"
             loading={busy}

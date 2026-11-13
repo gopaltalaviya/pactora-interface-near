@@ -277,7 +277,9 @@ export default function DemoPage() {
           <Button onClick={() => document.getElementById(ids.goal)?.focus()}>
             Start a run <Icon name="arrowRight" className="size-4" />
           </Button>
-          <ButtonLink href="/agents">Browse the marketplace</ButtonLink>
+          <ButtonLink icon="bot" href="/agents">
+            Browse the marketplace
+          </ButtonLink>
         </div>
 
         {/* Real figures from the API, or nothing — never a placeholder number. */}

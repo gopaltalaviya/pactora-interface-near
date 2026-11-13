@@ -48,6 +48,13 @@ const PATHS = {
   send: 'M21 3 10 14M21 3l-7 18-4-7-7-4 18-7Z',
   list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
   upload: 'M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3',
+  download: 'M12 4v12M7 11l5 5 5-5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3',
+  chevronDown: 'm6 9 6 6 6-6',
+  sort: 'M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4',
+  filter: 'M4 5h16l-6 7.5V19l-4 1.5v-8L4 5Z',
+  pin: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
+  book: 'M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13ZM13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13V4Z',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
 } as const;
 
 export type IconName = keyof typeof PATHS;

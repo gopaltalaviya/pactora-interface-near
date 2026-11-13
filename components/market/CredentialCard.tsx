@@ -156,7 +156,7 @@ export function CredentialCard({
               can check it on chain, and it stays with your account. Pactora pays to issue it, so it costs you
               nothing and you sign nothing.
             </p>
-            <Button size="sm" loading={phase.kind === 'claiming'} onClick={() => void claim()}>
+            <Button icon="shield" size="sm" loading={phase.kind === 'claiming'} onClick={() => void claim()}>
               Claim your work credential
             </Button>
             {phase.kind === 'claiming' && (
@@ -173,7 +173,7 @@ export function CredentialCard({
               Your credential is being issued on NEAR. It shows here once the transaction is final, usually
               within a few seconds.
             </p>
-            <Button size="sm" variant="secondary" onClick={() => void load()}>
+            <Button icon="refresh" size="sm" variant="secondary" onClick={() => void load()}>
               Check again
             </Button>
           </div>
@@ -203,6 +203,7 @@ export function CredentialCard({
             action={
               problem.retryable ? (
                 <Button
+                  icon="refresh"
                   size="sm"
                   variant="secondary"
                   onClick={() => void (problem.during === 'claim' ? claim() : load())}

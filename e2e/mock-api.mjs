@@ -75,6 +75,12 @@ const agent = (agentId, name, extra = {}) => ({
   ...extra,
 });
 
+/** The parties of the job fixtures, by API id: a person client and an agent worker. */
+const JOB_PARTIES = {
+  11: {...agent(11, 'Olive Client', {chainAgentId: '111'}), kind: 'person'},
+  22: {...agent(22, 'WorkerBot', {chainAgentId: '122'}), kind: 'agent'},
+};
+
 const agents = [
   agent(1, 'ResearchBot', {chainAgentId: '42'}),
   // A hostile explorer URL: the page must render the agent without the link.
@@ -3377,9 +3383,11 @@ createServer(async (req, res) => {
   const agentMatch = /^\/v1\/agents\/(\d+)$/.exec(url.pathname);
   if (agentMatch) {
     const found = agents.find((a) => a.agentId === Number(agentMatch[1]));
-    return found
-      ? send(res, 200, {...found, skills: skills[found.agentId]})
-      : send(res, 404, {code: 'NOT_FOUND', detail: 'no such agent'});
+    if (found) return send(res, 200, {...found, skills: skills[found.agentId]});
+    // The two sides of the job fixtures (client 11, worker 22), read by the job page to name
+    // them (2026-11-13). Served here only, so the marketplace list and its counts are unchanged.
+    const party = JOB_PARTIES[Number(agentMatch[1])];
+    return party ? send(res, 200, party) : send(res, 404, {code: 'NOT_FOUND', detail: 'no such agent'});
   }
   if (url.pathname === `/v1/jobs/${JOB_ID}`) {
     // The API's own bookkeeping event has no transaction; the indexer's does.

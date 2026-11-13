@@ -76,7 +76,7 @@ export function RunView({runId}: {runId: string}) {
           title={error.message}
           action={
             error.missing ? (
-              <ButtonLink href="/" size="sm">
+              <ButtonLink icon="bolt" href="/" size="sm">
                 Start a run
               </ButtonLink>
             ) : (

@@ -21,7 +21,15 @@ import {
   type ListingDraft,
 } from '@/lib/listing-form';
 import {applyTemplate, LISTING_TEMPLATES} from '@/lib/listing-templates';
-import {CATEGORIES, market, MODES, type Category, type HiringMode, type InteractionMode} from '@/lib/market';
+import {
+  amountDisplay,
+  CATEGORIES,
+  market,
+  MODES,
+  type Category,
+  type HiringMode,
+  type InteractionMode,
+} from '@/lib/market';
 import {useSession} from '@/lib/session';
 import {StandingBanner} from '@/components/market/Standing';
 import {NotReady} from '@/components/market/Readiness';
@@ -42,10 +50,25 @@ const freshKey = () =>
     ? crypto.randomUUID()
     : `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+/** Seconds as whole minutes, or hours past two. */
+function minutes(seconds: number): string {
+  const m = Math.round(seconds / 60);
+  return m >= 120 && m % 60 === 0 ? `${m / 60} hours` : `${m} minutes`;
+}
 export function NewListingView() {
   const session = useSession();
   const router = useRouter();
   const token = useNetwork();
+  // Network facts for the hints (live audit, 2026-11-13: limits and defaults were not said).
+  const net = token?.network;
+  const windows = net?.windows ?? null;
+  const feePct = net ? `${net.protocolFeeBps / 100}%` : '';
+  const limitsLine =
+    net?.minJobAmount && token
+      ? ` Between ${amountDisplay(net.minJobAmount, token.decimals, token.symbol)}${
+          net.maxJobAmount ? ` and ${amountDisplay(net.maxJobAmount, token.decimals, token.symbol)}` : ''
+        } per worker.`
+      : '';
   const [draft, setDraft] = useState<ListingDraft>(EMPTY_DRAFT);
   const [errors, setErrors] = useState<DraftErrors>({});
   const [busy, setBusy] = useState(false);
@@ -144,7 +167,7 @@ export function NewListingView() {
                   Posting a listing needs a person record on Pactora: it is who the bids go to, and whose
                   wallet funds the worker you choose. Joining takes one transaction and no API key.
                 </p>
-                <ButtonLink href="/join" variant="primary">
+                <ButtonLink icon="user" href="/join" variant="primary">
                   Join as a person
                 </ButtonLink>
               </div>
@@ -231,6 +254,7 @@ export function NewListingView() {
                     <Field
                       label="Category"
                       htmlFor="nl-category"
+                      hint="Physical: someone goes somewhere. Expertise: knowledge work. Judgment: a decision on each item."
                       error={errors.category}
                       hintId={cap('category', false)}
                     >
@@ -252,6 +276,7 @@ export function NewListingView() {
                     <Field
                       label="How it is done"
                       htmlFor="nl-interactionMode"
+                      hint="Task: deliver a result. Conversation: talk it through. Capture: send photos of a place."
                       error={errors.interactionMode}
                       hintId={cap('interactionMode', false)}
                     >
@@ -330,7 +355,7 @@ export function NewListingView() {
                       htmlFor="nl-price"
                       error={errors.price}
                       hintId={cap('price')}
-                      hint="The ceiling. Workers bid at or under it; the fee comes out of what they receive."
+                      hint={`The ceiling. Workers bid at or under it; the ${feePct} fee comes out of what they receive.${limitsLine}`}
                     >
                       <TextInput
                         id="nl-price"
@@ -348,7 +373,7 @@ export function NewListingView() {
                       htmlFor="nl-maxWorkers"
                       error={errors.maxWorkers}
                       hintId={cap('maxWorkers')}
-                      hint={`${LIMITS.workers.min}-${LIMITS.workers.max}. Your daily allowance is reserved for every slot.`}
+                      hint={`${LIMITS.workers.min}-${LIMITS.workers.max}. Your daily allowance (your purse’s 24-hour spending cap) is reserved for every slot.`}
                     >
                       <TextInput
                         id="nl-maxWorkers"
@@ -416,7 +441,7 @@ export function NewListingView() {
                       htmlFor="nl-acceptMinutes"
                       error={errors.acceptMinutes}
                       hintId={cap('acceptMinutes')}
-                      hint="How long a chosen worker has to accept. Empty uses the network default."
+                      hint={`How long a chosen worker has to accept. Empty uses the network default${windows ? ` (${minutes(windows.accept)})` : ''}.`}
                     >
                       <TextInput
                         id="nl-acceptMinutes"
@@ -433,7 +458,7 @@ export function NewListingView() {
                       htmlFor="nl-workMinutes"
                       error={errors.workMinutes}
                       hintId={cap('workMinutes')}
-                      hint={`At most ${MAX_WORK_WINDOW_MINUTES} minutes: the testnet contract’s longest work window is 5 hours. For longer work, split it into tasks. Empty uses the network default.`}
+                      hint={`At most ${MAX_WORK_WINDOW_MINUTES} minutes: the testnet contract’s longest work window is 5 hours. For longer work, split it into tasks. Empty uses the network default${windows ? ` (${minutes(windows.work)}); you then have ${minutes(windows.review)} to review the delivery` : ''}.`}
                     >
                       <TextInput
                         id="nl-workMinutes"

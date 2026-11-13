@@ -36,7 +36,7 @@ export function FeesTable() {
       <ErrorState
         title="The fees could not be loaded"
         action={
-          <Button variant="secondary" onClick={() => load()}>
+          <Button icon="refresh" variant="secondary" onClick={() => load()}>
             Retry
           </Button>
         }

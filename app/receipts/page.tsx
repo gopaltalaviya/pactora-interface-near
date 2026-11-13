@@ -134,17 +134,24 @@ export default function ReceiptsPage() {
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-                    <span className="tabular" title={r.specHash}>
+                    <span
+                      className="tabular"
+                      title={`Task hash: sha256 of the task, committed on chain — ${r.specHash}`}
+                    >
                       spec {r.specHash.slice(0, 10)}…
                     </span>
                     {r.resultHash && (
-                      <span className="tabular" title={r.resultHash}>
+                      <span
+                        className="tabular"
+                        title={`Result hash: sha256 of the delivery, committed on chain — ${r.resultHash}`}
+                      >
                         result {r.resultHash.slice(0, 10)}…
                       </span>
                     )}
                     <span className="tabular">
                       {r.chainJobId ? `on chain as job ${r.chainJobId}` : `job ${shortId(r.jobId)}`}
                     </span>
+                    <span>{r.path === 'direct' ? 'paid directly' : 'through escrow'}</span>
                     <span className="tabular">
                       {r.transactions} transaction{r.transactions === 1 ? '' : 's'}
                     </span>

@@ -1,5 +1,6 @@
 'use client';
 
+import {relativeTime} from '@/lib/format';
 import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode} from 'react';
 import {
@@ -73,6 +74,19 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+/** A bid's status in a sentence, beside its badge (live audit, 2026-11-13: only the raw word showed). */
+const BID_MEANING: Record<string, string> = {
+  pending: 'Waiting for the client to decide.',
+  selected: 'Chosen: a job was created at this price.',
+  rejected: 'Not chosen this time.',
+  withdrawn: 'You withdrew this bid.',
+  expired: 'The listing closed before a decision.',
+};
+
+/** "score 72/100", or "unproven" before any settled job (a score of 50 then means nothing yet). */
+export function scoreText(completed: number, score: number): string {
+  return completed > 0 ? `score ${score}/100` : 'unproven';
+}
 export function ListingView({listingId}: {listingId: string}) {
   const session = useSession();
   const token = useNetwork();
@@ -124,7 +138,7 @@ export function ListingView({listingId}: {listingId: string}) {
         <ErrorState
           title={error}
           action={
-            <Button variant="secondary" size="sm" onClick={reload}>
+            <Button icon="refresh" variant="secondary" size="sm" onClick={reload}>
               Retry
             </Button>
           }
@@ -194,6 +208,7 @@ function Details({listing, token}: {listing: ListingDetail; token: TokenInfo | n
         <KindBadge kind={listing.client.kind === 'person' ? 'person' : 'agent'} />
       </span>,
     ],
+    ['Posted', `${utc(listing.createdAt)} (${relativeTime(listing.createdAt)})`],
     ['Deadline', utc(listing.deadline)],
     ['Estimated effort', `${listing.estimatedMinutes} min per worker`],
     ['Location', listing.location || 'Anywhere'],
@@ -292,7 +307,7 @@ function ApplicantPanel({
       <Card title="Want this work?" labelledBy="bid-gate">
         <p className="text-sm text-muted">Sign in with your NEAR account to bid on this listing.</p>
         <div className="mt-4">
-          <ButtonLink href={signIn} variant="primary">
+          <ButtonLink icon="key" href={signIn} variant="primary">
             Sign in
           </ButtonLink>
         </div>
@@ -304,7 +319,7 @@ function ApplicantPanel({
       <Card title="Want this work?" labelledBy="bid-gate">
         <p className="text-sm text-muted">Bidding needs a person record on Pactora.</p>
         <div className="mt-4">
-          <ButtonLink href="/join" variant="primary">
+          <ButtonLink icon="user" href="/join" variant="primary">
             Join as a person
           </ButtonLink>
         </div>
@@ -395,6 +410,11 @@ function ApplicantPanel({
                     {a.status}
                   </Badge>
                 </div>
+                {BID_MEANING[a.status] && (
+                  <p className="mt-1 text-xs" data-testid="my-bid-meaning">
+                    {BID_MEANING[a.status]}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-muted">
                   You would receive{' '}
                   {token
@@ -421,6 +441,7 @@ function ApplicantPanel({
                         It counts as one of your {MAX_BIDS_PER_LISTING} bids here.
                       </span>
                       <Button
+                        icon="minus"
                         size="sm"
                         variant="danger"
                         loading={busy === `withdraw-${a.applicationId}`}
@@ -440,7 +461,7 @@ function ApplicantPanel({
                     </>
                   )}
                   {a.jobId && (
-                    <ButtonLink href={`/jobs/${a.jobId}`} size="sm">
+                    <ButtonLink icon="briefcase" href={`/jobs/${a.jobId}`} size="sm">
                       Open the job
                     </ButtonLink>
                   )}
@@ -482,6 +503,7 @@ function ApplicantPanel({
               />
               <NotReady readiness={readiness} />
               <Button
+                icon="briefcase"
                 loading={busy === 'claim'}
                 disabled={busy !== null || notReady}
                 onClick={() => void claim()}
@@ -1132,7 +1154,7 @@ function EditForm({
         </p>
       )}
       <div className="flex gap-2">
-        <Button type="submit" size="sm" loading={busy}>
+        <Button icon="check" type="submit" size="sm" loading={busy}>
           Save changes
         </Button>
         <Button variant="ghost" size="sm" onClick={onDone}>
@@ -1161,7 +1183,13 @@ function BidderFlags({application: a}: {application: ApplicantApplication}) {
           </span>
         </Badge>
       )}
-      {held && <Badge tone="refused">On hold</Badge>}
+      {held && (
+        <Badge tone="refused">
+          <span title="This account is on hold while a compliance review is open: selecting it is refused.">
+            On hold
+          </span>
+        </Badge>
+      )}
     </p>
   );
 }
@@ -1316,6 +1344,7 @@ function Applications({
       actions={
         <div className="w-48">
           <Select
+            icon="sort"
             aria-label="Sort bids"
             value={sort}
             onChange={(e) => {
@@ -1361,8 +1390,8 @@ function Applications({
                   </Badge>
                 </div>
                 <p className="text-xs text-muted">
-                  {a.applicant.location || 'no location'} · score {a.applicant.score} ·{' '}
-                  {a.applicant.completed} done
+                  {a.applicant.location || 'no location'} ·{' '}
+                  {scoreText(a.applicant.completed, a.applicant.score)} · {a.applicant.completed} done
                 </p>
                 <BidderFlags application={a} />
                 <p className="tabular">
@@ -1439,8 +1468,8 @@ function Applications({
                         {a.applicant.name}
                       </div>
                       <div className="text-xs text-muted">
-                        {a.applicant.location || 'no location'} · score {a.applicant.score} ·{' '}
-                        {a.applicant.completed} done
+                        {a.applicant.location || 'no location'} ·{' '}
+                        {scoreText(a.applicant.completed, a.applicant.score)} · {a.applicant.completed} done
                       </div>
                       <BidderFlags application={a} />
                       <p className="mt-1 max-w-sm whitespace-pre-wrap break-words text-xs text-muted">

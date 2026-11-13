@@ -120,7 +120,17 @@ function Line({line, compact}: {line: MoneyLine; compact: boolean}) {
       data-testid={`money-${line.id}`}
       data-status={line.status}
     >
-      <dt className="text-sm font-medium">{line.label}</dt>
+      <dt className="text-sm font-medium">
+        {/* Compact, the meaning is not printed: it is on hover and for screen readers (live audit, 2026-11-13). */}
+        {compact ? (
+          <abbr title={line.meaning} className="cursor-help no-underline">
+            {line.label}
+            <span className="sr-only">: {line.meaning}</span>
+          </abbr>
+        ) : (
+          line.label
+        )}
+      </dt>
       <dd className="flex flex-wrap items-center justify-end gap-2 text-right">
         <span className="tabular text-sm">{line.value}</span>
         {line.status !== 'ok' && <Badge tone={TONE[line.status]}>{WORD[line.status]}</Badge>}
@@ -225,7 +235,7 @@ export function MoneyPanel({
   );
 
   const refresh = (
-    <Button size="sm" variant="ghost" onClick={money.reload} disabled={money.loading}>
+    <Button icon="refresh" size="sm" variant="ghost" onClick={money.reload} disabled={money.loading}>
       Refresh
     </Button>
   );

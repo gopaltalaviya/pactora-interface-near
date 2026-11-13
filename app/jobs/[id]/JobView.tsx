@@ -1,10 +1,11 @@
 'use client';
 
+import {Term} from '@/components/ui/Term';
 import type {IconName} from '@/components/ui/Icon';
 import {KindBadge} from '@/components/ui/Kind';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react';
 import {
   ActionFeedback,
   useMe,
@@ -28,7 +29,7 @@ import {Card} from '@/components/ui/Card';
 import {Field, TextArea} from '@/components/ui/Field';
 import {PageHeader} from '@/components/ui/PageHeader';
 import {ErrorState, Notice, Skeleton} from '@/components/ui/States';
-import type {StreamState} from '@/lib/api';
+import {api, type StreamState} from '@/lib/api';
 import {describeError, type ErrorView} from '@/lib/errors';
 import {bondOf, disputeBondOf, feeOf, spendSummary, workerBondOf} from '@/lib/fees';
 import {bondBlocked, disputeBlocked, spendBlocked, type MoneyBlock} from '@/lib/hire';
@@ -192,7 +193,7 @@ export function JobView({jobId}: {jobId: string}) {
           action={
             // Only a failure that can pass (the network, a 5xx) is worth asking again.
             error.retryable ? (
-              <Button variant="secondary" size="sm" onClick={reload}>
+              <Button icon="refresh" variant="secondary" size="sm" onClick={reload}>
                 Retry
               </Button>
             ) : undefined
@@ -393,6 +394,37 @@ function ResultCard({
   );
 }
 
+/**
+ * One side of a job, named (live audit, 2026-11-13: the page never said who the
+ * client and worker are): its name and whether it is a person or an agent, an
+ * agent linked to its page. Falls back to its number, never a blank.
+ */
+function Party({agentId}: {agentId: string}) {
+  const [who, setWho] = useState<{name: string; kind: string} | null>(null);
+  useEffect(() => {
+    const c = new AbortController();
+    api
+      .agent(Number(agentId), c.signal)
+      .then((a) => setWho({name: a.name, kind: (a as {kind?: string}).kind ?? 'agent'}))
+      .catch(() => undefined);
+    return () => c.abort();
+  }, [agentId]);
+  if (!who) return <span className="text-muted">#{agentId}</span>;
+  const person = who.kind === 'person';
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5" data-testid="job-party">
+      {person ? (
+        who.name
+      ) : (
+        <Link href={`/agents/${agentId}`} className="underline underline-offset-2">
+          {who.name}
+        </Link>
+      )}
+      <KindBadge kind={person ? 'person' : 'agent'} />
+    </span>
+  );
+}
+
 function Facts({job, token}: {job: JobDetail; token: TokenInfo | null}) {
   const n = token?.network;
   const units = (base: bigint | string | null | undefined) =>
@@ -418,7 +450,16 @@ function Facts({job, token}: {job: JobDetail; token: TokenInfo | null}) {
         ? ', locked when the worker accepts'
         : ', not locked'
     : '';
-  const rows: [string, string][] = [
+  const feeRate = n ? ` (${n.protocolFeeBps / 100}% of the price)` : '';
+  const rows: [string, ReactNode][] = [
+    ['Client', <Party key="c" agentId={job.clientAgentId} />],
+    ['Worker', <Party key="w" agentId={job.workerAgentId} />],
+    [
+      'Payment path',
+      <Link key="p" href="/docs/concepts#paths" className="underline decoration-dotted underline-offset-2">
+        {job.path === 'direct' ? 'direct (paid at once)' : 'escrow (paid on approval)'}
+      </Link>,
+    ],
     ['Price', job.amountDisplay],
     ['Protocol fee', units(fee) ? `${units(fee)}${byRule}` : 'Fixed when the job is created on chain'],
     ['Worker receives', units(receives) ? `${units(receives)}${byRule}` : 'The price minus the fee'],
@@ -441,7 +482,14 @@ function Facts({job, token}: {job: JobDetail; token: TokenInfo | null}) {
     <Card
       title="The job"
       labelledBy="facts"
-      description="The fee comes out of the worker’s pay, never on top of the price. Bonds are held, not spent: each goes back to its owner unless a deadline is missed or a dispute is lost."
+      description={
+        <>
+          The <Term name="fee" />
+          {feeRate} comes out of the worker’s pay, never on top of the price. Each <Term name="bond" /> is
+          held, not spent: it goes back to its owner unless a deadline is missed or a dispute is lost. The
+          price waits in <Term name="escrow" /> until the work is approved.
+        </>
+      }
     >
       <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
         {rows.map(([k, v]) => (
@@ -548,7 +596,9 @@ function Deadlines({job, token}: {job: JobDetail; token: TokenInfo | null}) {
         ) : (
           <p>{windows ?? 'The deadlines are set when the job is funded on chain.'}</p>
         )}
-        <p className="text-xs text-muted">{KEEPER_LINE}</p>
+        <p className="text-xs text-muted">
+          {KEEPER_LINE} <Term name="keeper">What is the keeper?</Term>
+        </p>
       </div>
     </Card>
   );
@@ -915,7 +965,7 @@ function Actions({
                 <p className="text-xs text-muted" data-testid="will-sign-submit">
                   {willSign('submit', job, token)}
                 </p>
-                <Button disabled={pending} onClick={submitResult}>
+                <Button icon="upload" disabled={pending} onClick={submitResult}>
                   Sign and submit
                 </Button>
               </div>
@@ -944,7 +994,7 @@ function Actions({
                   {willSign('decline', job, token)}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="danger" disabled={pending} onClick={declineJob}>
+                  <Button icon="x" variant="danger" disabled={pending} onClick={declineJob}>
                     Confirm: decline the job
                   </Button>
                   <Button variant="ghost" disabled={pending} onClick={() => setOpen(null)}>
@@ -976,6 +1026,7 @@ function Actions({
                   {willSign('dispute', job, token)}
                 </p>
                 <Button
+                  icon="alert"
                   variant="danger"
                   disabled={pending || blocked('dispute') !== null}
                   onClick={disputeResult}
@@ -1047,7 +1098,7 @@ function Actions({
       {!party && !ownedParty && (
         <p className="text-sm text-muted" data-testid="not-a-party">
           You are not the client or the worker on this job, so you can only watch it.{' '}
-          <ButtonLink href="/jobs" size="sm" variant="ghost">
+          <ButtonLink icon="list" href="/jobs" size="sm" variant="ghost">
             Browse jobs
           </ButtonLink>
         </p>

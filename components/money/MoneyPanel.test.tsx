@@ -119,7 +119,11 @@ describe('MoneyPanel', () => {
     panel(state(), {compact: true, only: ['purse', 'daily'], id: 'hire-money'});
     expect(screen.getByTestId('money-purse')).toBeTruthy();
     expect(screen.queryByTestId('money-near')).toBeNull();
-    expect(screen.queryByText(/Pays for the jobs you hire/)).toBeNull();
+    // Compact prints no meaning under a line; it is on hover and for screen readers instead (2026-11-13).
+    expect(screen.queryByText(/Pays for the jobs you hire/, {selector: 'dd'})).toBeNull();
+    expect(screen.getByTestId('money-purse').querySelector('abbr')?.getAttribute('title')).toMatch(
+      /Pays for the jobs you hire/,
+    );
     expect(screen.getByRole('region', {name: /Your money/})).toBeTruthy();
   });
 });

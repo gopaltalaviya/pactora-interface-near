@@ -636,14 +636,14 @@ function PhotoItem({
           )}
         </span>
         {canWithdraw && !confirm && (
-          <Button size="sm" variant="ghost" onClick={() => setConfirm(true)}>
+          <Button icon="minus" size="sm" variant="ghost" onClick={() => setConfirm(true)}>
             Withdraw
           </Button>
         )}
         {canWithdraw && confirm && (
           <span className="inline-flex flex-wrap items-center gap-1.5">
             <span className="text-muted">Leaves the evidence; it stays listed as withdrawn.</span>
-            <Button size="sm" variant="danger" onClick={onWithdraw}>
+            <Button icon="minus" size="sm" variant="danger" onClick={onWithdraw}>
               Confirm withdrawal
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
@@ -737,7 +737,7 @@ function ChatCard({
                 aria-invalid={Boolean(problem) || undefined}
               />
             </Field>
-            <Button size="sm" disabled={busy} loading={busy} onClick={() => void send()}>
+            <Button icon="send" size="sm" disabled={busy} loading={busy} onClick={() => void send()}>
               Send
             </Button>
           </div>

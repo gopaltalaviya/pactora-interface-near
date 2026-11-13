@@ -238,7 +238,7 @@ export default function MarketplacePage() {
           title={`No agent matches${capability ? ` “${capability}”` : ''} yet.`}
           action={
             capability ? (
-              <Button variant="secondary" size="sm" onClick={() => setInput('')}>
+              <Button icon="x" variant="secondary" size="sm" onClick={() => setInput('')}>
                 Clear the filter
               </Button>
             ) : (

@@ -96,16 +96,16 @@ function SignIn() {
           </dl>
           <div className="mt-5 flex flex-wrap gap-2">
             {next && (
-              <ButtonLink href={next} size="sm" variant="primary">
+              <ButtonLink icon="arrowRight" href={next} size="sm" variant="primary">
                 Continue
               </ButtonLink>
             )}
             {session.person ? (
-              <ButtonLink href={manageHref(session.person.chainAgentId)} size="sm">
+              <ButtonLink icon="coins" href={manageHref(session.person.chainAgentId)} size="sm">
                 Fund and stake
               </ButtonLink>
             ) : session.personError ? null : (
-              <ButtonLink href="/join" size="sm">
+              <ButtonLink icon="user" href="/join" size="sm">
                 Join as a person
               </ButtonLink>
             )}
@@ -119,6 +119,7 @@ function SignIn() {
               Sign out
             </Button>
             <Button
+              icon="logout"
               variant="ghost"
               size="sm"
               loading={busy === 'all'}

@@ -73,7 +73,7 @@ export default function RunsPage() {
             label="Orchestrator API key"
             htmlFor={ids.key}
             hintId={ids.note}
-            hint="The key is used for this request only — it is never stored. A run history is that agent's own business; a single run's link is public."
+            hint="The agent's API key: issued once when the agent was registered (at /register), or re-issued on its manage page. It is used for this request only — never stored. A run history is that agent's own business; a single run's link is public."
           >
             <SecretInput
               id={ids.key}

@@ -488,7 +488,15 @@ export default function RegisterPage() {
               label="Price per task"
               htmlFor="reg-price"
               hintId="reg-price-hint"
-              hint={network ? `In ${network.paymentToken.symbol}, like 0.02.` : 'Like 0.02.'}
+              hint={
+                network
+                  ? `In ${network.paymentToken.symbol}, like 0.02.${
+                      minimum !== undefined
+                        ? ` At least ${formatUnits(minimum, network.paymentToken.decimals)} ${network.paymentToken.symbol};`
+                        : ''
+                    } the ${network.protocolFeeBps / 100}% fee comes out of it when a job settles.`
+                  : 'Like 0.02.'
+              }
               error={
                 priceInvalid
                   ? `A number like 0.02, with at most ${priceDecimals} decimal places.`
@@ -802,8 +810,12 @@ function Done({
             Fund and stake <Icon name="arrowRight" />
           </ButtonLink>
         )}
-        <ButtonLink href={agentHref(agent.agentId)}>View its profile</ButtonLink>
-        <ButtonLink href="/agents">Back to the marketplace</ButtonLink>
+        <ButtonLink icon="bot" href={agentHref(agent.agentId)}>
+          View its profile
+        </ButtonLink>
+        <ButtonLink icon="arrowLeft" href="/agents">
+          Back to the marketplace
+        </ButtonLink>
       </div>
     </div>
   );

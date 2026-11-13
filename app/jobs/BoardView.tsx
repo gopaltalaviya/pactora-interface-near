@@ -134,7 +134,11 @@ export function BoardView() {
         eyebrow="Jobs"
         title="Work on offer"
         description="Listings from people and agents who want work done. Bid with your own price, or claim a slot where hiring is instant. The listed ceiling is the most one worker is paid, before the fee."
-        actions={<ButtonLink href="/jobs/new">Post a listing</ButtonLink>}
+        actions={
+          <ButtonLink icon="plus" href="/jobs/new">
+            Post a listing
+          </ButtonLink>
+        }
       />
 
       <form
@@ -162,6 +166,7 @@ export function BoardView() {
         </div>
         <Field label="Category" htmlFor="f-category">
           <Select
+            icon="filter"
             id="f-category"
             value={category}
             onChange={(e) => setCategory(e.target.value as Category | '')}
@@ -175,7 +180,12 @@ export function BoardView() {
           </Select>
         </Field>
         <Field label="How it is done" htmlFor="f-mode">
-          <Select id="f-mode" value={mode} onChange={(e) => setMode(e.target.value as InteractionMode | '')}>
+          <Select
+            icon="filter"
+            id="f-mode"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as InteractionMode | '')}
+          >
             <option value="">Any</option>
             {MODES.map((m) => (
               <option key={m.value} value={m.value}>
@@ -186,6 +196,7 @@ export function BoardView() {
         </Field>
         <Field label="Skill" htmlFor="f-skill">
           <TextInput
+            icon="sparkle"
             id="f-skill"
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
@@ -195,6 +206,7 @@ export function BoardView() {
         </Field>
         <Field label="Location" htmlFor="f-location">
           <TextInput
+            icon="pin"
             id="f-location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
@@ -225,7 +237,7 @@ export function BoardView() {
         <ErrorState
           title="Could not load the board"
           action={
-            <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+            <Button icon="refresh" variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
               Retry
             </Button>
           }
@@ -247,7 +259,7 @@ export function BoardView() {
           icon="search"
           title={filtered ? 'No listings match these filters' : 'No open listings right now'}
           action={
-            <ButtonLink href="/jobs/new" size="sm">
+            <ButtonLink icon="plus" href="/jobs/new" size="sm">
               Post a listing
             </ButtonLink>
           }
@@ -271,6 +283,11 @@ export function BoardView() {
         </EmptyState>
       ) : (
         <>
+          <p className="text-sm text-muted" data-testid="board-count">
+            {next
+              ? `Showing ${listings.length} open listings${filtered ? ' that match' : ''}; more below.`
+              : `${listings.length} open ${listings.length === 1 ? 'listing' : 'listings'}${filtered ? ' that match' : ''}.`}
+          </p>
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Listings">
             {listings.map((l) => (
               <li key={l.listingId}>
@@ -280,7 +297,7 @@ export function BoardView() {
           </ul>
           <div className="flex justify-center" aria-live="polite">
             {next ? (
-              <Button variant="secondary" loading={more} onClick={() => void loadMore()}>
+              <Button icon="chevronDown" variant="secondary" loading={more} onClick={() => void loadMore()}>
                 Load more
               </Button>
             ) : (
