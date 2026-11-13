@@ -64,9 +64,11 @@ export function DraftBanner({updated}: {updated: ReactNode}) {
     <>
       <Callout type="warning">
         <p>
-          <strong>Draft — testnet only. Not reviewed by a lawyer.</strong> This is not legal advice. A lawyer
-          must review it before Pactora goes to mainnet. Every{' '}
-          <Placeholder>[highlighted square bracket]</Placeholder> is something not decided yet.
+          <strong>Draft — testnet only. Not reviewed by a lawyer.</strong> Pactora runs on NEAR testnet only:
+          no company operates it yet, no real money moves, and this page binds no one. It is the text prepared
+          for a mainnet launch, and is not legal advice. Every{' '}
+          <Placeholder>[highlighted square bracket]</Placeholder> is a decision for the operator and its
+          lawyer before that launch, left open on purpose rather than guessed.
         </p>
       </Callout>
       <p>

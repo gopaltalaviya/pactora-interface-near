@@ -3,7 +3,7 @@ import {PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD} from 'next/constants.j
 /**
  * The API lives in pactora-backend-near and is deployed separately, so the browser
  * talks to it directly. Kept as one env var rather than scattered literals —
- * the same page has to work against localhost, a Railway URL and a judge's
+ * the same page has to work against localhost, a hosted URL and a judge's
  * fork without a rebuild of anything but this value.
  *
  * A production build without it FAILS. It used to fall back to

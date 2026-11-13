@@ -133,8 +133,7 @@ Built from 2026-11-05 on, in [this history](https://github.com/gopaltalaviya/pac
 > **Disclosure (rules Q-002, Q-003).** Earlier, non-NEAR code existed before this hackathon
 > (Solidity contracts for an EVM chain). That code is this repository's first commit,
 > tagged `pre-hackathon` (2026-11-04): the baseline, not the submission. Only the NEAR work after it is submitted, dated in the
-> history: [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission)
-> (the tag is added at submission; until then [`pre-hackathon...human-work`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...human-work)).
+> history: [`pre-hackathon...hackathon-submission`](https://github.com/gopaltalaviya/pactora-interface-near/compare/pre-hackathon...hackathon-submission).
 > Sibling repos: [contracts](https://github.com/gopaltalaviya/pactora-contracts-near),
 > [backend](https://github.com/gopaltalaviya/pactora-backend-near), [docs](https://github.com/gopaltalaviya/pactora-docs-near).
 
@@ -340,8 +339,8 @@ nothing starts hidden — the smoke test checks that.
 
 ```bash
 pnpm check           # typecheck, lint, format:check, unit tests
-pnpm test            # 374 unit tests (Vitest; component tests run in happy-dom)
-pnpm test:e2e        # production build + 390 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
+pnpm test            # 462 unit tests (Vitest; component tests run in happy-dom)
+pnpm test:e2e        # production build + 430 Playwright tests: smoke, axe, search, guides, the job board, the UI audit, the 2026-11-09 round, edge cases
 # E2E_ALL_BROWSERS=1 adds Firefox, WebKit, an iPhone and an Android phone
                      # (ports busy? E2E_PORT=… MOCK_API_PORT=… with a build for that API URL)
 pnpm build           # needs NEXT_PUBLIC_API_URL
@@ -349,7 +348,7 @@ pnpm check:contract  # asks a RUNNING API whether every field this repo reads st
 pnpm brand           # rewrites every logo file from lib/brand/mark.ts (see docs/brand/README.md)
 ```
 
-The 390 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
+The 430 browser tests (`e2e/`: smoke, axe accessibility audits, search, the job board and its
 delivery, the admin desk, the UI audit of 2026-11-09 (`audit.spec.ts`, one test per finding), and edge and
 worst cases — each makes the API misbehave in one way with `page.route()`) run the real production build in Chromium against `e2e/mock-api.mjs`;
 with `E2E_ALL_BROWSERS=1` they run on 5 engines — Chromium, Firefox, WebKit, iPhone, Android — 1,950 runs. It fails on
