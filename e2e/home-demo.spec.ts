@@ -66,6 +66,8 @@ async function expectTourVideo(page: Page, which: 'demo') {
 }
 
 test('the home page shows the captioned overview, and the hero CTA leads to it', async ({page}) => {
+  // Reduced motion keeps the poster and its play button (no autoplay).
+  await page.emulateMedia({reducedMotion: 'reduce'});
   await page.goto('/');
   await expect(page.getByRole('link', {name: /Watch agents pay each other/})).toHaveAttribute(
     'href',
@@ -85,6 +87,7 @@ test('the home page shows the captioned overview, and the hero CTA leads to it',
 });
 
 test('/demo shows the captioned demo recording to a visitor without a key', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'});
   await page.goto('/demo');
   const slot = page.getByRole('region', {name: 'A recorded run'});
   await expectTourVideo(page, 'demo');
@@ -116,4 +119,69 @@ test('on a phone the hero diagram labels are readable', async ({page}) => {
   const box = await label.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.height).toBeGreaterThanOrEqual(11);
+});
+
+// Owner's request, 2026-11-13: the videos start by themselves once in view, muted and looping.
+for (const [path, which] of [
+  ['/', 'overview'],
+  ['/demo', 'demo'],
+] as const) {
+  test(`${path}: the ${which} video plays by itself, muted, once scrolled into view`, async ({page}) => {
+    await page.goto(path);
+    await page.waitForLoadState('load');
+    // A video icon before the title says there is a video here.
+    const heading = page.locator(which === 'overview' ? '#tour-heading' : '#recording-heading');
+    await expect(heading.locator('svg[aria-hidden]')).toHaveCount(1);
+    await page.getByTestId(`tour-poster-${which}`).scrollIntoViewIfNeeded();
+    const video = page.getByTestId(`tour-video-${which}`);
+    await expect(video).toBeVisible();
+    await expect(video).toHaveAttribute('data-autoplay', 'view');
+    const state = await video.evaluate((v: HTMLVideoElement) => ({
+      muted: v.muted,
+      loop: v.loop,
+      controls: v.controls,
+    }));
+    expect(state).toEqual({muted: true, loop: true, controls: true});
+  });
+}
+
+// Owner's request, 2026-11-13: every core feature directly visible to a judge, each linked to its live page.
+test('the home page lists every core feature, each opening the page that shows it', async ({page}) => {
+  await page.goto('/');
+  const section = page.getByRole('region', {name: 'Every core feature, live.'});
+  await expect(section).toBeVisible();
+  const tiles = section.getByTestId('core-feature');
+  await expect(tiles).toHaveCount(10);
+  const hrefs = await tiles.evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+  expect(hrefs).toEqual([
+    '/receipts',
+    '/agents',
+    '/swarm',
+    '/agents/6',
+    '/docs/security',
+    '/docs/concepts#disputes',
+    '/demo',
+    '/jobs',
+    '/docs/people#channels',
+    '/docs/quickstart',
+  ]);
+  await expect(section).toContainText('Telegram job alerts');
+  await expect(section).toContainText('Work credential NFTs');
+});
+
+test('the people guide shows the Telegram bot: how to link, an example chat, and what it does not do', async ({
+  page,
+}) => {
+  await page.goto('/docs/people#channels');
+  await expect(page.getByRole('heading', {name: 'Telegram job alerts'})).toBeVisible();
+  await expect(page.getByRole('link', {name: '@PactoraJobsBot'})).toHaveAttribute(
+    'href',
+    'https://t.me/PactoraJobsBot',
+  );
+  const chat = page.getByTestId('telegram-preview');
+  await chat.scrollIntoViewIfNeeded();
+  await expect(chat).toContainText('Example chat');
+  await expect(chat.getByRole('listitem')).toHaveCount(10, {timeout: 15_000});
+  await expect(chat).toContainText('New bid on your listing');
+  await expect(page.getByText(/does not run your account/)).toBeVisible();
 });

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {errorText} from '@/components/market/hooks';
 import {Button} from '@/components/ui/Button';
@@ -89,7 +90,7 @@ export function ChannelsCard() {
     <Card
       title="Notifications elsewhere"
       labelledBy="channels"
-      description="Job updates on Telegram or by email. Messages link back here for anything you sign."
+      description="Job updates on Telegram or by email. The bot sends updates and links; anything you sign happens here."
     >
       <div className="space-y-4 text-sm">
         {s.telegram && (
@@ -117,12 +118,18 @@ export function ChannelsCard() {
                 <strong className="tabular">{tg.number}</strong> when it asks. The code works for 10 minutes.
               </p>
             ) : (
-              <Button
-                size="sm"
-                onClick={() => void run(async () => setTg(await authed((t) => api.telegramCode(t))))}
-              >
-                Link Telegram
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  icon="send"
+                  onClick={() => void run(async () => setTg(await authed((t) => api.telegramCode(t))))}
+                >
+                  Link Telegram
+                </Button>
+                <Link href="/docs/people#channels" className="text-accent hover:underline">
+                  See an example chat
+                </Link>
+              </div>
             )}
           </div>
         )}

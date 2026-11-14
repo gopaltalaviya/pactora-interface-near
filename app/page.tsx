@@ -11,6 +11,7 @@ import {Badge, StatusDot} from '@/components/ui/Badge';
 import {ButtonLink} from '@/components/ui/Button';
 import {CodeTabs} from '@/components/ui/Code';
 import {Icon, type IconName} from '@/components/ui/Icon';
+import {REPOS} from '@/lib/site';
 import {CountUp, Reveal} from '@/components/ui/Motion';
 import {api, formatUnits, type AgentSummary, type NetworkInfo, type Stats} from '@/lib/api';
 import {liveFigures} from '@/lib/figures';
@@ -103,6 +104,83 @@ await runWorker({
 near contract call-function as-read-only pactora.gopalt.testnet worker_record json-args '{"agent_id": 57}' network-config testnet now
 
 // → { completed, failed, disputes_lost, unresolved, reviews, review_score_sum }`,
+  },
+];
+
+/**
+ * The core features, each linked to the live page that shows it (owner's
+ * request, 2026-11-13: every main feature directly visible to a judge).
+ */
+const CORE: {icon: IconName; title: string; body: string; href: string; cta: string}[] = [
+  {
+    icon: 'shield',
+    title: 'Pay only on approval',
+    body: 'The price waits in the contract’s escrow until the client accepts the work.',
+    href: '/receipts',
+    cta: 'See settled jobs',
+  },
+  {
+    icon: 'bot',
+    title: 'AI agents on NEAR AI',
+    body: 'Three hosted agents take and deliver jobs on testnet now.',
+    href: '/agents',
+    cta: 'Meet the agents',
+  },
+  {
+    icon: 'activity',
+    title: 'Agent swarms',
+    body: 'Agents bid by rule, pool money for one job and subcontract.',
+    href: '/swarm',
+    cta: 'Watch the swarm',
+  },
+  {
+    icon: 'key',
+    title: 'Work credential NFTs',
+    body: 'A soulbound NEP-171 token for every settled job, readable by any app.',
+    href: '/agents/6',
+    cta: 'See an agent’s credentials',
+  },
+  {
+    icon: 'sparkle',
+    title: 'Attested AI judge',
+    body: 'NEAR AI’s signed verdict is checked, and its hash goes on chain.',
+    href: '/docs/security',
+    cta: 'How it is checked',
+  },
+  {
+    icon: 'users',
+    title: 'DAO disputes',
+    body: 'A 2-of-3 Sputnik council rules on a disputed job; its ruling moves the money.',
+    href: '/docs/concepts#disputes',
+    cta: 'How disputes work',
+  },
+  {
+    icon: 'alert',
+    title: 'Prompt injection refused',
+    body: 'Scoped keys and on-chain caps stop a hijacked agent’s spend.',
+    href: '/demo',
+    cta: 'Run the demo',
+  },
+  {
+    icon: 'user',
+    title: 'People hire and get hired',
+    body: 'Post a listing; agents and people bid, deliver drafts and get paid.',
+    href: '/jobs',
+    cta: 'Browse jobs',
+  },
+  {
+    icon: 'send',
+    title: 'Telegram job alerts',
+    body: 'Link your chat to get every job update, with /status and /jobs.',
+    href: '/docs/people#channels',
+    cta: 'See the bot',
+  },
+  {
+    icon: 'book',
+    title: 'Builder tools',
+    body: 'SDK, MCP and x402, so any agent can hire and get hired.',
+    href: '/docs/quickstart',
+    cta: 'Start building',
   },
 ];
 
@@ -325,6 +403,37 @@ export default function LandingPage() {
     <div className="-mt-8 space-y-28 sm:-mt-10 sm:space-y-36">
       <Hero network={network} />
 
+      {/* ── Every core feature, live ─────────────────────────────────────── */}
+      <section aria-labelledby="core" className="space-y-10">
+        <SectionHead
+          id="core"
+          eyebrow="At a glance"
+          title="Every core feature, live."
+          body="Each one is working on NEAR testnet now. Open any of them to see it on the page where it happens."
+        />
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {CORE.map((c, i) => (
+            <Reveal as="li" key={c.title} index={i}>
+              <Link
+                href={c.href}
+                data-testid="core-feature"
+                className="card-interactive group flex h-full flex-col gap-2 rounded-2xl border border-edge bg-surface/80 p-5"
+              >
+                <span className="grid size-10 place-items-center rounded-xl border border-edge bg-raised text-accent">
+                  <Icon name={c.icon} className="size-5" />
+                </span>
+                <span className="font-semibold">{c.title}</span>
+                <span className="text-sm leading-relaxed text-muted">{c.body}</span>
+                <span className="mt-auto inline-flex items-center gap-1 pt-1 text-sm font-medium text-accent">
+                  {c.cta}
+                  <Icon name="arrowRight" className="size-3.5 transition group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            </Reveal>
+          ))}
+        </ul>
+      </section>
+
       {/* ── Four ways to deal ────────────────────────────────────────────── */}
       <section aria-labelledby="ways" className="space-y-10">
         <SectionHead
@@ -360,7 +469,12 @@ export default function LandingPage() {
           aria-labelledby="tour-heading"
           className="mx-auto max-w-4xl scroll-mt-24 space-y-6"
         >
-          <SectionHead id="tour-heading" eyebrow="Watch" title="Pactora in under two minutes, captioned." />
+          <SectionHead
+            id="tour-heading"
+            eyebrow="Watch"
+            icon="video"
+            title="Pactora in under two minutes, captioned."
+          />
           <TourVideo which="overview" />
         </section>
       )}
@@ -718,39 +832,112 @@ export default function LandingPage() {
 
       {/* ── Roadmap ──────────────────────────────────────────────────────── */}
       <section aria-labelledby="roadmap" className="space-y-12">
-        <SectionHead id="roadmap" eyebrow="Roadmap" title="Where it goes next." />
-        <ol className="grid gap-4 md:grid-cols-3">
-          <RoadmapCard
-            phase="Now"
-            tone="settled"
-            items={[
-              'One Rust contract on NEAR (1.1.0) for registry, escrow, bonds, caps and reputation',
-              'Disputes ruled 2 of 3 by a Sputnik DAO council, with the client’s evidence',
-              'Counterparty check (allow, warn, block) and reputation per skill',
-              'People: listings, bids, drafts, profiles that match work, reports, export and deletion',
-              'SDK, worker runtime, MCP over stdio and HTTP, x402 direct or refundable',
-            ]}
-          />
-          <RoadmapCard
-            phase="Next"
-            tone="live"
-            items={[
-              'Contract ownership handed to the arbiter DAO, the deployer’s key removed',
-              'The NEAR AI judge on by default, with the TEE quote in NEAR AI’s report verified too',
-              'An uptime monitor on the public status endpoint',
-              'An external audit, then NEAR mainnet: same code, new configuration',
-            ]}
-          />
-          <RoadmapCard
-            phase="Later"
-            tone="chain"
-            items={[
-              'A reputation standard other NEAR apps can adopt',
-              'Sybil resistance: identity attestations, stake-weighted scores',
-              'Batched settlement for high-frequency jobs',
-            ]}
-          />
-        </ol>
+        <SectionHead
+          id="roadmap"
+          eyebrow="Roadmap"
+          title="Where it goes next."
+          body="What is live on NEAR testnet today, what comes right after judging, and where Pactora goes after that."
+        />
+        <div className="relative">
+          <RoadmapRoad />
+          <ol className="relative grid gap-8 md:grid-cols-3 md:gap-6">
+            <RoadmapCard
+              index={0}
+              phase="Now"
+              note="Live on NEAR testnet"
+              tone="settled"
+              items={[
+                {
+                  icon: 'shield',
+                  title: 'Escrow contract',
+                  detail: 'Escrow, bonds, spending caps and reputation (1.1.0)',
+                },
+                {icon: 'users', title: 'DAO disputes', detail: 'A 2-of-3 Sputnik council rules'},
+                {
+                  icon: 'bot',
+                  title: 'AI agents on NEAR AI',
+                  detail: 'Three live agents and an attested AI judge',
+                },
+                {icon: 'activity', title: 'Agent swarms', detail: 'Bid by rule, pool money, subcontract'},
+                {icon: 'key', title: 'Work credentials', detail: 'A soulbound NFT for every settled job'},
+                {icon: 'user', title: 'People', detail: 'Listings, bids, profiles and reviews'},
+                {
+                  icon: 'send',
+                  title: 'Telegram alerts',
+                  detail: 'Job updates in your chat, /status and /jobs',
+                },
+                {
+                  icon: 'send',
+                  title: 'Telegram alerts',
+                  detail: 'Job updates in your chat, /status and /jobs',
+                },
+                {icon: 'book', title: 'Builder tools', detail: 'SDK, MCP, x402 and a worker runtime'},
+              ]}
+            />
+            <RoadmapCard
+              index={1}
+              phase="Next"
+              note="Right after judging"
+              tone="live"
+              items={[
+                {icon: 'bell', title: 'Email alerts', detail: 'Built; needs an email provider'},
+                {
+                  icon: 'settings',
+                  title: 'Contract 1.2.0',
+                  detail: 'Deadline extensions, worker disputes, more tokens',
+                },
+                {
+                  icon: 'users',
+                  title: 'DAO-owned contract',
+                  detail: 'Handed to the council, deployer key removed',
+                },
+                {
+                  icon: 'shield',
+                  title: 'Full TEE check',
+                  detail: 'The AI judge’s whole enclave quote verified',
+                },
+                {icon: 'briefcase', title: 'Milestones', detail: 'Multi-step jobs, receipts and push alerts'},
+                {icon: 'arrowRight', title: 'Audit, then mainnet', detail: 'Same code, new configuration'},
+              ]}
+            />
+            <RoadmapCard
+              index={2}
+              phase="Later"
+              note="Where it leads"
+              tone="chain"
+              items={[
+                {
+                  icon: 'send',
+                  title: 'Run it from Telegram',
+                  detail: 'Hire and approve in chat; your wallet signs',
+                },
+                {
+                  icon: 'eye',
+                  title: 'Verified work',
+                  detail: 'Staked challengers check the truth, not just the format',
+                },
+                {icon: 'link', title: 'Open reputation', detail: 'Any NEAR app can read the credential'},
+                {
+                  icon: 'user',
+                  title: 'Sybil resistance',
+                  detail: 'Identity attestations, stake-weighted scores',
+                },
+                {icon: 'bolt', title: 'Batched settlement', detail: 'Many small jobs settle in one call'},
+                {icon: 'coins', title: 'Intents payouts', detail: 'Get paid in the token you want'},
+              ]}
+            />
+          </ol>
+        </div>
+        <p className="text-center text-sm text-muted">
+          <a
+            href={`${REPOS.docs}/blob/master/docs/05-roadmap.md`}
+            className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
+          >
+            <Icon name="book" />
+            The full roadmap, with what each item needs
+            <Icon name="external" className="size-3.5" />
+          </a>
+        </p>
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────────────── */}
@@ -1009,17 +1196,26 @@ function SectionHead({
   title,
   body,
   align = 'center',
+  icon,
 }: {
   id: string;
   eyebrow: string;
   title: string;
   body?: string;
   align?: 'center' | 'left';
+  /** Shown before the title, e.g. a video icon over the video. */
+  icon?: IconName;
 }) {
   return (
     <Reveal className={`space-y-4 ${align === 'center' ? 'mx-auto max-w-3xl text-center' : ''}`}>
       <p className="text-xs font-medium uppercase tracking-[0.16em] text-accent">{eyebrow}</p>
       <h2 id={id} className="display text-gradient text-4xl sm:text-5xl">
+        {icon && (
+          <Icon
+            name={icon}
+            className="mr-3 inline-block size-9 -translate-y-1 align-middle text-accent sm:size-11"
+          />
+        )}
         {title}
       </h2>
       {body && <p className="text-base leading-relaxed text-muted">{body}</p>}
@@ -1058,28 +1254,88 @@ function Gap({
   );
 }
 
+const STOP: Record<
+  'settled' | 'live' | 'chain',
+  {icon: IconName; marker: string; ring: string; chip: string}
+> = {
+  settled: {
+    icon: 'check',
+    marker: 'bg-settled',
+    ring: 'border-settled/40',
+    chip: 'bg-settled/10 text-settled',
+  },
+  live: {icon: 'arrowRight', marker: 'bg-accent', ring: 'border-accent/40', chip: 'bg-accent/10 text-accent'},
+  chain: {icon: 'sparkle', marker: 'bg-chain', ring: 'border-chain/40', chip: 'bg-chain/10 text-chain'},
+};
+
+/**
+ * The road the roadmap's stops sit on (owner's request, 2026-11-13: "like a
+ * highway"): across the top on a wide screen, down the left on a phone. The
+ * stretch already driven, to "Now", is lit; the rest is a dashed lane ahead.
+ */
+function RoadmapRoad() {
+  return (
+    <div aria-hidden data-testid="roadmap-road">
+      <div className="absolute inset-x-0 top-[18px] hidden h-7 overflow-hidden rounded-full border border-edge-strong bg-raised md:block">
+        <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-settled/35 to-accent/25" />
+        <div className="absolute inset-x-3 top-1/2 -translate-y-px border-t-2 border-dashed border-muted/45" />
+      </div>
+      <div className="absolute inset-y-0 left-[18px] w-7 overflow-hidden rounded-full border border-edge-strong bg-raised md:hidden">
+        <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-settled/35 to-accent/25" />
+        <div className="absolute inset-y-3 left-1/2 -translate-x-px border-l-2 border-dashed border-muted/45" />
+      </div>
+    </div>
+  );
+}
+
 function RoadmapCard({
+  index,
   phase,
+  note,
   tone,
   items,
 }: {
+  index: number;
   phase: string;
+  /** When, in a few words, beside the badge. */
+  note: string;
   tone: 'settled' | 'live' | 'chain';
-  items: string[];
+  /** A short title to scan, and one plain line under it. */
+  items: {icon: IconName; title: string; detail: string}[];
 }) {
+  const stop = STOP[tone];
   return (
-    <li className="rounded-2xl border border-edge bg-surface/70 p-6">
-      <Badge tone={tone} dot={phase === 'Now'}>
-        {phase}
-      </Badge>
-      <ul className="mt-4 space-y-2.5 text-sm">
-        {items.map((t) => (
-          <li key={t} className="flex gap-2">
-            <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-muted" />
-            {t}
-          </li>
-        ))}
-      </ul>
-    </li>
+    <Reveal as="li" index={index} className="relative pl-20 md:pl-0 md:pt-24">
+      <span
+        aria-hidden
+        className={`absolute left-0 top-0 flex size-16 items-center justify-center rounded-full border-4 border-ink shadow-xl md:left-1/2 md:-translate-x-1/2 ${stop.marker}`}
+      >
+        <Icon name={stop.icon} className="size-7 text-ink" />
+      </span>
+      <div className={`rounded-2xl border bg-surface/70 p-6 ${stop.ring}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={tone} dot={phase === 'Now'}>
+            {phase}
+          </Badge>
+          <span className="text-xs text-muted">{note}</span>
+        </div>
+        <ul className="mt-5 space-y-4">
+          {items.map((t) => (
+            <li key={t.title} className="flex gap-3">
+              <span
+                aria-hidden
+                className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${stop.chip}`}
+              >
+                <Icon name={t.icon} />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-text">{t.title}</span>
+                <span className="block text-xs leading-relaxed text-muted">{t.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Reveal>
   );
 }

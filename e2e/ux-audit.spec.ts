@@ -132,6 +132,8 @@ test('the trust check reads in proper English: "0 finished jobs", not "job(s)"',
 });
 
 test('the home video plays the new opener without covering the poster’s headline', async ({page}) => {
+  // Reduced motion keeps the poster (no autoplay), so the knob can be measured.
+  await page.emulateMedia({reducedMotion: 'reduce'});
   await page.goto('/');
   const poster = page.getByTestId('tour-poster-overview');
   await expect(poster.locator('img')).toHaveAttribute('src', '/video/hook-overview.jpg');

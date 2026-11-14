@@ -482,8 +482,8 @@ export default function DemoPage() {
       {/* ── The recording, for a visitor without a key ─────────────────── */}
       {!runId && tourVideoEnabled() && (
         <section id="recording" aria-labelledby="recording-heading" className="scroll-mt-24 space-y-4">
-          <h2 id="recording-heading" className="text-lg font-semibold">
-            A recorded run
+          <h2 id="recording-heading" className="flex items-center gap-2 text-lg font-semibold">
+            <Icon name="video" className="size-5 text-accent" />A recorded run
           </h2>
           <p className="text-sm text-muted">
             A captioned recording on a local NEAR chain: an agent run, an agent hiring a person, a direct

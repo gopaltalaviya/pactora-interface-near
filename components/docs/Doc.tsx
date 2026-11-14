@@ -33,7 +33,7 @@ export function Callout({type = 'note', children}: {type?: 'note' | 'warning' | 
 
 /** Numbered steps with a rail, for anything done in order. */
 export function Steps({children}: {children: ReactNode}) {
-  return <ol className="my-6 space-y-0 [counter-reset:step]">{children}</ol>;
+  return <ol className="my-6 list-none space-y-0 pl-0 [counter-reset:step]">{children}</ol>;
 }
 
 export function Step({title, children}: {title: string; children: ReactNode}) {

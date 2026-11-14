@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import {cleanup, fireEvent, render} from '@testing-library/react';
+import {act, cleanup, fireEvent, render} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {TourVideo, tourVideoEnabled} from './TourVideo';
 
@@ -85,6 +85,41 @@ describe('TourVideo', () => {
     expect(tourVideoEnabled()).toBe(true);
     vi.stubEnv('NEXT_PUBLIC_TOUR_VIDEO', '0');
     expect(tourVideoEnabled()).toBe(false);
+  });
+
+  /** Owner's request, 2026-11-13: once the page has loaded and the poster is in view, play by itself, muted and looping. */
+  it('starts by itself, muted and looping, when the poster comes into view', () => {
+    let fire: ((entries: {isIntersecting: boolean}[]) => void) | undefined;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: (entries: {isIntersecting: boolean}[]) => void) {
+          fire ??= cb;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    try {
+      const {container} = render(<TourVideo which="overview" enabled />);
+      expect(container.querySelector('video')).toBeNull();
+      act(() => fire!([{isIntersecting: true}]));
+      const video = container.querySelector('video')!;
+      expect(video).not.toBeNull();
+      expect(video.muted).toBe(true);
+      expect(video.hasAttribute('loop')).toBe(true);
+      expect(video.getAttribute('data-autoplay')).toBe('view');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a click still plays it, without looping', () => {
+    const {container, getByRole} = render(<TourVideo which="demo" enabled />);
+    fireEvent.click(getByRole('button', {name: /^Play/}));
+    const video = container.querySelector('video')!;
+    expect(video.hasAttribute('loop')).toBe(false);
+    expect(video.getAttribute('data-autoplay')).toBe('click');
   });
 
   it('renders nothing when the flag is off', () => {

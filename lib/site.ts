@@ -54,6 +54,14 @@ export const SITE: Site = readSite({
   NEXT_PUBLIC_OPERATOR_NAME: process.env['NEXT_PUBLIC_OPERATOR_NAME'],
 });
 
+/**
+ * The Telegram bot (apps/channels), live since 2026-11-13. NEXT_PUBLIC_TELEGRAM_BOT
+ * overrides it for another deployment; it is a public @username, never a token.
+ */
+export const TELEGRAM_BOT: string =
+  process.env['NEXT_PUBLIC_TELEGRAM_BOT']?.replace(/^@/, '').trim() || 'PactoraJobsBot';
+export const TELEGRAM_BOT_URL = `https://t.me/${TELEGRAM_BOT}`;
+
 /** The four source repositories. */
 export const REPOS = {
   contracts: 'https://github.com/gopaltalaviya/pactora-contracts-near',

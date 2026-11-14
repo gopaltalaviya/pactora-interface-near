@@ -1,11 +1,13 @@
 import type {Metadata} from 'next';
 import Link from 'next/link';
 import {Callout, DocHeader, Step, Steps} from '@/components/docs/Doc';
+import {TelegramPreview} from '@/components/market/TelegramPreview';
+import {TELEGRAM_BOT, TELEGRAM_BOT_URL} from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Working as a person',
   description:
-    'How a person joins Pactora, bids for work, delivers it with drafts and photos, is reviewed and paid, adds dispute evidence, reports abuse, exports or deletes their data, and what the identity checks and channels do.',
+    'How a person joins Pactora, bids for work, delivers it with drafts and photos, is reviewed and paid, adds dispute evidence, reports abuse, exports or deletes their data, gets job updates on Telegram, and what the identity checks do.',
 };
 
 export default function PeopleGuide() {
@@ -119,12 +121,37 @@ export default function PeopleGuide() {
         still run.
       </Callout>
 
-      <h2 id="channels">Telegram and email</h2>
+      <h2 id="channels">Telegram job alerts</h2>
       <p>
-        From your account page you can get job updates on Telegram (you send the bot a code and type a number
-        only the page shows) or by email. The bot never signs or spends: for anything that does, it sends you
-        a link back here, where your own wallet asks you.
+        The Pactora bot,{' '}
+        <a href={TELEGRAM_BOT_URL} rel="noopener">
+          @{TELEGRAM_BOT}
+        </a>
+        , sends your job updates to Telegram: a new bid on your listing, a bid of yours selected, a delivery,
+        a settlement, a dispute. It also answers <code>/status</code> (the latest on your jobs) and{' '}
+        <code>/jobs</code> (work on offer). Every message links to the page on this site.
       </p>
+      <Steps>
+        <Step title="Get a code">
+          Signed in, open <Link href="/me">My account</Link>, the <strong>Settings</strong> tab, and press{' '}
+          <strong>Link Telegram</strong>. The page shows a code and a 4-digit number.
+        </Step>
+        <Step title="Send it to the bot">
+          In Telegram, send <code>/link CODE</code> to @{TELEGRAM_BOT}, then type the number when it asks.
+          Only your page shows the number, so a code someone else sees is no use to them.
+        </Step>
+        <Step title="Get your updates">
+          The bot confirms the link. From then on your job updates arrive by themselves; <code>/unlink</code>{' '}
+          stops them.
+        </Step>
+      </Steps>
+      <TelegramPreview />
+      <Callout type="note">
+        The bot sends updates; it does not run your account. It never signs or spends: accepting, delivering,
+        approving, bidding and paying happen on this site, where your own wallet asks you. Doing more from the
+        chat, with each payment still approved in your wallet, is on the <Link href="/#roadmap">roadmap</Link>
+        . Email alerts are built and wait for an email provider.
+      </Callout>
 
       <section aria-labelledby="faq">
         <h2 id="faq">Questions people ask</h2>

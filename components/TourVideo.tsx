@@ -23,6 +23,13 @@
  * preload="none" (the full e2e gate, 2026-11-10), and nobody downloads a
  * video they did not ask for. The play button sits in the poster's corner,
  * clear of the headline in the middle of the frame.
+ *
+ * Autoplay (owner's request, 2026-11-13): once the page has loaded and the
+ * poster is half in view, the player mounts and plays by itself, muted (the
+ * videos have no sound anyway) and looping, and it pauses while scrolled out
+ * of view. The page's load still never waits on the media, as nothing mounts
+ * before the load event. A visitor who asks for reduced motion keeps the
+ * poster and the play button.
  */
 
 import {useEffect, useRef, useState} from 'react';
@@ -68,7 +75,52 @@ export function TourVideo({
   className?: string;
 }) {
   const [playing, setPlaying] = useState(false);
+  /** Started by coming into view rather than by a click: muted, looping, paused while out of view. */
+  const [auto, setAuto] = useState(false);
   const ref = useRef<HTMLVideoElement>(null);
+  const posterRef = useRef<HTMLButtonElement>(null);
+  // Start by itself once the page has loaded and the poster is half in view.
+  useEffect(() => {
+    if (!enabled || playing) return;
+    const el = posterRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    let io: IntersectionObserver | undefined;
+    const watch = () => {
+      io = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            setAuto(true);
+            setPlaying(true);
+          }
+        },
+        {threshold: 0.5},
+      );
+      io.observe(el);
+    };
+    if (document.readyState === 'complete') watch();
+    else window.addEventListener('load', watch, {once: true});
+    return () => {
+      window.removeEventListener('load', watch);
+      io?.disconnect();
+    };
+  }, [enabled, playing]);
+  // An autoplayed video plays only while it is in view.
+  useEffect(() => {
+    const v = ref.current;
+    if (!auto || !playing || !v || typeof IntersectionObserver === 'undefined') return;
+    v.muted = true;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const seen = entries.some((e) => e.isIntersecting);
+        if (seen && v.paused) v.play().catch(() => undefined);
+        else if (!seen && !v.paused) v.pause();
+      },
+      {threshold: 0.25},
+    );
+    io.observe(v);
+    return () => io.disconnect();
+  }, [auto, playing]);
   // The videos are silent, so the captions are the narration: show them. `default`
   // alone is not enough, as WebKit leaves the track disabled (its caption setting).
   useEffect(() => {
@@ -87,6 +139,7 @@ export function TourVideo({
   if (!playing) {
     return (
       <button
+        ref={posterRef}
         type="button"
         onClick={() => setPlaying(true)}
         aria-label={`Play ${media.title}`}
@@ -114,11 +167,14 @@ export function TourVideo({
       ref={ref}
       controls
       autoPlay
+      muted={auto}
+      loop={auto}
       playsInline
       preload="auto"
       poster={media.poster}
       aria-label={media.title}
       data-testid={`tour-video-${which}`}
+      data-autoplay={auto ? 'view' : 'click'}
       className={frame}
     >
       {media.sources.map((s) => (
